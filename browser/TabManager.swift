@@ -26,8 +26,14 @@ class TabManager: ObservableObject {
 
     @Published var tabs: [Tab] = []
     @Published var selectedTabID: UUID? = nil
+    
+    @AppStorage("homepage", store:Config.sharedDefaults)
+    var homepage: URL = URL(string: "https://google.com")!
 
     public func createNewTab(urlInput: String) {
+        
+        let urlInput = (urlInput == "homepage") ? homepage.absoluteString : urlInput
+        
         @AppStorage("searchEngine", store: Config.sharedDefaults)
         var searchEngine = "https://google.com/search?q="
 
