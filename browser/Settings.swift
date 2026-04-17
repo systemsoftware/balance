@@ -108,7 +108,14 @@ var Settings = [
             name: "User Agent",
             type: "text",
             appStorageKey: "userAgent",
-        )
+        ),
+    Setting(
+            name: "Bookmark Bar",
+            type: "slider",
+            appStorageKey: "bookmarkBar",
+            sliderMax:2,
+            sliderMin:0,
+        ),
 ]
 
 // MARK: Header
@@ -169,6 +176,7 @@ struct SliderDoubleRow: View {
         }
     }
 }
+
 
 // MARK: - Toggle Component (Bool)
 struct ToggleRow: View {

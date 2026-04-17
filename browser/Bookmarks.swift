@@ -4,7 +4,6 @@ struct Bookmark: Codable, Identifiable {
     var id = UUID()
     var title: String
     var url: String
-    var folder: String?
 }
 
 struct BookmarksView: View {

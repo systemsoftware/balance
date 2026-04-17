@@ -27,7 +27,7 @@ struct browserApp: App {
     }
 }
 
-func createNewWindow() {
+func createNewWindow(with url: URL? = nil) {
     let newWindow = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
         styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -35,8 +35,10 @@ func createNewWindow() {
         defer: false
     )
     
+    let contentView = ContentView(initialURL: url)
+    
     newWindow.isReleasedWhenClosed = false
-    newWindow.contentView = NSHostingView(rootView: ContentView())
+    newWindow.contentView = NSHostingView(rootView: contentView)
     
     newWindow.delegate = WindowDelegate.shared
     
@@ -45,11 +47,13 @@ func createNewWindow() {
     newWindow.makeKeyAndOrderFront(nil)
 }
 
-func createNewTab() {
+func createNewTab(with url: URL? = nil) {
     guard let currentWindow = NSApp.mainWindow ?? NSApp.windows.first else {
         createNewWindow()
         return
     }
+    
+    let contentView = ContentView(initialURL: url)
     
     let newWindow = NSWindow(
         contentRect: currentWindow.frame,
@@ -59,8 +63,7 @@ func createNewTab() {
     )
     
     newWindow.isReleasedWhenClosed = false
-    newWindow.title = "New Tab"
-    newWindow.contentView = NSHostingView(rootView: ContentView())
+    newWindow.contentView = NSHostingView(rootView: contentView)
     newWindow.delegate = WindowDelegate.shared
     
     openWindows.append(newWindow)
