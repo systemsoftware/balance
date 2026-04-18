@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 import Foundation
 import AppKit
+import SwiftData
 
 // MARK: - Layout Constants
 enum Layout {
@@ -25,7 +26,8 @@ let builtInSidebar = [
     SidebarItem(icon: "message", view: "ChatView"),
     SidebarItem(icon: "bookmark", view: "BookmarkView"),
     SidebarItem(icon: "gearshape.fill", view: "SettingsView"),
-    SidebarItem(icon:"note.text", view: "NotesView")
+    SidebarItem(icon:"note.text", view: "NotesView"),
+    SidebarItem(icon:"clock.arrow.trianglehead.counterclockwise.rotate.90", view:"HistoryView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -49,6 +51,8 @@ struct ContentView: View {
     @State private var urlInput: String = ""
 
     @StateObject private var sidebarStore = SidebarStore()
+    
+    @Environment(\.modelContext) private var modelContext
 
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
     private var sidebarWidth: Int = 300
@@ -77,6 +81,8 @@ struct ContentView: View {
     @StateObject private var bookmarkStore = BookmarkStore()
     
     @State private var sidebarPage = WebPage()
+    
+    @State var privateMode = false
     
     var initialURLString: String?
     
@@ -152,6 +158,7 @@ struct ContentView: View {
                         
                         .buttonStyle(.plain)
                         .glassEffect(.regular.interactive(), in: .circle)
+                        
                     }
                     Button(action: {
                         browserState.webView?.reload()
@@ -168,12 +175,31 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .circle)
                 }
-
-                TextField("Search or enter website name", text: $urlInput)
-                    .onSubmit(submitURL)
-                    .padding(Layout.controlPadding)
-                    .textFieldStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
+                
+                HStack{
+                    if(location?.absoluteString.starts(with: "http") == true){
+                    Button(action: {
+                        print("info soon")
+                    } ) {
+                            if let trust = browserState.webView?.serverTrust {
+                            var error: CFError?
+                            if SecTrustEvaluateWithError(trust, &error) {
+                                Image(systemName: "lock.fill")
+                            } else {
+                                Image(systemName: "exclamationmark.triangle.fill")
+                            }
+                        }
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading)
+                }
+     
+                    TextField("Search or enter website name", text: $urlInput)
+                        .onSubmit(submitURL)
+                        .padding(Layout.controlPadding)
+                        .textFieldStyle(.plain)
+                }
+                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
 
                 if(showFindNavigator) {
                     FindBarView(state:browserState)
@@ -222,6 +248,7 @@ struct ContentView: View {
                                                                     url: url.absoluteString
                                                                 ))
                                                             }
+                            
                                                         }
                                                 
                          
@@ -232,6 +259,10 @@ struct ContentView: View {
                                 url: location
                             ))
                         }
+                        
+                        Divider()
+                        
+                        Toggle("Private Mode", isOn:$privateMode)
             
 
                     } label: {
@@ -280,6 +311,16 @@ struct ContentView: View {
                             .onChange(of: browserState.url) { oldValue, newValue in
                                 if let newURL = newValue {
                                     urlInput = newURL.absoluteString
+                                   
+                                    
+                                    if(privateMode == false) {
+                                        HistoryManager.addToHistory(
+                                            title: browserState.title.isEmpty ? browserState.url!.host() ?? "No Title" : browserState.title,
+                                            url: browserState.url?.absoluteString ?? "https://example.com",
+                                            context: modelContext
+                                        )
+                                    }
+                                    
                                 }
                             }.onChange(of: browserState.title) { old, new in
                                 if let window = NSApp.keyWindow {
@@ -319,6 +360,9 @@ struct ContentView: View {
                                         .roundedBorderStyle()
                                 } else if (sidebarURL.absoluteString.contains("Note")) {
                                     NoteView()
+                                        .roundedBorderStyle()
+                                } else if(sidebarURL.absoluteString.contains("History")) {
+                                    HistoryView()
                                         .roundedBorderStyle()
                                 }
                             } else {

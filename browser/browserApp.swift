@@ -1,5 +1,6 @@
 import SwiftUI
 import AppKit
+import SwiftData
 
 var openWindows: [NSWindow] = []
 
@@ -11,6 +12,7 @@ struct browserApp: App {
         WindowGroup {
             ContentView()
         }
+        .modelContainer(for: [HistoryItem.self]) 
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Tab") {
