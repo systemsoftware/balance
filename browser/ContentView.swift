@@ -28,10 +28,21 @@ let builtInSidebar = [
     SidebarItem(icon:"note.text", view: "NotesView")
 ]
 
-enum BookmarkBarMode: Int {
+enum BookmarkBarMode: Int, CaseIterable {
     case hidden = 0
     case newTabOnly = 1
     case always = 2
+    
+    var name: String {
+     switch self {
+            case .hidden:
+         return "Hidden"
+     case .newTabOnly:
+         return "New Tab Only"
+     case .always:
+         return "Always"
+        }
+    }
 }
 
 struct ContentView: View {
@@ -56,7 +67,7 @@ struct ContentView: View {
     
     @State private var showInspector = false
     
-    @StateObject private var browserState = BrowserState()
+    @StateObject var browserState = BrowserState()
     
     @State private var location: URL?
 
@@ -90,7 +101,7 @@ struct ContentView: View {
             return true
 
         case .newTabOnly:
-            return location == URL(string: homepage)
+            return location == URL(string: homepage != "default-home" ? homepage : Bundle.main.url(forResource: "home", withExtension: "html")!.absoluteString)
         }
     }
     
@@ -205,7 +216,7 @@ struct ContentView: View {
                             Divider()
 
                             
-                                                            Button("Add Link to Bookmarks", systemImage: "star") {
+                                                            Button("Add to Bookmarks", systemImage: "star") {
                                                                 bookmarkStore.add(Bookmark(
                                                                     title: url.host() ?? "Unnamed",
                                                                     url: url.absoluteString
@@ -282,7 +293,7 @@ struct ContentView: View {
                             Image(systemName: "globe")
                                 .font(.system(size: 50))
                                 .foregroundStyle(.secondary)
-                            Text("No page open")
+                            Text("Loading...")
                                 .foregroundStyle(.secondary)
                         }
                         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -298,7 +309,7 @@ struct ContentView: View {
                         if let sidebarURL {
                             if sidebarURL.absoluteString.contains(".view") {
                                 if sidebarURL.absoluteString.contains("Chat") {
-                                    ChatView()
+                                    ChatView(contentV: self)
                                         .roundedBorderStyle()
                                 } else if sidebarURL.absoluteString.contains("Bookmark") {
                                     BookmarksView()
@@ -392,22 +403,21 @@ struct ContentView: View {
                 location = URL(string:initialURLString)
                 return
             }
-            DispatchQueue.main.asyncAfter(deadline: .now() + 0.1) {
-                            print("Attempting to load homepage: \(homepage)")
+            DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
+                print("Attempting to load homepage: \(homepage)")
                 
                 if homepage == "default-home" {
                     if let localURL = Bundle.main.url(forResource: "home", withExtension: "html") {
-                            location = localURL
-                        } else {
-                            print("Error: home.html not found in bundle")
-                        }
-                        }
-                            if let url = URL(string: homepage) {
-                                location = url
-                            } else {
-                                print("Homepage URL was invalid: \(homepage)")
-                            }
-                        }
+                        location = localURL
+                    } else {
+                        print("Error: home.html not found in bundle")
+                    }
+                } else if let url = URL(string: homepage) {
+                    location = url
+                } else {
+                    print("Homepage URL was invalid: \(homepage)")
+                }
+            }
         }.onChange(of: sidebarURL) {
             sidebarPage.customUserAgent = userAgent
             if(sidebarURL != nil) { sidebarPage.load(sidebarURL!) }

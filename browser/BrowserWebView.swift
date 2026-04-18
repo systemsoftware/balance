@@ -115,29 +115,48 @@ final class BrowserWKWebView: WKWebView {
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
             print("custom menu is finally firing!")
-            
+        
             menu.addItem(.separator())
 
             var isDownloadable = false
-
-            // 1. Check for default WebKit download items and hide them
+        
+     //        var isLink = false
+        
+            var downloadType = ""
+        
             for item in menu.items {
                 let id = item.identifier?.rawValue ?? ""
                 let actionStr = item.action.map { String(describing: $0) } ?? ""
+                
+                print(id)
+                
                 if id == "WKMenuItemIdentifierDownloadImage" ||
                    id == "WKMenuItemIdentifierDownloadLinkedFile" ||
                    actionStr.lowercased().contains("downloadimage") ||
                    actionStr.lowercased().contains("downloadlinkedfile") {
                     
                     item.isHidden = true
-                    isDownloadable = true // Flag that we hovered over an image/link
+                    isDownloadable = true
+                    downloadType = id
+                }
+                if id.contains("WKMenuItemIdentifierOpenLinkInNewWindow") {
+                    item.title = "Open in New Tab"
+          //          isLink = true
+                }
+                
+                if id.contains("WKMenuItemIdentifierOpenImageInNewWindow") {
+                    item.title = "Open Image in New Tab"
                 }
             }
 
+        menu.addItem(.separator())
+
             // 2. Add custom Download button if applicable
             if isDownloadable {
-                let item = NSMenuItem(title: "Download", action: #selector(manualDownload(_:)), keyEquivalent: "")
+                let item = NSMenuItem(title: "Download \(downloadType == "WKMenuItemIdentifierDownloadImage" ? "Image" : "Linked File")", action: #selector(manualDownload(_:)), keyEquivalent: "", )
                 item.target = self
+                
+                item.image = NSImage(systemSymbolName: "square.and.arrow.down", accessibilityDescription: "Download")
                 
                 // Store the click point instead of blocking the main thread with hitTestURL!
                 let point = convert(event.locationInWindow, from: nil)
@@ -148,6 +167,13 @@ final class BrowserWKWebView: WKWebView {
                 print("Not a downloadable link or image")
             }
         }
+    
+    @objc func openInNewTab(_ sender: NSMenuItem) {
+        guard let url = sender.representedObject as? URL else { print("no url"); return }
+        DispatchQueue.main.async {
+            createNewTab(with: url)
+        }
+    }
     
 
     @objc func manualDownload(_ sender: NSMenuItem) {

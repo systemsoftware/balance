@@ -11,6 +11,7 @@ struct Setting: Codable, Identifiable {
     var defaultValueString: String?
     var defaultValueBool: Bool?
     var defaultValueDouble: Double?
+    var dropdownOptions: [Int: String]?
 }
 
 struct SettingRow: View {
@@ -20,7 +21,7 @@ struct SettingRow: View {
         VStack(alignment: .leading, spacing: 8) {
             
             
-            if setting.type != "header" {
+            if setting.type != "header" && setting.type != "dropdown" {
                             Text(setting.name).font(.headline)
                         }
             
@@ -35,6 +36,8 @@ struct SettingRow: View {
                 TextFieldRow(setting: setting)
             case "header":
                 Header(text: setting.name)
+            case "dropdown":
+                DropdownRow(setting: setting)
             default:
                 EmptyView()
             }
@@ -110,11 +113,16 @@ var Settings = [
             appStorageKey: "userAgent",
         ),
     Setting(
-            name: "Bookmark Bar",
-            type: "slider",
+        name:"Bookmark Bar",
+        type:"header",
+        appStorageKey: ""
+    ),
+    Setting(
+            name: "Show on",
+            type: "dropdown",
             appStorageKey: "bookmarkBar",
-            sliderMax:2,
-            sliderMin:0,
+            defaultValueInt: 0,
+            dropdownOptions: Dictionary(uniqueKeysWithValues: BookmarkBarMode.allCases.map { ($0.rawValue, $0.name) }),
         ),
 ]
 
@@ -149,6 +157,35 @@ struct SliderIntRow: View {
             ), in: Double(setting.sliderMin ?? 0)...Double(setting.sliderMax ?? 100))
             Text("\(value)").monospacedDigit().frame(width: 40)
         }
+    }
+}
+
+// MARK: - Dropdown Component (Enum/Int)
+struct DropdownRow: View {
+    let setting: Setting
+    @AppStorage var selectedValue: Int
+
+    init(setting: Setting) {
+        self.setting = setting
+        let defaultVal = setting.defaultValueInt ?? setting.dropdownOptions?.keys.first ?? 0
+        
+        self._selectedValue = AppStorage(
+            wrappedValue: defaultVal,
+            setting.appStorageKey,
+            store: Config.sharedDefaults
+        )
+    }
+
+    var body: some View {
+        Picker(setting.name, selection: $selectedValue) {
+            if let options = setting.dropdownOptions {
+                // Sorting keys ensures the list doesn't jump around
+                ForEach(options.keys.sorted(), id: \.self) { key in
+                    Text(options[key] ?? "").tag(key)
+                }
+            }
+        }
+        .pickerStyle(.menu) // Or .segmented for small sets
     }
 }
 
