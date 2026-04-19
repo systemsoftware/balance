@@ -8,9 +8,31 @@ var openWindows: [NSWindow] = []
 struct browserApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
     
+    @AppStorage("clearHistoryOnClose", store:Config.sharedDefaults)
+    var clearHistoryOnClose: Bool = false
+    
+    @AppStorage("clearDownloadHistoryOnClose", store:Config.sharedDefaults)
+    var clearDownloadHistoryOnClose: Bool = true
+    
+    @Environment(\.modelContext) private var modelContext
+    
+    var downloadStore = DownloadStore()
+    
     var body: some Scene {
         WindowGroup {
             ContentView()
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    print("App is about to close. Perform cleanup here.")
+                    if(clearDownloadHistoryOnClose) {
+                        HistoryManager.clearAllHistory()
+                    }
+                    
+                    if(clearDownloadHistoryOnClose) {
+                        for download in downloadStore.items {
+                            downloadStore.remove(id: download.id)
+                        }
+                    }
+                }
         }
         .modelContainer(for: [HistoryItem.self]) 
         .commands {

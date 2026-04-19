@@ -18,7 +18,14 @@ final class HistoryItem {
 // MARK: - 2. Management Logic
 @MainActor
 class HistoryManager {
-    static func addToHistory(title: String, url: String, context: ModelContext) {
+    
+    static let sharedContainer: ModelContainer = {
+        let schema = Schema([HistoryItem.self])
+        let configuration = ModelConfiguration(schema: schema)
+        return try! ModelContainer(for: schema, configurations: [configuration])
+    }()
+    
+    static func addToHistory(title: String, url: String, context: ModelContext?) {
         // 1. Check for empty data
         guard !url.isEmpty else {
             print("⚠️ History: URL was empty, skipping.")
@@ -32,7 +39,7 @@ class HistoryManager {
         )
         
         do {
-            let existingItems = try context.fetch(descriptor)
+            let existingItems = try sharedContainer.mainContext.fetch(descriptor)
             
             if let existingItem = existingItems.first {
                 existingItem.timestamp = Date()
@@ -40,17 +47,22 @@ class HistoryManager {
                 print("🔄 Updated existing history item")
             } else {
                 let newItem = HistoryItem(title: title, url: url)
-                context.insert(newItem)
+                sharedContainer.mainContext.insert(newItem)
                 print("✅ Inserted new history item")
             }
             
             // 2. Explicitly save to ensure persistence
-            try context.save()
+            try sharedContainer.mainContext.save()
             
         } catch {
             print("❌ SwiftData Error: \(error.localizedDescription)")
         }
     }
+    
+    static func clearAllHistory() {
+        sharedContainer.deleteAllData()
+    }
+    
 }
 
 

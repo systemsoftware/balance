@@ -6,6 +6,10 @@
 	objectVersion = 77;
 	objects = {
 
+/* Begin PBXBuildFile section */
+		A57B78F62F94B57D000398CF /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A57B78F52F94B57D000398CF /* ZIPFoundation */; };
+/* End PBXBuildFile section */
+
 /* Begin PBXFileReference section */
 		A5892D782F8D68CA00512319 /* browser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = browser.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
@@ -23,6 +27,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A57B78F62F94B57D000398CF /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -65,6 +70,7 @@
 			);
 			name = browser;
 			packageProductDependencies = (
+				A57B78F52F94B57D000398CF /* ZIPFoundation */,
 			);
 			productName = browser;
 			productReference = A5892D782F8D68CA00512319 /* browser.app */;
@@ -94,6 +100,9 @@
 			);
 			mainGroup = A5892D6F2F8D68CA00512319;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				A57B78F42F94B57D000398CF /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A5892D792F8D68CA00512319 /* Products */;
 			projectDirPath = "";
@@ -397,6 +406,25 @@
 			defaultConfigurationName = Release;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCRemoteSwiftPackageReference section */
+		A57B78F42F94B57D000398CF /* XCRemoteSwiftPackageReference "ZIPFoundation" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/weichsel/ZIPFoundation";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.9.20;
+			};
+		};
+/* End XCRemoteSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		A57B78F52F94B57D000398CF /* ZIPFoundation */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A57B78F42F94B57D000398CF /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
+			productName = ZIPFoundation;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = A5892D702F8D68CA00512319 /* Project object */;
 }

@@ -16,7 +16,7 @@ struct FindBarView: View {
                 .textFieldStyle(.plain)
                 .frame(width: 200)
                 .onSubmit { state.find(state.findQuery) }
-                .onChange(of: state.findQuery) { query in
+                .onChange(of: state.findQuery) { old, query in
                     state.find(query)
                 }
                 .padding(Layout.controlPadding)

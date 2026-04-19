@@ -21,7 +21,7 @@ struct SettingRow: View {
         VStack(alignment: .leading, spacing: 8) {
             
             
-            if setting.type != "header" && setting.type != "dropdown" {
+            if setting.type != "header" && setting.type != "dropdown" && setting.type != "toggle" {
                             Text(setting.name).font(.headline)
                         }
             
@@ -53,6 +53,12 @@ var Settings = [
     type:"header",
     appStorageKey: ""
     ),
+    Setting(
+            name: "Record History",
+            type: "toggle",
+            appStorageKey: "recordHistory",
+            defaultValueBool: true
+        ),
     Setting(
             name: "Homepage",
             type: "text",
@@ -124,6 +130,23 @@ var Settings = [
             defaultValueInt: 0,
             dropdownOptions: Dictionary(uniqueKeysWithValues: BookmarkBarMode.allCases.map { ($0.rawValue, $0.name) }),
         ),
+    Setting(
+        name:"Delete On Close",
+        type:"header",
+        appStorageKey:""
+    ),
+    Setting(
+        name:"Search History",
+        type: "toggle",
+        appStorageKey: "clearHistoryOnClose",
+        defaultValueBool: false
+    ),
+    Setting(
+        name:"Download History",
+        type: "toggle",
+        appStorageKey: "clearDownloadHistoryOnClose",
+        defaultValueBool: true
+    )
 ]
 
 // MARK: Header
@@ -234,9 +257,8 @@ struct ToggleRow: View {
         Toggle(isOn: $isEnabled) {
             // Optional: You can put setting.name here if you want it
             // inside the toggle row instead of the header above it
-            Text("Enable \(setting.name)")
-                .font(.subheadline)
-                .foregroundColor(.secondary)
+            Text(setting.name)
+                .font(.headline)
         }
     }
 }

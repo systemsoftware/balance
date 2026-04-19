@@ -98,7 +98,8 @@ struct ContentView: View {
     
     @State private var sidebarPage = WebPage()
     
-    @State private var privateMode = false
+    @AppStorage("recordHistory", store:Config.sharedDefaults)
+    private var recordHistory = true
     
     var initialURLString: String?
     
@@ -148,6 +149,7 @@ struct ContentView: View {
                                 .buttonStyle(.plain)
                                 .glassEffect(.regular.interactive())
                                 .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
+                                .keyboardShortcut(.leftArrow, modifiers: .command)
                             }
                             
                             if(browserState.canGoForward) {
@@ -162,6 +164,7 @@ struct ContentView: View {
                                 .buttonStyle(.plain)
                                 .glassEffect(.regular.interactive())
                                 .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
+                                .keyboardShortcut(.rightArrow, modifiers: .command)
                             }
                         }
                     }
@@ -171,9 +174,9 @@ struct ContentView: View {
                             Image(systemName: "square.and.arrow.up")
                                 .padding(Layout.controlPadding)
                         }
-                        
                         .buttonStyle(.plain)
                         .glassEffect(.regular.interactive(), in: .circle)
+                        .keyboardShortcut("s", modifiers: [.command, .shift])
                         
                     }
                     Button(action: {
@@ -190,6 +193,7 @@ struct ContentView: View {
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .circle)
+                    .keyboardShortcut("r", modifiers: [.command])
                 }
                 
                 HStack{
@@ -278,7 +282,7 @@ struct ContentView: View {
                         
                         Divider()
                         
-                        Toggle("Private Mode", isOn:$privateMode)
+                        Toggle("Record History", isOn:$recordHistory)
             
 
                     } label: {
@@ -290,6 +294,9 @@ struct ContentView: View {
                     .frame(width: 40, height: 40)
                     .glassEffect(.regular.interactive(), in: .circle)
                 }
+                
+                Divider()
+                
             }
             .padding(.horizontal, Layout.outerPadding)
             .padding(.vertical, 8) 
@@ -327,7 +334,7 @@ struct ContentView: View {
                             .onChange(of: browserState.url) { oldValue, newValue in
                                 if let newURL = newValue {
                                     urlInput = newURL.absoluteString
-                                    if(privateMode == false) {
+                                    if(recordHistory == true && newURL.absoluteString != homepage && newURL != Bundle.main.url(forResource: "home", withExtension: "html")) {
                                         HistoryManager.addToHistory(
                                             title: browserState.title.isEmpty ? browserState.url!.host() ?? "No Title" : browserState.title,
                                             url: browserState.url?.absoluteString ?? "https://example.com",

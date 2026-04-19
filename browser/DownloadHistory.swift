@@ -18,24 +18,7 @@ struct DownloadRow: View {
     let action: () -> Void
     let onDelete: () -> Void
     
-    @StateObject var downloadStore = DownloadStore()
-
     var body: some View {
-        
-        HStack {
-            Text("Downloads")
-                .font(.system(.headline, design: .rounded))
-            Spacer()
-            Button("Clear All") {
-                for item in Array(downloadStore.items) {
-                    downloadStore.remove(id: item.id)
-                }
-            }
-            .buttonStyle(.plain)
-            .font(.caption)
-            .foregroundColor(.secondary)
-        }
-        
         Button(action: action) {
             HStack(spacing: 12) {
                 ZStack {
@@ -89,41 +72,58 @@ struct DownloadRow: View {
 }
 
 struct DownloadsView: View {
-    @StateObject private var store = DownloadStore()
+    @StateObject private var downloadStore = DownloadStore()
     
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
     var sidebarWidth: Int = 300
-
+    
     @State private var showAddSheet = false
     @State private var urlInput: String = ""
     @State private var titleInput: String = ""
-
+    
     var body: some View {
-        VStack(spacing: 0) {
-            ScrollView {
-                if store.items.isEmpty {
-                    EmptyDownloadsView()
-                        .padding(.top, 40)
-                } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(store.items) { mark in
-                            DownloadRow(
-                                Download: mark,
-                                action: {
-                                    NSWorkspace.shared.activateFileViewerSelecting([URL(string:mark.to)!])
-                                },
-                                onDelete: { store.remove(id: mark.id) }
-                            )
-                        }
+        
+        VStack {
+            HStack {
+                Text("Downloads")
+                    .font(.system(.headline, design: .rounded))
+                Spacer()
+                Button("Clear All") {
+                    for item in Array(downloadStore.items) {
+                        downloadStore.remove(id: item.id)
                     }
-                    .padding(16)
                 }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundColor(.secondary)
             }
-            .frame(minWidth: CGFloat(sidebarWidth))
-
-
+            .padding()
+            VStack(spacing: 0) {
+                ScrollView {
+                    if downloadStore.items.isEmpty {
+                        EmptyDownloadsView()
+                            .padding(.top, 40)
+                    } else {
+                        VStack(alignment: .leading, spacing: 10) {
+                            ForEach(downloadStore.items) { mark in
+                                DownloadRow(
+                                    Download: mark,
+                                    action: {
+                                        NSWorkspace.shared.activateFileViewerSelecting([URL(string:mark.to)!])
+                                    },
+                                    onDelete: { downloadStore.remove(id: mark.id) }
+                                )
+                            }
+                        }
+                        .padding(16)
+                    }
+                }
+                .frame(minWidth: CGFloat(sidebarWidth))
+                
+                
+            }
+            .background(Color.black.opacity(0.03))
         }
-        .background(Color.black.opacity(0.03))
     }
 }
 

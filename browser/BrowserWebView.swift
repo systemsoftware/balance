@@ -2,6 +2,7 @@ import SwiftUI
 import WebKit
 import AppKit
 internal import Combine
+import ZIPFoundation
 
 final class BrowserState: ObservableObject {
     @Published var url: URL?
@@ -169,6 +170,23 @@ final class BrowserWKWebView: WKWebView {
             }
         }
     
+    final class WebExtensionManager {
+        static let shared = WebExtensionManager()
+        
+        let controller = WKWebExtensionController()
+        
+        private init() {}
+        
+        func loadExtension(from url: URL) throws {
+            Task {
+                let ext = try await WKWebExtension(resourceBaseURL: url)
+                let context = WKWebExtensionContext(for: ext)
+
+                try controller.load(context)
+            }
+        }
+    }
+    
     @objc func openInNewTab(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL else { print("no url"); return }
         DispatchQueue.main.async {
@@ -222,6 +240,9 @@ struct BrowserWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.webExtensionController = WebExtensionManager.shared.controller
+        
+        ExtensionStorage.loadInstalledExtensions()
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
@@ -452,4 +473,169 @@ struct BrowserWebView: NSViewRepresentable {
             completionHandler(result == .alertFirstButtonReturn ? input.stringValue : nil)
         }
     }
+}
+
+// MARK: - Manager
+
+final class WebExtensionManager {
+    static let shared = WebExtensionManager()
+    
+    let controller = WKWebExtensionController()
+    private(set) var contexts: [WKWebExtensionContext] = []
+    
+    private init() {}
+    
+    func loadExtension(from url: URL) throws {
+        Task {
+            let ext = try await WKWebExtension(resourceBaseURL: url)
+            let context = WKWebExtensionContext(for: ext)
+            
+            try controller.load(context)
+            contexts.append(context)
+        }
+    }
+    
+    func unloadAll() {
+        contexts.removeAll()
+    }
+}
+
+// MARK: - Storage
+
+enum ExtensionStorage {
+    
+    static func extensionsDirectory() throws -> URL {
+        let base = try FileManager.default.url(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask,
+            appropriateFor: nil,
+            create: true
+        )
+        
+        let dir = base.appendingPathComponent("YourBrowser/extensions", isDirectory: true)
+        
+        try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
+        
+        return dir
+    }
+    
+    static func loadInstalledExtensions() {
+        do {
+            let dir = try extensionsDirectory()
+            let contents = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+            
+            for folder in contents {
+                var isDir: ObjCBool = false
+                if FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDir),
+                   isDir.boolValue {
+                    
+                    try WebExtensionManager.shared.loadExtension(from: folder)
+                }
+            }
+        } catch {
+            print("Failed to load extensions:", error)
+        }
+    }
+}
+
+// MARK: - CRX Installer
+
+enum CRXInstaller {
+    
+    // Download CRX
+    static func download(from url: URL) async throws -> URL {
+        let (tempURL, _) = try await URLSession.shared.download(from: url)
+        return tempURL
+    }
+    
+    // Install CRX (download already done)
+    static func install(from crxURL: URL) async throws {
+        let extensionsDir = try ExtensionStorage.extensionsDirectory()
+        
+        let extID = UUID().uuidString
+        let dest = extensionsDir.appendingPathComponent(extID)
+        
+        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        
+        try extractCRX(at: crxURL, to: dest)
+        
+        let manifestURL = findManifest(in: dest)
+        
+        guard let manifestURL else {
+            throw NSError(domain: "Extension", code: 1, userInfo: [
+                NSLocalizedDescriptionKey: "manifest.json not found"
+            ])
+        }
+        
+        let root = manifestURL.deletingLastPathComponent()
+        
+        try WebExtensionManager.shared.loadExtension(from: root)
+    }
+    
+    // Combined helper
+    static func install(fromRemote url: URL) {
+        Task {
+            do {
+                let crx = try await download(from: url)
+                try await install(from: crx)
+                print("Extension installed")
+            } catch {
+                print("Install failed:", error)
+            }
+        }
+    }
+}
+
+// MARK: - CRX Extraction
+
+func extractCRX(at url: URL, to destination: URL) throws {
+    let data = try Data(contentsOf: url)
+    
+    guard String(data: data.prefix(4), encoding: .ascii) == "Cr24" else {
+        throw NSError(domain: "CRX", code: 1, userInfo: [
+            NSLocalizedDescriptionKey: "Invalid CRX file"
+        ])
+    }
+    
+    let version = data.withUnsafeBytes { $0.load(fromByteOffset: 4, as: UInt32.self) }
+    
+    let zipStart: Int
+    
+    if version == 2 {
+        let pubKeyLen = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self) }
+        let sigLen = data.withUnsafeBytes { $0.load(fromByteOffset: 12, as: UInt32.self) }
+        zipStart = 16 + Int(pubKeyLen) + Int(sigLen)
+    } else if version == 3 {
+        let headerLen = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self) }
+        zipStart = 12 + Int(headerLen)
+    } else {
+        throw NSError(domain: "CRX", code: 2, userInfo: [
+            NSLocalizedDescriptionKey: "Unsupported CRX version"
+        ])
+    }
+    
+    let zipData = data.subdata(in: zipStart..<data.count)
+    
+    let zipURL = destination.appendingPathComponent("temp.zip")
+    try zipData.write(to: zipURL)
+    
+    try FileManager.default.unzipItem(at: zipURL, to: destination)
+    
+    try? FileManager.default.removeItem(at: zipURL)
+}
+
+// MARK: - Helpers
+
+func findManifest(in directory: URL) -> URL? {
+    let fm = FileManager.default
+    
+    if let enumerator = fm.enumerator(at: directory, includingPropertiesForKeys: nil) {
+        for case let fileURL as URL in enumerator {
+            if fileURL.lastPathComponent == "manifest.json" {
+                return fileURL
+            }
+        }
+    }
+    
+    return nil
 }
