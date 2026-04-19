@@ -59,7 +59,7 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     
     // Fetch history sorted by newest first
-    @Query(sort: \HistoryItem.timestamp, order: .reverse) 
+    @Query(sort: \HistoryItem.timestamp, order: .reverse)
     private var historyItems: [HistoryItem]
     
     var body: some View {

@@ -27,7 +27,8 @@ let builtInSidebar = [
     SidebarItem(icon: "bookmark", view: "BookmarkView"),
     SidebarItem(icon: "gearshape.fill", view: "SettingsView"),
     SidebarItem(icon:"note.text", view: "NotesView"),
-    SidebarItem(icon:"clock.arrow.trianglehead.counterclockwise.rotate.90", view:"HistoryView")
+    SidebarItem(icon:"clock.arrow.trianglehead.counterclockwise.rotate.90", view:"HistoryView"),
+    SidebarItem(icon:"folder", view:"DownloadView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -46,6 +47,18 @@ enum BookmarkBarMode: Int, CaseIterable {
         }
     }
 }
+
+import AppKit
+
+enum BackgroundType: Int {
+    case system = 0
+    case light = 1
+    case dark = 2
+    case matchPage = 3
+    case custom = 4
+  
+
+ }
 
 struct ContentView: View {
     @State private var urlInput: String = ""
@@ -66,6 +79,9 @@ struct ContentView: View {
     // 0: hidden, 1: only new tab, 2: always
     @AppStorage("bookmarkBar", store: Config.sharedDefaults)
     private var bookmarkBar: Int = 0
+    
+    @AppStorage("backgroundType", store:Config.sharedDefaults)
+    private var backgroundType: Int = 0
 
     @State private var sidebarURL: URL?
     
@@ -82,7 +98,7 @@ struct ContentView: View {
     
     @State private var sidebarPage = WebPage()
     
-    @State var privateMode = false
+    @State private var privateMode = false
     
     var initialURLString: String?
     
@@ -311,8 +327,6 @@ struct ContentView: View {
                             .onChange(of: browserState.url) { oldValue, newValue in
                                 if let newURL = newValue {
                                     urlInput = newURL.absoluteString
-                                   
-                                    
                                     if(privateMode == false) {
                                         HistoryManager.addToHistory(
                                             title: browserState.title.isEmpty ? browserState.url!.host() ?? "No Title" : browserState.title,
@@ -349,22 +363,35 @@ struct ContentView: View {
                     HStack(spacing: 8) {
                         if let sidebarURL {
                             if sidebarURL.absoluteString.contains(".view") {
-                                if sidebarURL.absoluteString.contains("Chat") {
+
+                                switch sidebarURL.absoluteString {
+                                case let str where str.contains("Chat"):
                                     ChatView(contentV: self)
                                         .roundedBorderStyle()
-                                } else if sidebarURL.absoluteString.contains("Bookmark") {
+
+                                case let str where str.contains("Bookmark"):
                                     BookmarksView()
                                         .roundedBorderStyle()
-                                } else if (sidebarURL.absoluteString.contains("Settings")) {
+
+                                case let str where str.contains("Settings"):
                                     SettingsView()
                                         .roundedBorderStyle()
-                                } else if (sidebarURL.absoluteString.contains("Note")) {
+
+                                case let str where str.contains("Note"):
                                     NoteView()
                                         .roundedBorderStyle()
-                                } else if(sidebarURL.absoluteString.contains("History")) {
+
+                                case let str where str.contains("History"):
                                     HistoryView()
                                         .roundedBorderStyle()
+                                    
+                                case let str where str.contains("Download"):
+                                    DownloadsView()
+                                        .roundedBorderStyle()
+                                default:
+                                    EmptyView()
                                 }
+                                
                             } else {
                                 WebView(sidebarPage)
                                     .frame(width: CGFloat(sidebarWidth))
@@ -473,6 +500,8 @@ struct ContentView: View {
             } else{
                 print("no webview")
             }
+        } .onAppear {
+            sidebarPage.customUserAgent = userAgent
         }
 
     }

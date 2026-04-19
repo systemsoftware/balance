@@ -105,42 +105,66 @@ struct ChatView: View {
     // Bottom Input Bar
     private var inputBar: some View {
         VStack{
-            Button("Add Current Page") {
-                if let webView = contentView.browserState.webView {
+                Button(action: {
                     
-                    // 2. Call the function with the completion block
-                    getCleanText(from: webView) { cleanedText in
+                    if(CurrentPage.count > 0) {
+                        CurrentPage = ""
+                        return;
+                    }
+                    
+                    if let webView = contentView.browserState.webView {
                         
-                        // 3. Assign the result inside the brackets
-                        if let content = cleanedText {
-                            self.CurrentPage = content
+                        getCleanText(from: webView) { cleanedText in
+                            
+                            if let content = cleanedText {
+                                self.CurrentPage = content
+                            }
                         }
                     }
+                    
+                }) {
+                    
+                    if(CurrentPage.count == 0) {
+                      Text("Add Current Page")
+                            .padding(7)
+                    } else {
+                        Text("Remove Current Page")
+                            .padding(7)
+                    }
+                    
                 }
-            }
+                .buttonStyle(.plain)
+                .glassEffect()
             GlassCard {
                 HStack(spacing: 10) {
                     TextField("Query", text: $query)
                         .textFieldStyle(.plain)
                         .submitLabel(.send)
                         .onSubmit(sendMessage)
+                        .padding(7)
+                        .glassEffect()
                     
                     Button(action: sendMessage) {
                         Image(systemName: "paperplane.fill")
                             .font(.system(size: 14, weight: .bold))
+                            .padding(7)
                     }
-                    .buttonStyle(.glassProminent)
+                    .buttonStyle(.plain)
+                    .glassEffect()
                     .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty)
                     
                     Button(action: resetSession) {
                         Image(systemName: "arrow.counterclockwise")
                             .font(.system(size: 14))
+                            .padding(7)
                     }
-                    .buttonStyle(.glass)
+                    .buttonStyle(.plain)
+                    .glassEffect()
                 }
             }
             .padding()
         }
+        
     }
 
     // Helper for errors

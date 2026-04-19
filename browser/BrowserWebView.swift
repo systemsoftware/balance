@@ -112,6 +112,7 @@ extension BrowserState {
 
 final class BrowserWKWebView: WKWebView {
     
+    let downloadStore = DownloadStore()
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
             print("custom menu is finally firing!")
@@ -174,8 +175,7 @@ final class BrowserWKWebView: WKWebView {
             createNewTab(with: url)
         }
     }
-    
-
+ 
     @objc func manualDownload(_ sender: NSMenuItem) {
         guard let pointValue = sender.representedObject as? NSValue else { return }
         let point = pointValue.pointValue
@@ -200,7 +200,7 @@ final class BrowserWKWebView: WKWebView {
             }
         }
     }
-    
+        
     @objc func goBackAction() { goBack() }
     @objc func goForwardAction() { goForward() }
     @objc func reloadAction() { reload() }
@@ -250,6 +250,8 @@ struct BrowserWebView: NSViewRepresentable {
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+        
+        let downloadStore = DownloadStore()
 
         let state: BrowserState
         var downloads: Set<WKDownload> = []
@@ -336,6 +338,10 @@ struct BrowserWebView: NSViewRepresentable {
             downloads.insert(download)
             download.delegate = self
         }
+        
+        var downloadTitles: [WKDownload: String] = [:]
+        var downloadFrom: [WKDownload: String] = [:]
+        var downloadTo: [WKDownload: String] = [:]
 
         func download(_ download: WKDownload,
                       decideDestinationUsing response: URLResponse,
@@ -350,17 +356,38 @@ struct BrowserWebView: NSViewRepresentable {
             } else {
                 filename = "download"
             }
+            
+            downloadTitles[download] = suggestedFilename
+            downloadFrom[download] = response.url?.absoluteString
 
             let panel = NSSavePanel()
             panel.nameFieldStringValue = filename
 
-            panel.begin { result in
-                completionHandler(result == .OK ? panel.url : nil)
-            }
+            panel.begin { [weak self] result in
+                    if result == .OK, let url = panel.url {
+                        // SET DOWNLOAD TO HERE:
+                        // Store the path where the file is actually going to be saved
+                        self?.downloadTo[download] = url.path
+                        completionHandler(url)
+                    } else {
+                        completionHandler(nil)
+                    }
+                }
         }
 
                 func downloadDidFinish(_ download: WKDownload) {
                     print("Download completed successfully!")
+                    
+                    let title = downloadTitles[download] ?? "Unknown File"
+                    let url = downloadFrom[download] ?? "Unknown Location"
+                    let to = downloadTo[download] ?? "Unknown path"
+                    
+                    downloadStore.add(Download(
+                        title: title,
+                        from:url,
+                        to:to,
+                        time:Date()
+                    ))
                     downloads.remove(download)
                 }
 

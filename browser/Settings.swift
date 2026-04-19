@@ -269,6 +269,12 @@ struct SettingsView: View {
     var body: some View {
         VStack(spacing: 0) {
             
+            HStack {
+                Text("Settings")
+                    .font(.system(.headline, design: .rounded))
+                Spacer()
+            }.padding(.leading)
+            
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
                     ForEach(Settings) { setting in
