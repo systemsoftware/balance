@@ -11,7 +11,7 @@
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
-		A5892D782F8D68CA00512319 /* browser.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = browser.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		A5892D782F8D68CA00512319 /* Balance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Balance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
 /* Begin PBXFileSystemSynchronizedRootGroup section */
@@ -45,7 +45,7 @@
 		A5892D792F8D68CA00512319 /* Products */ = {
 			isa = PBXGroup;
 			children = (
-				A5892D782F8D68CA00512319 /* browser.app */,
+				A5892D782F8D68CA00512319 /* Balance.app */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -53,9 +53,9 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
-		A5892D772F8D68CA00512319 /* browser */ = {
+		A5892D772F8D68CA00512319 /* Balance */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A5892D832F8D68CB00512319 /* Build configuration list for PBXNativeTarget "browser" */;
+			buildConfigurationList = A5892D832F8D68CB00512319 /* Build configuration list for PBXNativeTarget "Balance" */;
 			buildPhases = (
 				A5892D742F8D68CA00512319 /* Sources */,
 				A5892D752F8D68CA00512319 /* Frameworks */,
@@ -68,12 +68,12 @@
 			fileSystemSynchronizedGroups = (
 				A5892D7A2F8D68CA00512319 /* browser */,
 			);
-			name = browser;
+			name = Balance;
 			packageProductDependencies = (
 				A57B78F52F94B57D000398CF /* ZIPFoundation */,
 			);
 			productName = browser;
-			productReference = A5892D782F8D68CA00512319 /* browser.app */;
+			productReference = A5892D782F8D68CA00512319 /* Balance.app */;
 			productType = "com.apple.product-type.application";
 		};
 /* End PBXNativeTarget section */
@@ -91,7 +91,7 @@
 					};
 				};
 			};
-			buildConfigurationList = A5892D732F8D68CA00512319 /* Build configuration list for PBXProject "browser" */;
+			buildConfigurationList = A5892D732F8D68CA00512319 /* Build configuration list for PBXProject "Balance" */;
 			developmentRegion = en;
 			hasScannedForEncodings = 0;
 			knownRegions = (
@@ -108,7 +108,7 @@
 			projectDirPath = "";
 			projectRoot = "";
 			targets = (
-				A5892D772F8D68CA00512319 /* browser */,
+				A5892D772F8D68CA00512319 /* Balance */,
 			);
 		};
 /* End PBXProject section */
@@ -387,7 +387,7 @@
 /* End XCBuildConfiguration section */
 
 /* Begin XCConfigurationList section */
-		A5892D732F8D68CA00512319 /* Build configuration list for PBXProject "browser" */ = {
+		A5892D732F8D68CA00512319 /* Build configuration list for PBXProject "Balance" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A5892D812F8D68CB00512319 /* Debug */,
@@ -396,7 +396,7 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A5892D832F8D68CB00512319 /* Build configuration list for PBXNativeTarget "browser" */ = {
+		A5892D832F8D68CB00512319 /* Build configuration list for PBXNativeTarget "Balance" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				A5892D842F8D68CB00512319 /* Debug */,
