@@ -124,7 +124,7 @@ struct ContentView: View {
             return true
 
         case .newTabOnly:
-            return location == URL(string: homepage != "default-home" ? homepage : Bundle.main.url(forResource: "home", withExtension: "html")!.absoluteString)
+            return location == URL(string: homepage != "default-home" ? homepage : "")
         }
     }
     
@@ -330,7 +330,7 @@ struct ContentView: View {
                             .onChange(of: browserState.url) { oldValue, newValue in
                                 if let newURL = newValue {
                                     urlInput = newURL.absoluteString
-                                    if(recordHistory == true && newURL.absoluteString != homepage && newURL != Bundle.main.url(forResource: "home", withExtension: "html")) {
+                                    if(recordHistory == true && newURL.absoluteString != homepage) {
                                         HistoryManager.addToHistory(
                                             title: browserState.title.isEmpty ? browserState.url!.host() ?? "No Title" : browserState.title,
                                             url: browserState.url?.absoluteString ?? "https://example.com",
@@ -347,14 +347,9 @@ struct ContentView: View {
                                 }
                             }
                     } else {
-                        VStack(spacing: 12) {
-                            Image(systemName: "globe")
-                                .font(.system(size: 50))
-                                .foregroundStyle(.secondary)
-                            Text("Loading...")
-                                .foregroundStyle(.secondary)
-                        }
-                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                       BrowserHomepage()
+                            .transition(.opacity)
+                            .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                     }
                 }
                 .padding(Layout.outerPadding)
@@ -512,15 +507,15 @@ struct ContentView: View {
     // MARK: - Helper Methods
     private func submitURL() {
         let trimmed = urlInput.trimmingCharacters(in: .whitespaces)
-        guard !trimmed.isEmpty else { return }
+     //   guard !trimmed.isEmpty else { return }
 
         let url: URL?
         if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
             url = URL(string: trimmed)
         } else if trimmed.contains(".") && !trimmed.contains(" ") {
             url = URL(string: "https://\(trimmed)")
-        } else if(trimmed == "homepage" || trimmed == "local-home") {
-            url = Bundle.main.url(forResource: "home", withExtension: "html")
+        } else if(trimmed == "default-home" || trimmed.count == 0) {
+            url = nil
         } else {
             let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
             url = URL(string: "https://www.google.com/search?q=\(encoded)")
