@@ -280,8 +280,6 @@ struct TextFieldRow: View {
     }
 }
 struct SettingsView: View {
-    @EnvironmentObject var tabManager: TabManager
-   
     @StateObject private var store = BookmarkStore()
     
     @AppStorage("sidebarWidth", store:Config.sharedDefaults)

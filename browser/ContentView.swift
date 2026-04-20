@@ -280,9 +280,6 @@ struct ContentView: View {
                             ))
                         }
                         
-                        Divider()
-                        
-                        Toggle("Record History", isOn:$recordHistory)
             
 
                     } label: {
@@ -295,7 +292,6 @@ struct ContentView: View {
                     .glassEffect(.regular.interactive(), in: .circle)
                 }
                 
-                Divider()
                 
             }
             .padding(.horizontal, Layout.outerPadding)

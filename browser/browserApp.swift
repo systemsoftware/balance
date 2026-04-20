@@ -110,4 +110,23 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
     }
+    
+    func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
+        let menu = NSMenu()
+        
+        let newWindowItem = NSMenuItem(
+            title: "New Window",
+            action: #selector(handleNewWindow),
+            keyEquivalent: ""
+        )
+        newWindowItem.target = self
+        
+        menu.addItem(newWindowItem)
+        
+        return menu
+    }
+    
+    @objc func handleNewWindow() {
+        createNewWindow()
+    }
 }
