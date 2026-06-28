@@ -59,6 +59,8 @@ func createNewWindow(with url: URL? = nil) {
         defer: false
     )
     
+    newWindow.title = "Balance"
+    
     let contentView = ContentView(initialURL: url)
     
     newWindow.isReleasedWhenClosed = false
@@ -85,6 +87,8 @@ func createNewTab(with url: URL? = nil) {
         backing: .buffered,
         defer: false
     )
+    
+    newWindow.title = "Balance"
     
     newWindow.isReleasedWhenClosed = false
     newWindow.contentView = NSHostingView(rootView: contentView)
@@ -128,5 +132,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     @objc func handleNewWindow() {
         createNewWindow()
+    }
+    
+    @objc func newWindowForTab(_ sender: Any?) {
+        createNewTab()
     }
 }

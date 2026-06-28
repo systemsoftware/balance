@@ -350,6 +350,15 @@ struct ContentView: View {
                        BrowserHomepage()
                             .transition(.opacity)
                             .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
+                            .task {
+                                if let window = NSApp.keyWindow {
+                                    browserState.title = "Balance"
+                                    window.title = "Balance"
+                                } else {
+                                    print("no key window")
+                                }
+                            }
+
                     }
                 }
                 .padding(Layout.outerPadding)
@@ -476,11 +485,7 @@ struct ContentView: View {
                 print("Attempting to load homepage: \(homepage)")
                 
                 if homepage == "default-home" {
-                    if let localURL = Bundle.main.url(forResource: "home", withExtension: "html") {
-                        location = localURL
-                    } else {
-                        print("Error: home.html not found in bundle")
-                    }
+                    browserState.title = "Home"
                 } else if let url = URL(string: homepage) {
                     location = url
                 } else {

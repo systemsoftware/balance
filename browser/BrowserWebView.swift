@@ -295,7 +295,7 @@ struct BrowserWebView: NSViewRepresentable {
                     self.state.progress = webView.estimatedProgress
                     self.state.isLoading = webView.isLoading
                 case "title":
-                    self.state.title = webView.title ?? ""
+                    self.state.title = webView.title ?? "Page"
                 case "URL":
                     self.state.url = webView.url
                 case "canGoBack":
@@ -315,7 +315,7 @@ struct BrowserWebView: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             state.isLoading = false
             state.url = webView.url
-            state.title = webView.title ?? ""
+            state.title = webView.title ?? "Page"
         }
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
