@@ -421,7 +421,7 @@ struct ContentView: View {
                         Button() {
                                   showCommands = true
                         } label: {
-                            Label("Commands", systemImage: "command.square")
+                            Label("Palette", systemImage: "command.square")
                         }
                               .keyboardShortcut("k", modifiers: [.command])
                         

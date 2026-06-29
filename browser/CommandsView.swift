@@ -156,12 +156,18 @@ struct CommandsView: View {
                     
                     if !filteredBookmarks.isEmpty {
                         Section(header: Text("Bookmarks").padding(.top, 8)) {
-                            ForEach(filteredBookmarks) {
-                                row(
-                                    title: $0.title,
-                                    image: "bookmark",
-                                    showsChevron: true
-                                )
+                            ForEach(filteredBookmarks) { mark in
+                                Button {
+                                    createNewTab(with: URL(string:mark.url))
+                                    dismiss()
+                                } label: {
+                                    row(
+                                        title: mark.title,
+                                        image: "bookmark",
+                                        showsChevron: true
+                                    )
+                                }
+                                .buttonStyle(.plain)
                             }
                         }
                     }
@@ -321,10 +327,10 @@ struct CommandsView: View {
             }
         }
         .listStyle(.inset)
-        .navigationTitle(screen == .commands ? "Commands" : "Select Profile")
+        .navigationTitle(screen == .commands ? "Palette" : "Select Profile")
         .searchable(
             text: $searchText,
-            prompt: screen == .commands ? "Search commands" : screen == .profiles ? "Search profiles" : "Cannot search"
+            prompt: screen == .commands ? "Search" : screen == .profiles ? "Search profiles" : "Cannot search"
         )
         .toolbar {
             if screen == .profiles {
