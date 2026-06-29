@@ -90,7 +90,7 @@ var Settings = [
         appStorageKey: ""
     ),
     Setting(
-            name: "AI Temperature",
+            name: "Temperature",
             type: "doubleSlider",
             appStorageKey: "temp",
             sliderMax: 1,
@@ -106,7 +106,7 @@ var Settings = [
         defaultValueInt: 1000
     ),
     Setting(
-        name:"AI Page Character Cutoff",
+        name:"Page Character Cutoff",
         type:"slider",
         appStorageKey: "pageCutoff",
         sliderMax: 15000,
@@ -114,7 +114,7 @@ var Settings = [
         defaultValueInt: 12000
     ),
     Setting(
-            name: "AI Instructions",
+            name: "Instructions",
             type: "text",
             appStorageKey: "instructions",
         ),

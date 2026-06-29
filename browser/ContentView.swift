@@ -24,7 +24,7 @@ struct SidebarItem: Identifiable, Codable {
 
 let builtInSidebar = [
     SidebarItem(icon: "message", view: "ChatView"),
-    SidebarItem(icon: "bookmark", view: "BookmarkView"),
+    SidebarItem(icon: "bookmark", view: "BookmarksView"),
     SidebarItem(icon: "gearshape.fill", view: "SettingsView"),
     SidebarItem(icon:"note.text", view: "NotesView"),
     SidebarItem(icon:"clock.arrow.trianglehead.counterclockwise.rotate.90", view:"HistoryView"),
@@ -420,7 +420,7 @@ struct ContentView: View {
                         
                         Divider()
                         
-                        Toggle("Show Sidebar",isOn:$showSidebar)
+                        Toggle("Sidebar",isOn:$showSidebar)
                         
                         Divider()
                       

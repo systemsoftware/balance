@@ -17,7 +17,7 @@ struct NoteView: View {
                     notepad = ""
                 }
                 
-                Toggle("This Tab Only", isOn:$thisTabOnly)
+                Toggle("Ephemeral", isOn:$thisTabOnly)
             }.padding()
                 .buttonStyle(.plain)
                 .font(.caption)

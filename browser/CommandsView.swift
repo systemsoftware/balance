@@ -10,6 +10,7 @@ struct Command: Identifiable {
         case newWindowAt
         case newPrivateWindowAt
         case newWindowWithProfile
+        case newProfile
     }
 
     let id = UUID()
@@ -86,7 +87,11 @@ struct CommandsView: View {
         
             .init(name: "New Window With Profile",
                   systemImage: "person.fill",
-                  action: .newWindowWithProfile, showsChevron:true)
+                  action: .newWindowWithProfile, showsChevron:true),
+        
+            .init(name: "Create Profile",
+                  systemImage: "person.fill.badge.plus",
+                  action: .newProfile, showsChevron:true)
     ]
     
     var filteredCommands: [Command] {
@@ -112,6 +117,7 @@ struct CommandsView: View {
     @State private var nameInput = ""
     @State private var iconInput = ""
     @State private var showNewProfile = false
+    @State private var hideProfileList = false
     
     var body: some View {
         List {
@@ -132,23 +138,33 @@ struct CommandsView: View {
                 
             case .profiles:
                 Section("Profiles") {
-                    ForEach(filteredProfiles) { profile in
-                        Button {
-                            createNewWindow(profile: profile.id.uuidString, profileIcon:profile.icon.isEmpty ? "person.fill" : profile.icon)
-                            dismiss()
-                        } label: {
-                            row(
-                                title: profile.name,
-                                image: profile.icon.isEmpty ? "person.fill" : profile.icon,
-                            )
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button(role: .destructive) {
-                                deleteProfile(profile)
-                            } label: {
-                                Label("Delete Profile", systemImage: "trash")
+                    if !hideProfileList {
+                        if !filteredProfiles.isEmpty {
+                            ForEach(filteredProfiles) { profile in
+                                Button {
+                                    createNewWindow(profile: profile.id.uuidString, profileIcon:profile.icon.isEmpty ? "person.fill" : profile.icon)
+                                    dismiss()
+                                } label: {
+                                    row(
+                                        title: profile.name,
+                                        image: profile.icon.isEmpty ? "person.fill" : profile.icon,
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                                .contextMenu {
+                                    Button(role: .destructive) {
+                                        deleteProfile(profile)
+                                    } label: {
+                                        Label("Delete Profile", systemImage: "trash")
+                                    }
+                                }
                             }
+                        } else {
+                            row(
+                                title: "No Profiles",
+                                image: "person.slash.fill",
+                            )
+                            .foregroundStyle(.gray)
                         }
                     }
                 }
@@ -306,6 +322,12 @@ struct CommandsView: View {
         case .newWindowWithProfile:
             searchText = ""
             screen = .profiles
+            showNewProfile = false
+            hideProfileList = false
+        case .newProfile:
+            screen = .profiles
+            showNewProfile = true
+            hideProfileList = true
         }
     }
     
