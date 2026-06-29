@@ -104,6 +104,14 @@ var Settings = [
         defaultValueInt: 1000
     ),
     Setting(
+        name:"AI Page Character Cutoff",
+        type:"slider",
+        appStorageKey: "pageCutoff",
+        sliderMax: 15000,
+        sliderMin: 0,
+        defaultValueInt: 12000
+    ),
+    Setting(
             name: "AI Instructions",
             type: "text",
             appStorageKey: "instructions",

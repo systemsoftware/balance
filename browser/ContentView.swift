@@ -218,6 +218,7 @@ struct ContentView: View {
     @State var showCommands = false
     @State var showTabSearch = false
     @State var showServerTrust = false
+    @State private var currentActivity: NSUserActivity?
     
     var body: some View {
         VStack(spacing: 0) {
@@ -358,7 +359,7 @@ struct ContentView: View {
                     .glassEffect(.regular.interactive(), in: .circle)
                     
                     Button() {
-                        showSuggestions = true
+                        showSuggestions.toggle()
                     } label: {
                         Image(systemName: "keyboard.onehanded.right")
                             .font(.title2)
@@ -576,17 +577,11 @@ struct ContentView: View {
                                 .transition(.opacity)
                                 .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                                 .onChange(of: browserState.url) { oldValue, newValue in
-                                    if let newURL = newValue {
-                                        urlInput = newURL.absoluteString
-                                        if(recordHistory == true && newURL.absoluteString != homepage) {
-                                            if priv == true { return }
-                                            HistoryManager.addToHistory(
-                                                title: browserState.title.isEmpty ? browserState.url!.host() ?? "No Title" : browserState.title,
-                                                url: browserState.url?.absoluteString ?? "https://example.com",
-                                                context: modelContext
-                                            )
-                                        }
-                                    }
+                                    handleURLChange(from: oldValue, to: newValue)
+                                }
+                                // 2. Keep userActivity lightweight by calling a separate function
+                                .userActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
+                                    configureUserActivity(userActivity)
                                 }
                             
                             if !splitURL.isEmpty {
@@ -768,6 +763,8 @@ struct ContentView: View {
             }
         }
 
+        
+        
     }
 
     // MARK: - Helper Methods
@@ -807,6 +804,37 @@ struct ContentView: View {
 
         operation.run()
     }
+    
+
+    private func configureUserActivity(_ userActivity: NSUserActivity) {
+        userActivity.webpageURL = browserState.url
+        self.currentActivity = userActivity
+    }
+
+    private func handleURLChange(from oldValue: URL?, to newValue: URL?) {
+        guard let newURL = newValue else { return }
+        
+        urlInput = newURL.absoluteString
+        
+        if priv == true { return }
+        
+        if let activity = currentActivity {
+            activity.webpageURL = newURL
+            activity.needsSave = true
+        }
+        
+        if recordHistory == true && newURL.absoluteString != homepage {
+            let historyTitle = browserState.title.isEmpty ? (newURL.host() ?? "No Title") : browserState.title
+            let historyURL = newURL.absoluteString
+            
+            HistoryManager.addToHistory(
+                title: historyTitle,
+                url: historyURL,
+                context: modelContext
+            )
+        }
+    }
+
     
 }
 

@@ -13,8 +13,39 @@ struct ChatItem: Identifiable {
 func getCleanText(from webView: WKWebView, completion: @escaping (String?) -> Void) {
     let jsCode = """
         (function() {
-            // innerText excludes <script> and <style> by default
-            let text = document.body.innerText; 
+            // Find main content area or fallback to body
+            let root = document.querySelector('article') || document.querySelector('main') || document.body;
+            let clone = root.cloneNode(true);
+            
+            // Remove common useless elements
+            let selectors = [
+                'nav', 'header', 'footer', 'aside', 'script', 'style', 'noscript', 
+                'svg', 'button', 'form', 'iframe',
+                '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
+                '.nav', '.header', '.footer', '.sidebar', '.menu', '.ad', '.advertisement', '.comments',
+                '#nav', '#header', '#footer', '#sidebar', '#menu', '#comments'
+            ];
+            
+            clone.querySelectorAll(selectors.join(', ')).forEach(el => el.remove());
+            
+            // Append to a hidden div to properly extract innerText (preserves block spacing)
+            // We cannot use display:none or visibility:hidden because innerText relies on layout
+            let tempDiv = document.createElement('div');
+            tempDiv.style.position = 'fixed';
+            tempDiv.style.left = '-9999px';
+            tempDiv.style.top = '-9999px';
+            tempDiv.style.width = '1px';
+            tempDiv.style.height = '1px';
+            tempDiv.style.overflow = 'hidden';
+            tempDiv.style.opacity = '0';
+            tempDiv.style.pointerEvents = 'none';
+            tempDiv.appendChild(clone);
+            document.body.appendChild(tempDiv);
+            
+            let text = tempDiv.innerText;
+            
+            document.body.removeChild(tempDiv);
+            
             // Remove excessive newlines and tabs to save tokens
             return text.replace(/\\t+/g, ' ')
                        .replace(/\\n{3,}/g, '\\n\\n')
@@ -37,6 +68,7 @@ struct ChatView: View {
     @AppStorage("instructions", store: Config.sharedDefaults) var inst: String = ""
     @AppStorage("temp", store: Config.sharedDefaults) var temp: Double = 0.7
     @AppStorage("maxTokens", store: Config.sharedDefaults) var maxTokens: Int = 1000
+    @AppStorage("pageCutoff", store:Config.sharedDefaults) var pageCutoff: Int = 12000
     
     @State var chat: [ChatItem] = []
     @State private var query: String = ""
@@ -80,7 +112,7 @@ struct ChatView: View {
                 VStack(alignment: .leading, spacing: 16) {
                     ForEach(chat) { item in
                         VStack(alignment: .leading, spacing: 8) {
-                            Text(item.query.replacingOccurrences(of: String(CurrentPage.prefix(12000)), with: ""))
+                            Text(item.query.replacingOccurrences(of: String(CurrentPage.prefix(pageCutoff)), with: ""))
                                 .font(.caption)
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 4)
