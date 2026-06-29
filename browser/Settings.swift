@@ -63,6 +63,7 @@ var Settings = [
             name: "Homepage",
             type: "text",
             appStorageKey: "homepage",
+            defaultValueString: "default-home"
         ),
     Setting(
             name: "Search Engine",

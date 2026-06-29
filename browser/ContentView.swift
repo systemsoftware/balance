@@ -148,7 +148,7 @@ struct ContentView: View {
     private var userAgent: String = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
     
     @AppStorage("homepage", store: Config.sharedDefaults)
-    private var homepage: String = "https://www.google.com"
+    private var homepage: String = "default-home"
     
     // 0: hidden, 1: only new tab, 2: always
     @AppStorage("bookmarkBar", store: Config.sharedDefaults)
@@ -224,6 +224,7 @@ struct ContentView: View {
     @State var showServerTrust = false
     @State private var currentActivity: NSUserActivity?
     @State private var showReader = false
+    @State private var showExtensionsPopover = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -276,7 +277,11 @@ struct ContentView: View {
                         
                     }
                     ReloadButton(state: browserState) {
-                        browserState.webView?.reload()
+                        if browserState.isLoading  {
+                            browserState.webView?.stopLoading()
+                        } else {
+                            browserState.webView?.reload()
+                        }
                     }
                 }
                 
@@ -338,30 +343,20 @@ struct ContentView: View {
                 }
                 
                 HStack(spacing: 12) {
-                    /*
-                    ForEach(extensionManager.contexts, id: \.self) { context in
-                        Button(action: {
-                            context.performAction(for: nil)
-                        }) {
-                            Image(systemName: "puzzlepiece.extension")
-                                .font(.system(size: 14))
-                                .padding(8)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        .popover(isPresented: Binding(
-                            get: { extensionManager.showPopup && extensionManager.popupContext === context },
-                            set: { if !$0 { extensionManager.showPopup = false } }
-                        )) {
-                            if let wv = extensionManager.popupWebView {
-                                ExtensionPopupView(webView: wv)
-                                    .frame(width: 320, height: 400)
-                            }
-                        }
-             
+                    Button(action: {
+                        showExtensionsPopover.toggle()
+                    }) {
+                        Image(systemName: "puzzlepiece.extension")
+                            .font(.title2)
+                            .padding(Layout.controlPadding)
                     }
-                     */
-
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .popover(isPresented: $showExtensionsPopover, arrowEdge: .bottom) {
+                        ExtensionsPopoverView()
+                            .frame(width: 350, height: 450)
+                    }
+           
                     Button(action: submitURL) {
                         Image(systemName: "magnifyingglass")
                             .font(.title2)
@@ -401,6 +396,34 @@ struct ContentView: View {
                                 Label(showFindNavigator ? "Hide Find In Page" : "Find In Page", systemImage: "magnifyingglass")
                             }
                             .keyboardShortcut("f", modifiers: .command)
+                            Divider()
+                            
+                            Menu() {
+                                Button() {
+                                    browserState.zoomIn()
+                                } label: {
+                                    Label("In", systemImage:"plus.magnifyingglass")
+                                }
+                                .keyboardShortcut("+", modifiers: .command)
+                                
+                                Button() {
+                                    browserState.zoomOut()
+                                } label: {
+                                    Label("Out", systemImage:"minus.magnifyingglass")
+                                }
+                                .keyboardShortcut("-", modifiers: .command)
+                                
+                                Divider()
+                                
+                                Button() {
+                                    browserState.resetZoom()
+                                } label: {
+                                    Label("Reset", systemImage: "arrow.clockwise.circle")
+                                }
+                            } label: {
+                                Label("Zoom", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
+                            }
+                            
                             Divider()
                             
                             Button() {
@@ -805,7 +828,7 @@ struct ContentView: View {
      //   guard !trimmed.isEmpty else { return }
 
         let url: URL?
-        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") {
+        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
             url = URL(string: trimmed)
         } else if trimmed.contains(".") && !trimmed.contains(" ") {
             url = URL(string: "https://\(trimmed)")
@@ -839,8 +862,10 @@ struct ContentView: View {
     
 
     private func configureUserActivity(_ userActivity: NSUserActivity) {
-        userActivity.webpageURL = browserState.url
-        self.currentActivity = userActivity
+        if let scheme = browserState.url?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            userActivity.webpageURL = browserState.url
+            self.currentActivity = userActivity
+        }
     }
 
     private func handleURLChange(from oldValue: URL?, to newValue: URL?) {
@@ -851,8 +876,10 @@ struct ContentView: View {
         if priv == true { return }
         
         if let activity = currentActivity {
-            activity.webpageURL = newURL
-            activity.needsSave = true
+            if let scheme = newURL.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                activity.webpageURL = newURL
+                activity.needsSave = true
+            }
         }
         
         if recordHistory == true && newURL.absoluteString != homepage {

@@ -55,16 +55,42 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
         let js = "document.querySelectorAll('video, audio').forEach(function(element) { element.muted = \(isAudioMuted ? "true" : "false"); });"
         webView?.evaluateJavaScript(js, completionHandler: nil)
     }
+    
+    @Published var zoomLevel: CGFloat = 1.0
+    
+    
+func applyZoom() {    
+    let js = "document.body.style.zoom = '\(zoomLevel)';"
+    
+    webView?.evaluateJavaScript(js, completionHandler: { result, error in
+        if let error = error {
+            print("Failed to apply zoom script: \(error.localizedDescription)")
+        }
+    })
+}
+
+    
+    public func zoomIn() {
+        zoomLevel = min(2.0, zoomLevel + 0.1)
+        applyZoom()
+    }
+
+    public func zoomOut() {
+        zoomLevel = max(0.5, zoomLevel - 0.1)
+        applyZoom()
+    }
+
+    public func resetZoom() {
+        zoomLevel = 1.0
+        applyZoom()
+    }
 }
 
 // MARK: - Browser Window
 
 final class BrowserWindow: NSObject, WKWebExtensionWindow {
     func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] {
-        if let tab = WebExtensionManager.shared.activeTab {
-            return [tab]
-        }
-        return []
+        Array(WebExtensionManager.shared.allTabs)
     }
     
     func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? {
@@ -90,6 +116,7 @@ final class BrowserWindow: NSObject, WKWebExtensionWindow {
         completionHandler(nil)
     }
     func close(for context: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) { completionHandler(nil) }
+    
 }
 
 extension BrowserState {
@@ -109,6 +136,7 @@ extension BrowserState {
         config.wraps = true
         webView?.find(query, configuration: config) { _ in }
     }
+
 
     func clearFind() {
         clearHighlights()  // add this
@@ -188,11 +216,27 @@ extension BrowserState {
 final class BrowserWKWebView: WKWebView {
     
     let downloadStore = DownloadStore()
+    var state: BrowserState?
+    
+    override func becomeFirstResponder() -> Bool {
+        let result = super.becomeFirstResponder()
+        if let state = state, result {
+            let manager = WebExtensionManager.shared
+            manager.activeTab = state
+            if let extController = self.configuration.webExtensionController {
+                extController.didActivateTab(state)
+            }
+        }
+        return result
+    }
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
             print("custom menu is finally firing!")
         
             menu.addItem(.separator())
+            
+            let point = convert(event.locationInWindow, from: nil)
+            let pointValue = NSValue(point: point)
 
             var isDownloadable = false
         
@@ -217,11 +261,17 @@ final class BrowserWKWebView: WKWebView {
                 }
                 if id.contains("WKMenuItemIdentifierOpenLinkInNewWindow") {
                     item.title = "Open in New Tab"
+                    item.target = self
+                    item.action = #selector(openInNewTab(_:))
+                    item.representedObject = pointValue
           //          isLink = true
                 }
                 
                 if id.contains("WKMenuItemIdentifierOpenImageInNewWindow") {
                     item.title = "Open Image in New Tab"
+                    item.target = self
+                    item.action = #selector(openInNewTab(_:))
+                    item.representedObject = pointValue
                 }
             }
 
@@ -235,8 +285,7 @@ final class BrowserWKWebView: WKWebView {
                 item.image = NSImage(systemSymbolName: "square.and.arrow.down", accessibilityDescription: "Download")
                 
                 // Store the click point instead of blocking the main thread with hitTestURL!
-                let point = convert(event.locationInWindow, from: nil)
-                item.representedObject = NSValue(point: point)
+                item.representedObject = pointValue
                 
                 menu.addItem(item)
             } else {
@@ -247,9 +296,22 @@ final class BrowserWKWebView: WKWebView {
 
     
     @objc func openInNewTab(_ sender: NSMenuItem) {
-        guard let url = sender.representedObject as? URL else { print("no url"); return }
-        DispatchQueue.main.async {
-            createNewTab(with: url)
+        guard let pointValue = sender.representedObject as? NSValue else { return }
+        let point = pointValue.pointValue
+
+        evaluateJavaScript("""
+        (function() {
+            let el = document.elementFromPoint(\(point.x), \(point.y));
+            if (!el) return null;
+            if (el.tagName === 'IMG' && el.src) return el.src;
+            let a = el.closest('a');
+            return a ? a.href : null;
+        })()
+        """) { value, _ in
+            guard let urlString = value as? String, let url = URL(string: urlString) else { return }
+            DispatchQueue.main.async {
+                createNewTab(with: url)
+            }
         }
     }
     
@@ -262,17 +324,21 @@ final class BrowserWKWebView: WKWebView {
         (function() {
             let el = document.elementFromPoint(\(point.x), \(point.y));
             if (!el) return null;
-            if (el.tagName === 'IMG') return el.src;
+            if (el.tagName === 'IMG' && el.src) return { url: el.src, name: el.getAttribute('download') || '' };
             let a = el.closest('a');
-            return a ? a.href : null;
+            return a ? { url: a.href, name: a.getAttribute('download') || '' } : null;
         })()
         """) { value, _ in
-            guard let urlString = value as? String, let url = URL(string: urlString) else { return }
+            guard let dict = value as? [String: String], let urlString = dict["url"], let url = URL(string: urlString) else { return }
+            let name = dict["name"] ?? ""
             let request = URLRequest(url: url)
             Task { @MainActor in
                 let download = await self.startDownload(using: request)
                 if let coordinator = self.navigationDelegate as? BrowserWebView.Coordinator {
                     coordinator.downloads.insert(download)
+                    if !name.isEmpty {
+                        coordinator.downloadTitles[download] = name
+                    }
                     download.delegate = coordinator
                 }
             }
@@ -303,8 +369,6 @@ struct BrowserWebView: NSViewRepresentable {
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.defaultWebpagePreferences.allowsContentJavaScript = true
-        config.webExtensionController = WebExtensionManager.shared.controller
-        config.webExtensionController?.delegate = context.coordinator
         
         // Chrome Web Store integration
         config.userContentController.add(context.coordinator, name: "installExtension")
@@ -408,12 +472,28 @@ struct BrowserWebView: NSViewRepresentable {
         default:
             config.websiteDataStore = .default()
         }
+        
+        let controller = WebExtensionManager.shared.controller(for: profileContext)
+        config.webExtensionController = controller
+        config.webExtensionController?.delegate = context.coordinator
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
+        webView.state = state
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
 
         state.attach(webView)
+        
+        let manager = WebExtensionManager.shared
+        let extController = manager.controller(for: profileContext)
+        if !manager.hasOpenedWindow {
+            extController.didOpenWindow(manager.window)
+            manager.hasOpenedWindow = true
+        }
+        manager.allTabs.insert(state)
+        extController.didOpenTab(state)
+        extController.didActivateTab(state)
+        manager.activeTab = state
 
         webView.addObserver(context.coordinator, forKeyPath: "estimatedProgress", options: .new, context: nil)
         webView.addObserver(context.coordinator, forKeyPath: "title", options: .new, context: nil)
@@ -485,6 +565,11 @@ struct BrowserWebView: NSViewRepresentable {
         nsView.removeObserver(coordinator, forKeyPath: "URL")
         nsView.removeObserver(coordinator, forKeyPath: "canGoBack")
         nsView.removeObserver(coordinator, forKeyPath: "canGoForward")
+        let manager = WebExtensionManager.shared
+        manager.allTabs.remove(coordinator.state)
+        if let controller = nsView.configuration.webExtensionController {
+            controller.didCloseTab(coordinator.state)
+        }
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKWebExtensionControllerDelegate {
@@ -584,6 +669,9 @@ struct BrowserWebView: NSViewRepresentable {
                     self.state.title = webView.title ?? "Page"
                 case "URL":
                     self.state.url = webView.url
+                    if let extController = webView.configuration.webExtensionController {
+                        extController.didChangeTabProperties([.URL], for: self.state)
+                    }
                 case "canGoBack":
                     self.state.canGoBack = webView.canGoBack
                 case "canGoForward":
@@ -598,11 +686,22 @@ struct BrowserWebView: NSViewRepresentable {
             state.isLoading = true
         }
 
+        func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
+            print("didFailProvisionalNavigation:", error)
+            state.isLoading = false
+        }
+        
+        func webView(_ webView: WKWebView, didFail navigation: WKNavigation!, withError error: Error) {
+            print("didFail:", error)
+            state.isLoading = false
+        }
+        
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             state.isLoading = false
             state.url = webView.url
             state.title = webView.title ?? "Page"
         }
+
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
             state.url = webView.url
@@ -612,6 +711,10 @@ struct BrowserWebView: NSViewRepresentable {
                      decidePolicyFor navigationAction: WKNavigationAction,
                      preferences: WKWebpagePreferences,
                      decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
+            
+            if let url = navigationAction.request.url {
+                print("decidePolicyFor:", url.absoluteString)
+            }
             
             if let host = navigationAction.request.url?.host {
                 let jsSetting = SitePermissionStore.shared.setting(for: host, type: "javascript", defaultState: .allow)
@@ -661,8 +764,10 @@ struct BrowserWebView: NSViewRepresentable {
                       suggestedFilename: String,
                       completionHandler: @escaping (URL?) -> Void) {
 
-            let filename: String
-            if !suggestedFilename.isEmpty && suggestedFilename != "download" {
+            var filename: String = suggestedFilename
+            if let preTitle = downloadTitles[download], !preTitle.isEmpty {
+                filename = preTitle
+            } else if !suggestedFilename.isEmpty && suggestedFilename != "download" {
                 filename = suggestedFilename
             } else if let lastComponent = response.url?.lastPathComponent, !lastComponent.isEmpty {
                 filename = lastComponent
@@ -670,7 +775,7 @@ struct BrowserWebView: NSViewRepresentable {
                 filename = "download"
             }
             
-            downloadTitles[download] = suggestedFilename
+            downloadTitles[download] = filename
             downloadFrom[download] = response.url?.absoluteString
 
             let panel = NSSavePanel()
@@ -811,7 +916,8 @@ struct BrowserWebView: NSViewRepresentable {
 final class WebExtensionManager: ObservableObject {
     static let shared = WebExtensionManager()
     
-    let controller = WKWebExtensionController()
+    private var controllers: [String: WKWebExtensionController] = [:]
+    
     @Published var contexts: [WKWebExtensionContext] = []
     
     @Published var popupWebView: WKWebView?
@@ -819,16 +925,34 @@ final class WebExtensionManager: ObservableObject {
     @Published var showPopup: Bool = false
     
     var activeTab: BrowserState?
+    var allTabs: Set<BrowserState> = []
     let window = BrowserWindow()
     
+    var hasOpenedWindow = false
     private var hasLoaded = false
     
     private init() {}
+    
+    func controller(for profile: String) -> WKWebExtensionController {
+        let key = profile.isEmpty ? "default" : profile
+        if let existing = controllers[key] { return existing }
+        let newController = WKWebExtensionController()
+        controllers[key] = newController
+        
+        // Load existing contexts into the new controller
+        for context in contexts {
+            try? newController.load(context)
+        }
+        
+        return newController
+    }
     
     /// Loads all extensions from disk. Only runs once; subsequent calls are no-ops.
     func loadAllFromDisk() {
         guard !hasLoaded else { return }
         hasLoaded = true
+        // Initialize default controller
+        _ = controller(for: "default")
         ExtensionStorage.loadInstalledExtensions()
     }
     
@@ -838,17 +962,24 @@ final class WebExtensionManager: ObservableObject {
                 let ext = try await WKWebExtension(resourceBaseURL: url)
                 let context = WKWebExtensionContext(for: ext)
                 
-                // Grant all requested permissions so content scripts and APIs work
-                for permission in context.currentPermissions {
+                // Grant all requested permissions from manifest
+                for permission in ext.requestedPermissions {
                     context.setPermissionStatus(.grantedExplicitly, for: permission, expirationDate: nil)
                 }
                 
-                // Grant access to all URLs so content scripts can inject
+                // Grant all requested match patterns from manifest
+                for pattern in ext.requestedPermissionMatchPatterns {
+                    context.setPermissionStatus(.grantedExplicitly, for: pattern, expirationDate: nil)
+                }
+                
+                // Grant access to all URLs so content scripts can inject as a fallback
                 if let allURLs = try? WKWebExtension.MatchPattern(string: "<all_urls>") {
                     context.setPermissionStatus(.grantedExplicitly, for: allURLs, expirationDate: nil)
                 }
                 
-                try controller.load(context)
+                for (_, controller) in controllers {
+                    try? controller.load(context)
+                }
                 contexts.append(context)
             } catch {
                 print("Failed to load extension from \(url):", error)
@@ -857,17 +988,17 @@ final class WebExtensionManager: ObservableObject {
     }
     
     func unloadExtension(_ context: WKWebExtensionContext) {
-        do {
-            try controller.unload(context)
-            contexts.removeAll { $0 === context }
-        } catch {
-            print("Failed to unload extension:", error)
+        for (_, controller) in controllers {
+            try? controller.unload(context)
         }
+        contexts.removeAll { $0 === context }
     }
     
     func unloadAll() {
         for context in contexts {
-            try? controller.unload(context)
+            for (_, controller) in controllers {
+                try? controller.unload(context)
+            }
         }
         contexts.removeAll()
     }
