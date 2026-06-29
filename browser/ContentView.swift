@@ -208,10 +208,14 @@ struct ContentView: View {
     }
     
     var priv: Bool = false
+    var bProfile: String = ""
+    var bProfileIcon: String? = ""
     
-    init(initialURL: URL? = nil, pvt: Bool = false) {
+    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "") {
         if(initialURL != nil) { initialURLString = initialURL?.absoluteString } else { print("nil initial url") }
         priv = pvt
+        bProfile = profile
+        bProfileIcon = profileIcon
     }
     
     @State var showSuggestions = false
@@ -258,10 +262,7 @@ struct ContentView: View {
                         }
                     }
                 }
-                
-                if priv {
-                    Image(systemName:"eye.slash.fill")
-                }
+           
 
                 if location != nil {
                     if location?.absoluteString.starts(with: "http") == true {
@@ -290,6 +291,22 @@ struct ContentView: View {
                     }
                     
                     AddressField(text: $urlInput, onSubmit: submitURL)
+                    
+                    Spacer()
+                    
+                    
+                    if priv {
+                        Image(systemName:"eye.slash.fill")
+                            .help("Private Mode")
+                            .padding(0.25)
+                    }
+                    
+                    
+                    if let pIcon = bProfileIcon {
+                        Image(systemName: pIcon)
+                            .help("Profile active")
+                            .padding(.trailing, 10)
+                    }
                 }
                 .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
                 .popover(isPresented: $showSuggestions) {
@@ -587,7 +604,7 @@ struct ContentView: View {
                         }
                         
                         HStack(spacing: 8) {
-                            BrowserWebView(request:URLRequest(url:URL(string:homepage)!), state: browserState, priv:priv)
+                            BrowserWebView(request:URLRequest(url:URL(string:homepage)!), state: browserState, priv:priv, profile:bProfile)
                                 .roundedBorderStyleNoFrame()
                                 .transition(.opacity)
                                 .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
@@ -600,7 +617,7 @@ struct ContentView: View {
                                 }
                             
                             if !splitURL.isEmpty {
-                                BrowserWebView(request:URLRequest(url:URL(string:splitURL)!), state: splitState, priv:priv)
+                                BrowserWebView(request:URLRequest(url:URL(string:splitURL)!), state: splitState, priv:priv, profile:bProfile)
                                     .roundedBorderStyleNoFrame()
                                     .transition(.opacity)
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))

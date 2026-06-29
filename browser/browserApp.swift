@@ -51,13 +51,17 @@ struct browserApp: App {
     }
 }
 
-func createNewWindow(with url: URL? = nil, pvt: Bool = false) {
+func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String? = "") {
     let newWindow = NSWindow(
         contentRect: NSRect(x: 0, y: 0, width: 800, height: 800),
         styleMask: [.titled, .closable, .miniaturizable, .resizable],
         backing: .buffered,
         defer: false
     )
+    
+    if !profile.isEmpty {
+        print("Using custom profile: \(profile)")
+    }
     
     if let screen = NSScreen.main {
         let visibleFrame = screen.visibleFrame
@@ -66,7 +70,7 @@ func createNewWindow(with url: URL? = nil, pvt: Bool = false) {
     
     newWindow.title = "Balance"
     
-    let contentView = ContentView(initialURL: url, pvt:pvt)
+    let contentView = ContentView(initialURL: url, pvt:pvt, profile:profile, profileIcon:profileIcon ?? "person.fill")
     
     newWindow.isReleasedWhenClosed = false
     newWindow.contentView = NSHostingView(rootView: contentView)

@@ -293,6 +293,7 @@ struct BrowserWebView: NSViewRepresentable {
     @ObservedObject var state: BrowserState
     
     var priv: Bool = false
+    var profile = ""
 
     func makeCoordinator() -> Coordinator {
         Coordinator(state: state)
@@ -385,7 +386,28 @@ struct BrowserWebView: NSViewRepresentable {
         WebExtensionManager.shared.loadAllFromDisk()
         WebExtensionManager.shared.activeTab = state
         
-        config.websiteDataStore = priv ? WKWebsiteDataStore.nonPersistent() : WKWebsiteDataStore.default()
+        var profileContext = ""
+        
+        if priv {
+            profileContext = "priv"
+        }
+
+        
+        if !profile.isEmpty {
+            profileContext = "profile"
+        }
+        
+        switch profileContext {
+
+        case "priv":
+            config.websiteDataStore = .nonPersistent()
+
+        case "profile":
+            config.websiteDataStore = WKWebsiteDataStore(forIdentifier: UUID(uuidString: profile)!)
+            
+        default:
+            config.websiteDataStore = .default()
+        }
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
