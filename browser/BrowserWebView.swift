@@ -4,7 +4,7 @@ import AppKit
 internal import Combine
 import ZIPFoundation
 
-final class BrowserState: ObservableObject {
+final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var url: URL?
     @Published var title: String = ""
     @Published var isLoading: Bool = false
@@ -16,6 +16,80 @@ final class BrowserState: ObservableObject {
     @Published var isFindBarVisible: Bool = false
     @Published var findQuery: String = ""
     @Published var findMatchCount: Int = 0
+    @Published var isAudioMuted: Bool = false
+    
+    // MARK: - WKWebExtensionTab
+    
+    func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
+        WebExtensionManager.shared.window
+    }
+    
+    func webView(for context: WKWebExtensionContext) -> WKWebView? {
+        self.webView
+    }
+    
+    func title(for context: WKWebExtensionContext) -> String? {
+        self.title
+    }
+    
+    func url(for context: WKWebExtensionContext) -> URL? {
+        self.url
+    }
+    
+    func isLoadingComplete(for context: WKWebExtensionContext) -> Bool {
+        !self.isLoading
+    }
+    
+    func isPinned(for context: WKWebExtensionContext) -> Bool { false }
+    func isReaderModeAvailable(for context: WKWebExtensionContext) -> Bool { false }
+    func isReaderModeActive(for context: WKWebExtensionContext) -> Bool { false }
+    func isPlayingAudio(for context: WKWebExtensionContext) -> Bool { false }
+    func isMuted(for context: WKWebExtensionContext) -> Bool { self.isAudioMuted }
+    func size(for context: WKWebExtensionContext) -> CGSize {
+        webView?.frame.size ?? .zero
+    }
+    func zoomFactor(for context: WKWebExtensionContext) -> Double { 1.0 }
+    
+    func toggleMute() {
+        isAudioMuted.toggle()
+        let js = "document.querySelectorAll('video, audio').forEach(function(element) { element.muted = \(isAudioMuted ? "true" : "false"); });"
+        webView?.evaluateJavaScript(js, completionHandler: nil)
+    }
+}
+
+// MARK: - Browser Window
+
+final class BrowserWindow: NSObject, WKWebExtensionWindow {
+    func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] {
+        if let tab = WebExtensionManager.shared.activeTab {
+            return [tab]
+        }
+        return []
+    }
+    
+    func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? {
+        WebExtensionManager.shared.activeTab
+    }
+    
+    func windowType(for context: WKWebExtensionContext) -> WKWebExtension.WindowType { .normal }
+    func windowState(for context: WKWebExtensionContext) -> WKWebExtension.WindowState { .normal }
+    func setWindowState(_ state: WKWebExtension.WindowState, for context: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) { completionHandler(nil) }
+    func isPrivate(for context: WKWebExtensionContext) -> Bool { false }
+    
+    func screenFrame(for context: WKWebExtensionContext) -> CGRect {
+        NSScreen.main?.frame ?? .zero
+    }
+    
+    func frame(for context: WKWebExtensionContext) -> CGRect {
+        NSApp.mainWindow?.frame ?? .zero
+    }
+    
+    func setFrame(_ frame: CGRect, for context: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) { completionHandler(nil) }
+    func focus(for context: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
+        NSApp.mainWindow?.makeKeyAndOrderFront(nil)
+        completionHandler(nil)
+    }
+    func close(for context: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) { completionHandler(nil) }
 }
 
 extension BrowserState {
@@ -170,22 +244,7 @@ final class BrowserWKWebView: WKWebView {
             }
         }
     
-    final class WebExtensionManager {
-        static let shared = WebExtensionManager()
-        
-        let controller = WKWebExtensionController()
-        
-        private init() {}
-        
-        func loadExtension(from url: URL) throws {
-            Task {
-                let ext = try await WKWebExtension(resourceBaseURL: url)
-                let context = WKWebExtensionContext(for: ext)
 
-                try controller.load(context)
-            }
-        }
-    }
     
     @objc func openInNewTab(_ sender: NSMenuItem) {
         guard let url = sender.representedObject as? URL else { print("no url"); return }
@@ -193,6 +252,7 @@ final class BrowserWKWebView: WKWebView {
             createNewTab(with: url)
         }
     }
+    
  
     @objc func manualDownload(_ sender: NSMenuItem) {
         guard let pointValue = sender.representedObject as? NSValue else { return }
@@ -231,6 +291,8 @@ final class BrowserWKWebView: WKWebView {
 struct BrowserWebView: NSViewRepresentable {
     let request: URLRequest
     @ObservedObject var state: BrowserState
+    
+    var priv: Bool = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(state: state)
@@ -241,8 +303,89 @@ struct BrowserWebView: NSViewRepresentable {
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         config.webExtensionController = WebExtensionManager.shared.controller
+        config.webExtensionController?.delegate = context.coordinator
         
-        ExtensionStorage.loadInstalledExtensions()
+        // Chrome Web Store integration
+        config.userContentController.add(context.coordinator, name: "installExtension")
+        
+        let installedIDs = WebExtensionManager.shared.contexts.compactMap { $0.baseURL.lastPathComponent }
+        let idsStr = installedIDs.map { "\"\($0)\"" }.joined(separator: ",")
+        
+        let cwsScript = """
+        (function() {
+            window.balanceInstalledExtensions = [\(idsStr)];
+            if (!window.location.hostname.includes("chromewebstore.google.com")) return;
+            let checkInterval = setInterval(() => {
+                let buttons = Array.from(document.querySelectorAll('button'));
+                let installBtn = buttons.find(b => {
+                    let text = b.innerText.toLowerCase();
+                    let aria = (b.getAttribute('aria-label') || "").toLowerCase();
+                    if (text.includes("switch to chrome") || aria.includes("switch to chrome")) return false;
+                    
+                    return text.includes("available on chrome") || 
+                           text.includes("add to chrome") ||
+                           text.includes("install");
+                });
+                
+                if (installBtn && !installBtn.hasAttribute('data-balance-injected')) {
+                    let pathParts = window.location.pathname.split('/');
+                    let extId = pathParts[pathParts.length - 1];
+                    
+                    if (extId && extId.length === 32) {
+                        let newBtn = installBtn.cloneNode(true);
+                        newBtn.setAttribute('data-balance-injected', 'true');
+                        newBtn.disabled = false;
+                        
+                        let isInstalled = window.balanceInstalledExtensions.includes(extId);
+                        
+                        let spans = newBtn.querySelectorAll('span');
+                        let textSpan = Array.from(spans).find(s => s.innerText.includes("Chrome") || s.innerText.includes("Install"));
+                        
+                        let btnText = isInstalled ? "Installed" : "Install in Balance";
+                        
+                        if (textSpan) {
+                            textSpan.innerText = btnText;
+                        } else {
+                            newBtn.innerText = btnText;
+                        }
+                        
+                        newBtn.style.backgroundColor = isInstalled ? "#34C759" : "#007AFF"; 
+                        newBtn.style.color = "white";
+                        newBtn.style.opacity = "1";
+                        newBtn.style.cursor = isInstalled ? "default" : "pointer";
+                        newBtn.style.pointerEvents = "auto";
+                        
+                        installBtn.parentNode.replaceChild(newBtn, installBtn);
+                        
+                        if (!isInstalled) {
+                            newBtn.addEventListener('click', (e) => {
+                                e.preventDefault();
+                                e.stopPropagation();
+                                if (textSpan) textSpan.innerText = "Installing...";
+                                else newBtn.innerText = "Installing...";
+                                window.webkit.messageHandlers.installExtension.postMessage(extId);
+                                
+                                setTimeout(() => {
+                                    if (textSpan) textSpan.innerText = "Installed";
+                                    else newBtn.innerText = "Installed";
+                                    newBtn.style.backgroundColor = "#34C759";
+                                }, 2000);
+                            });
+                        }
+                        
+                        clearInterval(checkInterval);
+                    }
+                }
+            }, 1000);
+        })();
+        """
+        let script = WKUserScript(source: cwsScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        config.userContentController.addUserScript(script)
+        
+        WebExtensionManager.shared.loadAllFromDisk()
+        WebExtensionManager.shared.activeTab = state
+        
+        config.websiteDataStore = priv ? WKWebsiteDataStore.nonPersistent() : WKWebsiteDataStore.default()
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
         webView.navigationDelegate = context.coordinator
@@ -255,6 +398,58 @@ struct BrowserWebView: NSViewRepresentable {
         webView.addObserver(context.coordinator, forKeyPath: "URL", options: .new, context: nil)
         webView.addObserver(context.coordinator, forKeyPath: "canGoBack", options: .new, context: nil)
         webView.addObserver(context.coordinator, forKeyPath: "canGoForward", options: .new, context: nil)
+        
+        webView.allowsBackForwardNavigationGestures = true
+        
+            let base = try? FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+
+            let fileManager = FileManager.default
+            let dir = base!.appendingPathComponent("Balance/contentblockers", isDirectory: true)
+        
+            let userContentController = webView.configuration.userContentController
+
+            userContentController.removeAllContentRuleLists()
+
+            do {
+                let items = try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+
+                for item in items {
+                    // Load JSON rules from file
+                    let jsonStr = try String(contentsOf: item, encoding: .utf8)
+
+                    let identifier = "dynamicRules-\(UUID().uuidString)"
+
+                    guard let data = jsonStr.data(using: .utf8),
+                          (try? JSONSerialization.jsonObject(with: data)) != nil else {
+                        print("addToContentBlocker — invalid JSON rules at: \(item.lastPathComponent)")
+                        continue
+                    }
+
+                    WKContentRuleListStore.default().compileContentRuleList(
+                        forIdentifier: identifier,
+                        encodedContentRuleList: jsonStr
+                    ) { ruleList, error in
+                        if let error {
+                            print("Failed to compile content blocker rules: \(error.localizedDescription)")
+                            return
+                        }
+
+                        guard let ruleList else {
+                            print("Failed to compile content blocker rules: no rule list returned")
+                            return
+                        }
+
+                        userContentController.add(ruleList)
+                    }
+                }
+            } catch {
+                print("Error reading directory: \(error.localizedDescription)")
+            }
         
         webView.load(request)
         return webView
@@ -270,7 +465,7 @@ struct BrowserWebView: NSViewRepresentable {
         nsView.removeObserver(coordinator, forKeyPath: "canGoForward")
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKWebExtensionControllerDelegate {
         
         let downloadStore = DownloadStore()
 
@@ -279,6 +474,75 @@ struct BrowserWebView: NSViewRepresentable {
 
         init(state: BrowserState) {
             self.state = state
+        }
+        
+        // MARK: - WKWebExtensionControllerDelegate
+        
+        func webExtensionController(_ controller: WKWebExtensionController, openWindowsFor extensionContext: WKWebExtensionContext) -> [any WKWebExtensionWindow] {
+            [WebExtensionManager.shared.window]
+        }
+        
+        func webExtensionController(_ controller: WKWebExtensionController, focusedWindowFor extensionContext: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
+            WebExtensionManager.shared.window
+        }
+        
+        func webExtensionController(_ controller: WKWebExtensionController, presentActionPopup action: WKWebExtension.Action, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
+            DispatchQueue.main.async {
+                WebExtensionManager.shared.popupWebView = action.popupWebView
+                WebExtensionManager.shared.popupContext = extensionContext
+                WebExtensionManager.shared.showPopup = true
+                completionHandler(nil)
+            }
+        }
+        
+        func webExtensionController(_ controller: WKWebExtensionController, promptForPermissions permissions: Set<WKWebExtension.Permission>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
+            // Auto-grant all requested permissions
+            completionHandler(permissions, nil)
+        }
+        
+        func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionMatchPatterns matchPatterns: Set<WKWebExtension.MatchPattern>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void) {
+            // Auto-grant all requested match patterns
+            completionHandler(matchPatterns, nil)
+        }
+        
+        func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<URL>, Date?) -> Void) {
+            // Auto-grant access to all URLs
+            completionHandler(urls, nil)
+        }
+        
+        func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
+            if let optionsURL = extensionContext.optionsPageURL {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .openURLInNewTab,
+                        object: nil,
+                        userInfo: ["url": optionsURL]
+                    )
+                }
+            }
+            completionHandler(nil)
+        }
+        
+        func webExtensionController(_ controller: WKWebExtensionController, openNewTabUsing configuration: WKWebExtension.TabConfiguration, for extensionContext: WKWebExtensionContext, completionHandler: @escaping ((any WKWebExtensionTab)?, Error?) -> Void) {
+            if let url = configuration.url {
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(
+                        name: .openURLInNewTab,
+                        object: nil,
+                        userInfo: ["url": url]
+                    )
+                }
+            }
+            completionHandler(WebExtensionManager.shared.activeTab, nil)
+        }
+        
+        func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
+            if message.name == "installExtension", let extId = message.body as? String {
+                let downloadURLString = "https://clients2.google.com/service/update2/crx?response=redirect&prodversion=114.0.0.0&acceptformat=crx2,crx3&x=id%3D" + extId + "%26installsource%3Dondemand%26uc"
+                if let url = URL(string: downloadURLString) {
+                    CRXInstaller.install(fromRemote: url)
+                }
+            }
         }
 
         override func observeValue(
@@ -472,31 +736,87 @@ struct BrowserWebView: NSViewRepresentable {
             let result = alert.runModal()
             completionHandler(result == .alertFirstButtonReturn ? input.stringValue : nil)
         }
+        
+
     }
 }
 
 // MARK: - Manager
 
-final class WebExtensionManager {
+final class WebExtensionManager: ObservableObject {
     static let shared = WebExtensionManager()
     
     let controller = WKWebExtensionController()
-    private(set) var contexts: [WKWebExtensionContext] = []
+    @Published var contexts: [WKWebExtensionContext] = []
+    
+    @Published var popupWebView: WKWebView?
+    @Published var popupContext: WKWebExtensionContext?
+    @Published var showPopup: Bool = false
+    
+    var activeTab: BrowserState?
+    let window = BrowserWindow()
+    
+    private var hasLoaded = false
     
     private init() {}
     
-    func loadExtension(from url: URL) throws {
-        Task {
-            let ext = try await WKWebExtension(resourceBaseURL: url)
-            let context = WKWebExtensionContext(for: ext)
-            
-            try controller.load(context)
-            contexts.append(context)
+    /// Loads all extensions from disk. Only runs once; subsequent calls are no-ops.
+    func loadAllFromDisk() {
+        guard !hasLoaded else { return }
+        hasLoaded = true
+        ExtensionStorage.loadInstalledExtensions()
+    }
+    
+    func loadExtension(from url: URL) {
+        Task { @MainActor in
+            do {
+                let ext = try await WKWebExtension(resourceBaseURL: url)
+                let context = WKWebExtensionContext(for: ext)
+                
+                // Grant all requested permissions so content scripts and APIs work
+                for permission in context.currentPermissions {
+                    context.setPermissionStatus(.grantedExplicitly, for: permission, expirationDate: nil)
+                }
+                
+                // Grant access to all URLs so content scripts can inject
+                if let allURLs = try? WKWebExtension.MatchPattern(string: "<all_urls>") {
+                    context.setPermissionStatus(.grantedExplicitly, for: allURLs, expirationDate: nil)
+                }
+                
+                try controller.load(context)
+                contexts.append(context)
+            } catch {
+                print("Failed to load extension from \(url):", error)
+            }
+        }
+    }
+    
+    func unloadExtension(_ context: WKWebExtensionContext) {
+        do {
+            try controller.unload(context)
+            contexts.removeAll { $0 === context }
+        } catch {
+            print("Failed to unload extension:", error)
         }
     }
     
     func unloadAll() {
+        for context in contexts {
+            try? controller.unload(context)
+        }
         contexts.removeAll()
+    }
+    
+    /// Removes an extension's files from disk and unloads it.
+    func removeExtensionFromDisk(_ context: WKWebExtensionContext) {
+        unloadExtension(context)
+        
+        let baseURL = context.baseURL
+        do {
+            try FileManager.default.removeItem(at: baseURL)
+        } catch {
+            print("Failed to remove extension files at \(baseURL):", error)
+        }
     }
 }
 
@@ -512,7 +832,9 @@ enum ExtensionStorage {
             create: true
         )
         
-        let dir = base.appendingPathComponent("YourBrowser/extensions", isDirectory: true)
+        let dir = base.appendingPathComponent("Balance/extensions", isDirectory: true)
+        
+        print("ext dir, \(dir)")
         
         try FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         
@@ -529,7 +851,7 @@ enum ExtensionStorage {
                 if FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDir),
                    isDir.boolValue {
                     
-                    try WebExtensionManager.shared.loadExtension(from: folder)
+                    WebExtensionManager.shared.loadExtension(from: folder)
                 }
             }
         } catch {
@@ -549,11 +871,26 @@ enum CRXInstaller {
     }
     
     // Install CRX (download already done)
-    static func install(from crxURL: URL) async throws {
+    static func install(from crxURL: URL, originalURL: URL? = nil) async throws {
         let extensionsDir = try ExtensionStorage.extensionsDirectory()
         
-        let extID = UUID().uuidString
+        var extID = UUID().uuidString
+        if let original = originalURL?.absoluteString, let range = original.range(of: "x=id%3D") {
+            let afterId = original[range.upperBound...]
+            if let endRange = afterId.range(of: "%26") {
+                let extracted = String(afterId[..<endRange.lowerBound])
+                if extracted.count == 32 {
+                    extID = extracted
+                }
+            }
+        }
+        
         let dest = extensionsDir.appendingPathComponent(extID)
+        
+        // Remove existing directory if re-installing
+        if FileManager.default.fileExists(atPath: dest.path) {
+            try FileManager.default.removeItem(at: dest)
+        }
         
         try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
         
@@ -562,14 +899,16 @@ enum CRXInstaller {
         let manifestURL = findManifest(in: dest)
         
         guard let manifestURL else {
+            // Clean up the empty/invalid directory
+            try? FileManager.default.removeItem(at: dest)
             throw NSError(domain: "Extension", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "manifest.json not found"
+                NSLocalizedDescriptionKey: "manifest.json not found — the download may not be a valid CRX file"
             ])
         }
         
         let root = manifestURL.deletingLastPathComponent()
         
-        try WebExtensionManager.shared.loadExtension(from: root)
+         WebExtensionManager.shared.loadExtension(from: root)
     }
     
     // Combined helper
@@ -577,7 +916,7 @@ enum CRXInstaller {
         Task {
             do {
                 let crx = try await download(from: url)
-                try await install(from: crx)
+                try await install(from: crx, originalURL: url)
                 print("Extension installed")
             } catch {
                 print("Install failed:", error)
@@ -639,3 +978,4 @@ func findManifest(in directory: URL) -> URL? {
     
     return nil
 }
+

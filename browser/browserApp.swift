@@ -22,8 +22,8 @@ struct browserApp: App {
         WindowGroup {
             ContentView()
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                    print("App is about to close. Perform cleanup here.")
-                    if(clearDownloadHistoryOnClose) {
+                    print("App is about to close.")
+                    if(clearHistoryOnClose) {
                         HistoryManager.clearAllHistory()
                     }
                     
@@ -51,17 +51,22 @@ struct browserApp: App {
     }
 }
 
-func createNewWindow(with url: URL? = nil) {
+func createNewWindow(with url: URL? = nil, pvt: Bool = false) {
     let newWindow = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+        contentRect: NSRect(x: 0, y: 0, width: 800, height: 800),
         styleMask: [.titled, .closable, .miniaturizable, .resizable],
         backing: .buffered,
         defer: false
     )
     
+    if let screen = NSScreen.main {
+        let visibleFrame = screen.visibleFrame
+        newWindow.setFrame(visibleFrame, display: true, animate: true)
+    }
+    
     newWindow.title = "Balance"
     
-    let contentView = ContentView(initialURL: url)
+    let contentView = ContentView(initialURL: url, pvt:pvt)
     
     newWindow.isReleasedWhenClosed = false
     newWindow.contentView = NSHostingView(rootView: contentView)
@@ -127,11 +132,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         
         menu.addItem(newWindowItem)
         
+        let newPrivateWindowItem = NSMenuItem(
+            title: "New Private Window",
+            action: #selector(handleNewWindowPrivate),
+            keyEquivalent: ""
+        )
+        newPrivateWindowItem.target = self
+        
+        menu.addItem(newPrivateWindowItem)
+        
         return menu
     }
     
     @objc func handleNewWindow() {
         createNewWindow()
+    }
+    
+    @objc func handleNewWindowPrivate() {
+        createNewWindow(pvt: true)
     }
     
     @objc func newWindowForTab(_ sender: Any?) {

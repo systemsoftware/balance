@@ -226,7 +226,9 @@ struct BookmarkCard: View {
         .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
         .onHover { isHovered = $0 }
         .onTapGesture {
-            if let url = URL(string: bookmark.url) { NSWorkspace.shared.open(url) }
+            if let url = URL(string: bookmark.url) {
+                createNewTab(with:url)
+            }
         }
     }
 }

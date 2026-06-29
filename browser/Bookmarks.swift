@@ -6,9 +6,6 @@ struct Bookmark: Codable, Identifiable {
     var url: String
 }
 
-import SwiftUI
-
-// --- UI Components ---
 
 struct BookmarkRow: View {
     let bookmark: Bookmark
@@ -18,7 +15,6 @@ struct BookmarkRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                // Mock Favicon Circle
                 ZStack {
                     Circle()
                         .fill(Color.blue.opacity(0.1))
