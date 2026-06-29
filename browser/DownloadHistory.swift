@@ -81,6 +81,18 @@ struct DownloadsView: View {
     @State private var urlInput: String = ""
     @State private var titleInput: String = ""
     
+    @State private var searchText: String = ""
+    
+    var filteredHistory: [Download] {
+        if searchText.isEmpty {
+            return downloadStore.items
+        }
+        
+        return downloadStore.items.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
     var body: some View {
         
         VStack {
@@ -104,8 +116,10 @@ struct DownloadsView: View {
                         EmptyDownloadsView()
                             .padding(.top, 40)
                     } else {
+                        SearchInputView(text:$searchText)
+                            .padding(.horizontal)
                         VStack(alignment: .leading, spacing: 10) {
-                            ForEach(downloadStore.items) { mark in
+                            ForEach(filteredHistory) { mark in
                                 DownloadRow(
                                     Download: mark,
                                     action: {

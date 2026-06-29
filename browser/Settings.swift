@@ -16,7 +16,7 @@ struct Setting: Codable, Identifiable {
 
 enum DropdownOptionsSource: Codable {
     case staticOptions([Int: String])
-    case appStorage(String)
+    case staticTaggedOptions([String: String])
 }
 
 struct SettingRow: View {
@@ -26,7 +26,7 @@ struct SettingRow: View {
         VStack(alignment: .leading, spacing: 8) {
             
             
-            if setting.type != "header" && setting.type != "dropdown" && setting.type != "toggle" {
+            if setting.type != "header" && setting.type != "dropdown" && setting.type != "dropdownString" && setting.type != "toggle" {
                             Text(setting.name).font(.headline)
                         }
             
@@ -43,6 +43,8 @@ struct SettingRow: View {
                 Header(text: setting.name)
             case "dropdown":
                 DropdownRow(setting: setting)
+            case "dropdownString":
+                DropdownStringRow(setting: setting)
             default:
                 EmptyView()
             }
@@ -61,15 +63,34 @@ var Settings = [
             defaultValueBool: true
         ),
     Setting(
+            name:"Search Engine",
+            type:"dropdownString",
+            appStorageKey:"searchURL",
+            defaultValueString: "https://google.com/search?q=",
+            dropdownOptions: .staticTaggedOptions([
+                "https://google.com/search?q=": "Google",
+                "https://www.bing.com/search?q=":"Bing",
+                "https://duckduckgo.com/?q=":"DuckDuckGo",
+                "https://www.perplexity.ai/search/new?q=": "Perplexity",
+                "https://en.wikipedia.org/wiki/":"Wikipedia",
+                "https://search.yahoo.com/search?p=":"Yahoo"
+            ])
+        ),
+    Setting(
+            name:"Autofill Engine",
+            type:"dropdownString",
+            appStorageKey:"autofillEngine",
+            defaultValueString: "https://ac.duckduckgo.com/ac/?&type=list&q=",
+            dropdownOptions: .staticTaggedOptions([
+                "https://ac.duckduckgo.com/ac/?&type=list&q=": "DuckDuckGo",
+                "https://suggestqueries.google.com/complete/search?client=firefox&hl=en&q=":"Google"
+            ])
+        ),
+    Setting(
             name: "Homepage",
             type: "text",
             appStorageKey: "homepage",
             defaultValueString: "default-home"
-        ),
-    Setting(
-            name: "Search Engine",
-            type: "text",
-            appStorageKey: "searchEngine",
         ),
     Setting(
         name:"Sidebar",
@@ -209,24 +230,57 @@ struct DropdownRow: View {
         )
     }
 
-    var options: [Int: String] {
+    var options: [String: String] {
         switch setting.dropdownOptions {
         case .staticOptions(let options):
-            return options
-
-        case .appStorage(let key):
-            let json = Config.sharedDefaults?.string(forKey: key) ?? "[]"
-            let profiles = (try? JSONDecoder().decode([Profile].self,
-                                                      from: Data(json.utf8))) ?? []
-
             return Dictionary(
-                uniqueKeysWithValues: profiles.enumerated().map { index, profile in
-                    (index, profile.name)
-                }
+                uniqueKeysWithValues: options.map { (String($0.key), $0.value) }
             )
+
         case .none:
             return [:]
           
+        case .staticTaggedOptions(let options):
+            return options
+        }
+    }
+    
+    var body: some View {
+        Picker(setting.name, selection: $selectedValue) {
+            ForEach(options.keys.sorted(), id: \.self) { key in
+                if let keyInt = Int(key) {
+                    Text(options[key]!).tag(keyInt)
+                } else {
+                    Text(options[key]!).tag(key)
+                }
+            }
+        }
+        .pickerStyle(.menu)
+    }
+}
+
+// MARK: - Dropdown Component (String)
+struct DropdownStringRow: View {
+    let setting: Setting
+    @AppStorage var selectedValue: String
+
+    init(setting: Setting) {
+        self.setting = setting
+        let defaultVal = setting.defaultValueString ?? ""
+        
+        self._selectedValue = AppStorage(
+            wrappedValue: defaultVal,
+            setting.appStorageKey,
+            store: Config.sharedDefaults
+        )
+    }
+
+    var options: [String: String] {
+        switch setting.dropdownOptions {
+        case .staticTaggedOptions(let options):
+            return options
+        default:
+            return [:]
         }
     }
     
@@ -236,7 +290,7 @@ struct DropdownRow: View {
                 Text(options[key]!).tag(key)
             }
         }
-        .pickerStyle(.menu) // Or .segmented for small sets
+        .pickerStyle(.menu)
     }
 }
 
@@ -273,7 +327,6 @@ struct ToggleRow: View {
 
     init(setting: Setting) {
         self.setting = setting
-        // Initialize AppStorage with the Bool default value
         self._isEnabled = AppStorage(
             wrappedValue: setting.defaultValueBool ?? false,
             setting.appStorageKey,
@@ -283,8 +336,6 @@ struct ToggleRow: View {
 
     var body: some View {
         Toggle(isOn: $isEnabled) {
-            // Optional: You can put setting.name here if you want it
-            // inside the toggle row instead of the header above it
             Text(setting.name)
                 .font(.headline)
         }

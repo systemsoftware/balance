@@ -1,8 +1,14 @@
 import SwiftUI
+internal import Combine
 
 struct GoogleSuggestions: Decodable {
     let query: String
     let suggestions: [String]
+
+    init(query: String, suggestions: [String]) {
+        self.query = query
+        self.suggestions = suggestions
+    }
 
     init(from decoder: Decoder) throws {
         var container = try decoder.unkeyedContainer()
@@ -15,76 +21,139 @@ struct GoogleSuggestions: Decodable {
 
 struct AutoFillView: View {
     @Binding var searchTerm: String
-
+    
     @State private var result: GoogleSuggestions?
-    @State private var isLoading = true
-
+    @State private var isLoading = false
+    
+    @AppStorage("autofillEngine", store:Config.sharedDefaults) private var engine: String = "https://ac.duckduckgo.com/ac/?&type=list&q="
+    
+    var noContentAvView = false
+    
+    @State private var activeQuery: String = ""
+    
     @Environment(\.dismiss) private var dismiss
-
+    
+    @State private var cache: [String: [String]] = [:]
+    
+    var updateOther: Binding<String?>?
+    
     var suggestions: [String] {
         result?.suggestions ?? []
     }
-
+    
     var body: some View {
-        VStack(spacing: 0) {
-          
-
-            Group {
-                if isLoading {
-                    VStack(spacing: 12) {
-                        ProgressView()
-                        Text("Loading suggestions…")
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                } else if suggestions.isEmpty {
+        Group {
+            if isLoading {
+                HStack(spacing: 8) {
+                    ProgressView()
+                        .controlSize(.small)
+                    Text("Loading suggestions…")
+                        .foregroundStyle(.secondary)
+                }
+                .padding(.vertical, 6)
+                .frame(maxWidth: .infinity, alignment: .center)
+            } else if suggestions.isEmpty {
+                if !noContentAvView {
                     ContentUnavailableView(
                         "No Suggestions",
                         systemImage: "magnifyingglass",
                         description: Text("Try a different search.")
                     )
-                } else {
-                    List(suggestions, id: \.self) { suggestion in
-                        Button {
-                            searchTerm = suggestion
-                            dismiss()
-                        } label: {
-                            HStack(spacing: 12) {
-                                Image(systemName: "magnifyingglass")
-                                    .foregroundStyle(.secondary)
-
-                                Text(suggestion)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            .padding(.vertical, 6)
-                        }
-                        .buttonStyle(.plain)
-                    }
-                    .listStyle(.inset)
-                    .scrollContentBackground(.hidden)
+                    .frame(maxWidth: .infinity, minHeight: 350)
                     .listRowBackground(Color.clear)
-                    .animation(.default, value: suggestions)
+                } else {
+                    Text("Type to get suggestions")
+                        .foregroundStyle(.secondary)
+                        .padding(.vertical, 6)
                 }
+            } else {
+                ForEach(suggestions, id: \.self) { suggestion in
+                    Button {
+                        if let other = updateOther {
+                            other.wrappedValue = suggestion
+                            searchTerm = ""
+                        } else {
+                            searchTerm = suggestion
+                        }
+                        dismiss()
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: "magnifyingglass")
+                                .foregroundStyle(.secondary)
+                            
+                            Text(suggestion)
+                                .frame(maxWidth: .infinity, alignment: .leading)
+                        }
+                        .padding(.vertical, 6)
+                    }
+                    .buttonStyle(.plain)
+                }
+                .animation(.default, value: suggestions)
             }
-            .padding()
         }
-        .task {
-            isLoading = true
-            defer { isLoading = false }
+        .task(id: searchTerm) {
+            let query = searchTerm
+            activeQuery = query
 
-            result = try? await loadData()
+            do {
+                try await Task.sleep(nanoseconds: 300_000_000)
+                guard !Task.isCancelled else { return }
+                await fetchSuggestions(for: query)
+            } catch {}
         }
     }
-
-    func loadData() async throws -> GoogleSuggestions? {
+    
+    func loadData(for query: String) async throws -> GoogleSuggestions? {
         guard
-            let encoded = searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-            let url = URL(string: "https://suggestqueries.google.com/complete/search?client=firefox&hl=en&q=\(encoded)")
+            let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+            let url = URL(string:"\(engine)\(encoded)")
         else {
             return nil
         }
-
+        
         let (data, _) = try await URLSession.shared.data(from: url)
         return try JSONDecoder().decode(GoogleSuggestions.self, from: data)
     }
+    
+    func fetchSuggestions(for query: String) async {
+        guard !query.isEmpty else {
+            if activeQuery == query {
+                result = nil
+                isLoading = false
+            }
+            return
+        }
+        
+        if let cached = cache[query] {
+            if activeQuery == query {
+                result = GoogleSuggestions(query: query, suggestions: cached)
+                isLoading = false
+            }
+            return
+        }
+        
+        if activeQuery == query {
+            isLoading = true
+        }
+                
+        do {
+            let response = try await loadData(for: query)
+            
+            if !Task.isCancelled && activeQuery == query {
+                result = response
+                isLoading = false
+                
+                if let suggestions = response?.suggestions {
+                    cache[query] = suggestions
+                }
+            }
+        } catch {
+            print("error:", error)
+            if !Task.isCancelled && activeQuery == query {
+                result = nil
+                isLoading = false
+            }
+        }
+    }
+    
 }

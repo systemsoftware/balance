@@ -118,8 +118,11 @@ private struct AddressField: View {
 private struct AutoFillPopover: View {
     @Binding var searchTerm: String
     var body: some View {
-        AutoFillView(searchTerm: $searchTerm)
-            .frame(width: 500, height: 400)
+        List {
+            AutoFillView(searchTerm: $searchTerm)
+        }
+        .listStyle(.inset)
+        .frame(width: 500, height: 400)
     }
 }
 
@@ -254,6 +257,8 @@ struct ContentView: View {
     @State private var showReader = false
     @State private var showExtensionsPopover = false
     
+    @State var commandSearchText = ""
+    
     var body: some View {
         VStack(spacing: 0) {
             // MARK: - Address Bar
@@ -346,13 +351,16 @@ struct ContentView: View {
                     AutoFillPopover(searchTerm: $urlInput)
                 }
                 .sheet(isPresented: $showCommands) {
-                    CommandsView()
-                    Button("Close") {
-                        showCommands = false
+                    VStack(spacing: 0) {
+                        CommandsView(searchText:$commandSearchText, searchQuery: $urlInput)
+                        Button("Close") {
+                            showCommands = false
+                        }
+                        .padding()
+                        .buttonStyle(.borderedProminent)
+                        .tint(.red)
                     }
-                    .padding()
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
+                    .frame(width: 450, height: 600)
                 }
                 
                 .sheet(isPresented: $showTabSearch) {
@@ -859,6 +867,8 @@ struct ContentView: View {
         
         
     }
+    
+    @AppStorage("searchURL", store:Config.sharedDefaults) var searchURL = "https://www.google.com/search?q="
 
     // MARK: - Helper Methods
     private func submitURL() {
@@ -874,7 +884,7 @@ struct ContentView: View {
             url = nil
         } else {
             let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
-            url = URL(string: "https://www.google.com/search?q=\(encoded)")
+            url = URL(string: "\(searchURL)\(encoded)")
         }
 
         location = url

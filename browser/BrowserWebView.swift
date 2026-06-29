@@ -919,6 +919,7 @@ final class WebExtensionManager: ObservableObject {
     private var controllers: [String: WKWebExtensionController] = [:]
     
     @Published var contexts: [WKWebExtensionContext] = []
+    private var contextURLs: [WKWebExtensionContext: URL] = [:]
     
     @Published var popupWebView: WKWebView?
     @Published var popupContext: WKWebExtensionContext?
@@ -961,6 +962,7 @@ final class WebExtensionManager: ObservableObject {
             do {
                 let ext = try await WKWebExtension(resourceBaseURL: url)
                 let context = WKWebExtensionContext(for: ext)
+                contextURLs[context] = url
                 
                 // Grant all requested permissions from manifest
                 for permission in ext.requestedPermissions {
@@ -992,6 +994,7 @@ final class WebExtensionManager: ObservableObject {
             try? controller.unload(context)
         }
         contexts.removeAll { $0 === context }
+        contextURLs.removeValue(forKey: context)
     }
     
     func unloadAll() {
@@ -1001,17 +1004,23 @@ final class WebExtensionManager: ObservableObject {
             }
         }
         contexts.removeAll()
+        contextURLs.removeAll()
     }
     
     /// Removes an extension's files from disk and unloads it.
     func removeExtensionFromDisk(_ context: WKWebExtensionContext) {
+        let fileURL = contextURLs[context]
         unloadExtension(context)
         
-        let baseURL = context.baseURL
+        guard let fileURL = fileURL else {
+            print("No file URL found for extension context")
+            return
+        }
+        
         do {
-            try FileManager.default.removeItem(at: baseURL)
+            try FileManager.default.removeItem(at: fileURL)
         } catch {
-            print("Failed to remove extension files at \(baseURL):", error)
+            print("Failed to remove extension files at \(fileURL):", error)
         }
     }
 }

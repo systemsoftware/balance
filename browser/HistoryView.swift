@@ -71,8 +71,25 @@ struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     
     // Fetch history sorted by newest first
-    @Query(sort: \HistoryItem.timestamp, order: .reverse)
-    private var historyItems: [HistoryItem]
+    @Query private var historyItems: [HistoryItem]
+    
+    @State private var searchText: String = ""
+    
+    init() {
+        var descriptor = FetchDescriptor<HistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+        descriptor.fetchLimit = 1000
+        _historyItems = Query(descriptor)
+    }
+    
+    var filteredHistory: [HistoryItem] {
+        if searchText.isEmpty {
+            return historyItems
+        }
+        
+        return historyItems.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -102,7 +119,10 @@ struct HistoryView: View {
                     .padding(.top, 60)
                 } else {
                     LazyVStack(spacing: 8) {
-                        ForEach(historyItems) { item in
+                        
+                        SearchInputView(text:$searchText)
+                        
+                        ForEach(filteredHistory) { item in
                             HistoryRow(item: item) {
                                 createNewTab(with: URL(string:item.url))
                             }

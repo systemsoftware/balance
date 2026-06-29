@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import SwiftData
 
 
 struct Command: Identifiable {
@@ -46,7 +47,12 @@ struct CommandsView: View {
     @Environment(\.dismiss) private var dismiss
     
     @State private var screen: Screen = .commands
-    @State private var searchText = ""
+    @Binding var searchText: String
+    
+    @Query(sort: \HistoryItem.timestamp, order: .reverse)
+    private var historyItems: [HistoryItem]
+    
+    @State private var bookmarkStore = BookmarkStore()
     
     @AppStorage("profiles", store: Config.sharedDefaults)
     private var profilesJSON = "[]"
@@ -113,29 +119,91 @@ struct CommandsView: View {
             $0.name.localizedCaseInsensitiveContains(searchText)
         }
     }
+    
+    var filteredBookmarks: [Bookmark] {
+        if searchText.isEmpty {
+            return bookmarkStore.items
+        }
+        
+        return bookmarkStore.items.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+        
+    var filteredHistory: [HistoryItem] {
+        if searchText.isEmpty {
+            return historyItems
+        }
+        
+        return historyItems.filter {
+            $0.title.localizedCaseInsensitiveContains(searchText)
+        }
+    }
     @State private var urlString = ""
     @State private var nameInput = ""
     @State private var iconInput = ""
     @State private var showNewProfile = false
     @State private var hideProfileList = false
     
+    @Binding var searchQuery: String
+    
     var body: some View {
         List {
             switch screen {
             case .commands:
-                ForEach(filteredCommands) { command in
-                    Button {
-                        perform(command.action)
-                    } label: {
-                        row(
-                            title: command.name,
-                            image: command.systemImage,
-                            showsChevron: command.showsChevron
+                
+                Section() {
+                    
+                    if !filteredBookmarks.isEmpty {
+                        Section(header: Text("Bookmarks").padding(.top, 8)) {
+                            ForEach(filteredBookmarks) {
+                                row(
+                                    title: $0.title,
+                                    image: "bookmark",
+                                    showsChevron: true
+                                )
+                            }
+                        }
+                    }
+                    
+                    Section(header: Text("Search").padding(.top, 8)) {
+                        AutoFillView(searchTerm: $searchText, noContentAvView:true,
+                                     updateOther: Binding<String?>(
+                                         get: { searchQuery },
+                                         set: { searchQuery = $0 ?? "" }
+                                     )
                         )
                     }
-                    .buttonStyle(.plain)
+                    
+                    if !filteredCommands.isEmpty {
+                        Section(header: Text("Commands").padding(.top, 8)) {
+                            ForEach(filteredCommands) { command in
+                                Button {
+                                    perform(command.action)
+                                } label: {
+                                    row(
+                                        title: command.name,
+                                        image: command.systemImage,
+                                        showsChevron: command.showsChevron
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
                 }
                 
+                if !filteredHistory.isEmpty {
+                    Section(header: Text("History").padding(.top, 8)) {
+                        ForEach(filteredHistory) {
+                            row(
+                                title: $0.title,
+                                image: "arrow.up.circle",
+                                showsChevron: true
+                            )
+                        }
+                    }
+                }
             case .profiles:
                 Section("Profiles") {
                     if !hideProfileList {
