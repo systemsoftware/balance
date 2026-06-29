@@ -588,13 +588,19 @@ struct BrowserWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView,
                      decidePolicyFor navigationAction: WKNavigationAction,
-                     decisionHandler: @escaping (WKNavigationActionPolicy) -> Void) {
+                     preferences: WKWebpagePreferences,
+                     decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
+            
+            if let host = navigationAction.request.url?.host {
+                let jsSetting = SitePermissionStore.shared.setting(for: host, type: "javascript", defaultState: .allow)
+                preferences.allowsContentJavaScript = (jsSetting == .allow)
+            }
 
             if navigationAction.shouldPerformDownload {
-                decisionHandler(.download)
+                decisionHandler(.download, preferences)
                 return
             }
-            decisionHandler(.allow)
+            decisionHandler(.allow, preferences)
         }
 
         func webView(_ webView: WKWebView,
@@ -687,11 +693,48 @@ struct BrowserWebView: NSViewRepresentable {
                      windowFeatures: WKWindowFeatures) -> WKWebView? {
 
             if let url = navigationAction.request.url {
+                if let host = webView.url?.host {
+                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .block)
+                    if popupSetting == .block {
+                        print("Blocked popup to \(url)")
+                        return nil
+                    }
+                }
+                
                 DispatchQueue.main.async {
                     createNewTab(with: url)
                 }
             }
             return nil
+        }
+
+        @available(macOS 12.0, *)
+        func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin, initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType, decisionHandler: @escaping (WKPermissionDecision) -> Void) {
+            let host = origin.host
+            
+            var cameraState: PermissionState = .allow
+            var micState: PermissionState = .allow
+            
+            if type == .camera || type == .cameraAndMicrophone {
+                cameraState = SitePermissionStore.shared.mediaPermission(for: host, type: "camera")
+            }
+            if type == .microphone || type == .cameraAndMicrophone {
+                micState = SitePermissionStore.shared.mediaPermission(for: host, type: "microphone")
+            }
+            
+            if cameraState == .deny || micState == .deny {
+                decisionHandler(.deny)
+                return
+            }
+            
+            if (type == .camera && cameraState == .allow) ||
+               (type == .microphone && micState == .allow) ||
+               (type == .cameraAndMicrophone && cameraState == .allow && micState == .allow) {
+                decisionHandler(.grant)
+                return
+            }
+            
+            decisionHandler(.prompt)
         }
 
         func webView(_ webView: WKWebView,

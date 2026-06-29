@@ -3,7 +3,9 @@ import Security
 
 struct ServerTrustView: View {
     let trust: SecTrust
+    let url: URL?
     
+    @StateObject private var store = SitePermissionStore.shared
     @State private var isTrusted: Bool = false
     @State private var certificates: [SecCertificate] = []
     @State private var errorMessage: String? = nil
@@ -44,6 +46,21 @@ struct ServerTrustView: View {
                     }
                 }
             }
+            
+            if let host = url?.host {
+                Divider()
+                
+                Text("Permissions for \(host)")
+                    .font(.subheadline)
+                    .bold()
+                
+                VStack(spacing: 12) {
+                    permissionRow(title: "Camera", icon: "camera", host: host, type: "camera", isMedia: true)
+                    permissionRow(title: "Microphone", icon: "mic", host: host, type: "microphone", isMedia: true)
+                    permissionRow(title: "Pop-ups", icon: "macwindow.on.rectangle", host: host, type: "popups", isMedia: false, defaultState: .block)
+                    permissionRow(title: "JavaScript", icon: "curlybraces.square", host: host, type: "javascript", isMedia: false, defaultState: .allow)
+                }
+            }
         }
         .padding()
         .frame(width: 350, height: 400)
@@ -62,6 +79,38 @@ struct ServerTrustView: View {
         
         if let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate] {
             certificates = chain
+        }
+    }
+    
+    @ViewBuilder
+    private func permissionRow(title: String, icon: String, host: String, type: String, isMedia: Bool, defaultState: SettingState = .allow) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            if isMedia {
+                Picker("", selection: Binding(
+                    get: { store.mediaPermission(for: host, type: type) },
+                    set: { store.setMediaPermission(for: host, type: type, state: $0) }
+                )) {
+                    ForEach(PermissionState.allCases, id: \.self) { state in
+                        Text(state.rawValue).tag(state)
+                    }
+                }
+                .frame(width: 100)
+                .labelsHidden()
+            } else {
+                Picker("", selection: Binding(
+                    get: { store.setting(for: host, type: type, defaultState: defaultState) },
+                    set: { store.setSetting(for: host, type: type, state: $0) }
+                )) {
+                    ForEach(SettingState.allCases, id: \.self) { state in
+                        Text(state.rawValue).tag(state)
+                    }
+                }
+                .frame(width: 100)
+                .labelsHidden()
+            }
         }
     }
 }

@@ -219,6 +219,7 @@ struct ContentView: View {
     @State var showTabSearch = false
     @State var showServerTrust = false
     @State private var currentActivity: NSUserActivity?
+    @State private var showReader = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -283,7 +284,7 @@ struct ContentView: View {
                         TrustIndicator(trust: browserState.webView?.serverTrust, isPresented: $showTrustInfo)
                             .popover(isPresented: $showTrustInfo) {
                                 if let trust = browserState.webView?.serverTrust {
-                                    ServerTrustView(trust: trust)
+                                    ServerTrustView(trust: trust, url: browserState.url)
                                 }
                             }
                     }
@@ -294,7 +295,6 @@ struct ContentView: View {
                 .popover(isPresented: $showSuggestions) {
                     AutoFillPopover(searchTerm: $urlInput)
                 }
-                
                 .sheet(isPresented: $showCommands) {
                     CommandsView()
                     Button("Close") {
@@ -314,7 +314,8 @@ struct ContentView: View {
                     .buttonStyle(.borderedProminent)
                     .tint(.red)
                 }
-
+           
+                
                 if(showFindNavigator) {
                     FindBarView(state:browserState)
                 }
@@ -368,29 +369,34 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .circle)
                     .keyboardShortcut("s", modifiers: [.command, .shift])
+                        
 
                     Menu {
                         
                         
-                        Button("Commands") {
+                        Button() {
                                   showCommands = true
-                              }
+                        } label: {
+                            Label("Commands", systemImage: "command.square")
+                        }
                               .keyboardShortcut("k", modifiers: [.command])
                         
                         Divider()
                       
                         if let url = location {
-                            
-                            
-                            Button(showFindNavigator ? "Hide Find In Page" : "Find In Page") {
+                            Button() {
                                 showFindNavigator = !showFindNavigator
+                            } label: {
+                                Label(showFindNavigator ? "Hide Find In Page" : "Find In Page", systemImage: "magnifyingglass")
                             }
                             .keyboardShortcut("f", modifiers: .command)
                             Divider()
                             
-                            Button("Search Tabs") {
+                            Button() {
                                       showTabSearch = true
-                                  }
+                            } label: {
+                                Label("Search Tabs", systemImage: "rectangle.and.text.magnifyingglass")
+                            }
                             .keyboardShortcut("s", modifiers: [.command, .option])
                             
                             Divider()
@@ -528,7 +534,14 @@ struct ContentView: View {
                             }
                             .keyboardShortcut("i", modifiers: [.command, .option])
                             
-                                                        }
+                            Divider()
+                            
+                            Button("Reader Mode", systemImage: "doc.text") {
+                                showReader = true
+                            }
+                            .keyboardShortcut("r", modifiers: [.command, .option])
+                                                       
+                        }
                             
                     } label: {
                         Image(systemName: "line.3.horizontal.decrease.circle")
@@ -571,6 +584,13 @@ struct ContentView: View {
                 // MARK: - Web Content Area
                 ZStack {
                     if (location != nil) {
+                        
+                        
+                        if showReader {
+                            ReaderView(sourceWebView:browserState.webView!)
+                                .zIndex(100)
+                        }
+                        
                         HStack(spacing: 8) {
                             BrowserWebView(request:URLRequest(url:URL(string:homepage)!), state: browserState, priv:priv)
                                 .roundedBorderStyleNoFrame()
