@@ -11,7 +11,12 @@ struct Setting: Codable, Identifiable {
     var defaultValueString: String?
     var defaultValueBool: Bool?
     var defaultValueDouble: Double?
-    var dropdownOptions: [Int: String]?
+    var dropdownOptions: DropdownOptionsSource?
+}
+
+enum DropdownOptionsSource: Codable {
+    case staticOptions([Int: String])
+    case appStorage(String)
 }
 
 struct SettingRow: View {
@@ -46,13 +51,9 @@ struct SettingRow: View {
     }
 }
 
+
 // MARK: SETTINGS
 var Settings = [
-    Setting(
-    name:"Browsing",
-    type:"header",
-    appStorageKey: ""
-    ),
     Setting(
             name: "Record History",
             type: "toggle",
@@ -137,7 +138,7 @@ var Settings = [
             type: "dropdown",
             appStorageKey: "bookmarkBar",
             defaultValueInt: 0,
-            dropdownOptions: Dictionary(uniqueKeysWithValues: BookmarkBarMode.allCases.map { ($0.rawValue, $0.name) }),
+            dropdownOptions:.staticOptions(Dictionary(uniqueKeysWithValues: BookmarkBarMode.allCases.map { ($0.rawValue, $0.name) })),
         ),
     Setting(
         name:"Delete On Close",
@@ -199,7 +200,7 @@ struct DropdownRow: View {
 
     init(setting: Setting) {
         self.setting = setting
-        let defaultVal = setting.defaultValueInt ?? setting.dropdownOptions?.keys.first ?? 0
+        let defaultVal = setting.defaultValueInt ?? 0
         
         self._selectedValue = AppStorage(
             wrappedValue: defaultVal,
@@ -208,13 +209,31 @@ struct DropdownRow: View {
         )
     }
 
+    var options: [Int: String] {
+        switch setting.dropdownOptions {
+        case .staticOptions(let options):
+            return options
+
+        case .appStorage(let key):
+            let json = Config.sharedDefaults?.string(forKey: key) ?? "[]"
+            let profiles = (try? JSONDecoder().decode([Profile].self,
+                                                      from: Data(json.utf8))) ?? []
+
+            return Dictionary(
+                uniqueKeysWithValues: profiles.enumerated().map { index, profile in
+                    (index, profile.name)
+                }
+            )
+        case .none:
+            return [:]
+          
+        }
+    }
+    
     var body: some View {
         Picker(setting.name, selection: $selectedValue) {
-            if let options = setting.dropdownOptions {
-                // Sorting keys ensures the list doesn't jump around
-                ForEach(options.keys.sorted(), id: \.self) { key in
-                    Text(options[key] ?? "").tag(key)
-                }
+            ForEach(options.keys.sorted(), id: \.self) { key in
+                Text(options[key]!).tag(key)
             }
         }
         .pickerStyle(.menu) // Or .segmented for small sets
@@ -294,6 +313,23 @@ struct SettingsView: View {
     @AppStorage("sidebarWidth", store:Config.sharedDefaults)
     var sidebarWidth: Int = 300
 
+    @AppStorage("defaultProfile", store:Config.sharedDefaults) var defaultProfile = ""
+    
+    @AppStorage("profiles", store: Config.sharedDefaults)
+    private var profilesJSON = "[]"
+    
+    private var profiles: [Profile] {
+        get {
+            (try? JSONDecoder().decode([Profile].self,
+                                       from: Data(profilesJSON.utf8))) ?? []
+        }
+        set {
+            profilesJSON = String(
+                data: try! JSONEncoder().encode(newValue),
+                encoding: .utf8
+            )!
+        }
+    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -306,6 +342,20 @@ struct SettingsView: View {
             
             ScrollView {
                 VStack(alignment: .leading, spacing: 12) {
+                    
+                    Header(text:"Browsing")
+                        .padding(.horizontal)
+                        .padding(.top)
+                    Picker("Default Profile", selection: $defaultProfile) {
+                        Text("None").tag("")
+
+                        ForEach(profiles) { profile in
+                            Text(profile.name)
+                                .tag(profile.id.uuidString)
+                        }
+                    }
+                    .padding(.horizontal)
+                    
                     ForEach(Settings) { setting in
                         SettingRow(setting: setting)
                             .padding(.horizontal)

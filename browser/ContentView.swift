@@ -181,6 +181,8 @@ struct ContentView: View {
     
    @State private var splitURL: String = ""
     
+    @AppStorage("showSidebar", store:Config.sharedDefaults) var showSidebar = true
+    
     @State private var showFindNavigator = false
     @State private var showTrustInfo = false
 
@@ -210,19 +212,45 @@ struct ContentView: View {
     var priv: Bool = false
     var bProfile: String = ""
     var bProfileIcon: String? = ""
+    var bProfileName: String? = ""
     
+    @AppStorage("profiles", store: Config.sharedDefaults)
+    private var profilesJSON = "[]"
+    
+    @AppStorage("defaultProfile", store:Config.sharedDefaults) var defaultProfile = ""
+    private var profiles: [Profile] {
+        get {
+            (try? JSONDecoder().decode([Profile].self,
+                                       from: Data(profilesJSON.utf8))) ?? []
+        }
+        set {
+            profilesJSON = String(
+                data: try! JSONEncoder().encode(newValue),
+                encoding: .utf8
+            )!
+        }
+    }
+
     init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "") {
         if(initialURL != nil) { initialURLString = initialURL?.absoluteString } else { print("nil initial url") }
         priv = pvt
         bProfile = profile
         bProfileIcon = profileIcon
+        
+        if bProfile.isEmpty && !defaultProfile.isEmpty {
+            bProfile = defaultProfile
+            bProfileIcon = profiles.first(where: { $0.id.uuidString == bProfile })?.icon
+        }
+        
+        if !bProfile.isEmpty {
+            bProfileName = profiles.first(where: { $0.id.uuidString == bProfile })?.name
+        }
     }
     
     @State var showSuggestions = false
     @State var showCommands = false
     @State var showTabSearch = false
     @State var showServerTrust = false
-    @State private var currentActivity: NSUserActivity?
     @State private var showReader = false
     @State private var showExtensionsPopover = false
     
@@ -309,7 +337,7 @@ struct ContentView: View {
                     
                     if let pIcon = bProfileIcon {
                         Image(systemName: pIcon)
-                            .help("Profile active")
+                            .help("Profile: \(bProfileName ?? "")")
                             .padding(.trailing, 10)
                     }
                 }
@@ -386,6 +414,11 @@ struct ContentView: View {
                             Label("Commands", systemImage: "command.square")
                         }
                               .keyboardShortcut("k", modifiers: [.command])
+                        
+                        
+                        Divider()
+                        
+                        Toggle("Show Sidebar",isOn:$showSidebar)
                         
                         Divider()
                       
@@ -634,7 +667,7 @@ struct ContentView: View {
                                 .onChange(of: browserState.url) { oldValue, newValue in
                                     handleURLChange(from: oldValue, to: newValue)
                                 }
-                                // 2. Keep userActivity lightweight by calling a separate function
+                            // 2. Keep userActivity lightweight by calling a separate function
                                 .userActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
                                     configureUserActivity(userActivity)
                                 }
@@ -647,73 +680,73 @@ struct ContentView: View {
                             }
                         }
                     } else {
-                       BrowserHomepage()
+                        BrowserHomepage()
                             .transition(.opacity)
                             .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                             .task {
                                 browserState.title = "Balance"
                             }
-
+                        
                     }
                 }
                 .padding(Layout.outerPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
-
-
+                
+                
                 // MARK: - Sidebar
-
-                    HStack(spacing: 8) {
-                        if let sidebarURL {
-                            if sidebarURL.absoluteString.contains(".view") {
-
-                                switch sidebarURL.absoluteString {
-                                case let str where str.contains("Chat"):
-                                    ChatView(contentV: self)
-                                        .roundedBorderStyle()
-
-                                case let str where str.contains("Bookmark"):
-                                    BookmarksView()
-                                        .roundedBorderStyle()
-
-                                case let str where str.contains("Settings"):
-                                    SettingsView()
-                                        .roundedBorderStyle()
-
-                                case let str where str.contains("Note"):
-                                    NoteView()
-                                        .roundedBorderStyle()
-
-                                case let str where str.contains("History"):
-                                    HistoryView()
-                                        .roundedBorderStyle()
-                                    
-                                case let str where str.contains("Download"):
-                                    DownloadsView()
-                                        .roundedBorderStyle()
-
-                                case let str where str.contains("Extension"):
-                                    ExtensionsView()
-                                        .roundedBorderStyle()
-                                        
-                                case let str where str.contains("ContentBlocker"):
-                                    ContentBlockerView()
-                                        .roundedBorderStyle()
-                                        
-                                default:
-                                    EmptyView()
-                                }
+                
+                HStack(spacing: 8) {
+                    if let sidebarURL {
+                        if sidebarURL.absoluteString.contains(".view") {
+                            
+                            switch sidebarURL.absoluteString {
+                            case let str where str.contains("Chat"):
+                                ChatView(contentV: self)
+                                    .roundedBorderStyle()
                                 
-                            } else {
-                                WebView(sidebarPage)
-                                    .frame(width: CGFloat(sidebarWidth))
-                                    .overlay(
-                                        RoundedRectangle(cornerRadius: Layout.cornerRadius)
-                                            .stroke(Color.gray, lineWidth: 1)
-                                    )
-                                    .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
+                            case let str where str.contains("Bookmark"):
+                                BookmarksView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("Settings"):
+                                SettingsView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("Note"):
+                                NoteView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("History"):
+                                HistoryView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("Download"):
+                                DownloadsView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("Extension"):
+                                ExtensionsView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("ContentBlocker"):
+                                ContentBlockerView()
+                                    .roundedBorderStyle()
+                                
+                            default:
+                                EmptyView()
                             }
+                            
+                        } else {
+                            WebView(sidebarPage)
+                                .frame(width: CGFloat(sidebarWidth))
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: Layout.cornerRadius)
+                                        .stroke(Color.gray, lineWidth: 1)
+                                )
+                                .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                         }
-
+                    }
+                    if showSidebar {
                         VStack(spacing: Layout.sidebarItemSpacing) {
                             GlassEffectContainer {
                                 ForEach(sidebarStore.items) { item in
@@ -776,9 +809,11 @@ struct ContentView: View {
                         .frame(maxHeight: .infinity)
                         .padding(.vertical, Layout.outerPadding)
                     }
-                    .padding(.trailing, Layout.outerPadding)
-                    .padding(.vertical, Layout.outerPadding)
+                    }
+                        .padding(.trailing, Layout.outerPadding)
+                        .padding(.vertical, Layout.outerPadding)
                 }
+            
         }.onAppear {
             if let initialURLString {
                 print("has initialURLString: \(initialURLString)")
@@ -864,7 +899,6 @@ struct ContentView: View {
     private func configureUserActivity(_ userActivity: NSUserActivity) {
         if let scheme = browserState.url?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
             userActivity.webpageURL = browserState.url
-            self.currentActivity = userActivity
         }
     }
 
@@ -874,13 +908,6 @@ struct ContentView: View {
         urlInput = newURL.absoluteString
         
         if priv == true { return }
-        
-        if let activity = currentActivity {
-            if let scheme = newURL.scheme?.lowercased(), scheme == "http" || scheme == "https" {
-                activity.webpageURL = newURL
-                activity.needsSave = true
-            }
-        }
         
         if recordHistory == true && newURL.absoluteString != homepage {
             let historyTitle = browserState.title.isEmpty ? (newURL.host() ?? "No Title") : browserState.title
