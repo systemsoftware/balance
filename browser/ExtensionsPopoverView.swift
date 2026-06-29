@@ -48,7 +48,7 @@ struct ExtensionsPopoverView: View {
                     ScrollView {
                         VStack(spacing: 0) {
                             if manager.contexts.isEmpty {
-                                Text("No extensions found. Load a page to see available extensions if you have any.")
+                                Text("No extensions found.")
                                     .foregroundStyle(.secondary)
                                     .padding(.vertical, 20)
                             } else {

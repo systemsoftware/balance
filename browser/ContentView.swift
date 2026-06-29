@@ -371,20 +371,6 @@ struct ContentView: View {
                 }
                 
                 HStack(spacing: 12) {
-                    Button(action: {
-                        showExtensionsPopover.toggle()
-                    }) {
-                        Image(systemName: "puzzlepiece.extension")
-                            .font(.title2)
-                            .padding(Layout.controlPadding)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .circle)
-                    .popover(isPresented: $showExtensionsPopover, arrowEdge: .bottom) {
-                        ExtensionsPopoverView()
-                            .frame(width: 350, height: 450)
-                    }
-           
                     Button(action: submitURL) {
                         Image(systemName: "magnifyingglass")
                             .font(.title2)
@@ -403,6 +389,22 @@ struct ContentView: View {
                     .buttonStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .circle)
                     .keyboardShortcut("s", modifiers: [.command])
+                    
+                    if browserState.url != nil && browserState.url?.isFileURL == false {
+                        Button(action: {
+                            showExtensionsPopover.toggle()
+                        }) {
+                            Image(systemName: "puzzlepiece.extension")
+                                .font(.title2)
+                                .padding(Layout.controlPadding)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .popover(isPresented: $showExtensionsPopover, arrowEdge: .bottom) {
+                            ExtensionsPopoverView()
+                                .frame(width: 350, height: 450)
+                        }
+                    }
                         
 
                     Menu {
@@ -423,6 +425,7 @@ struct ContentView: View {
                         Divider()
                       
                         if let url = location {
+                            
                             Button() {
                                 showFindNavigator = !showFindNavigator
                             } label: {
