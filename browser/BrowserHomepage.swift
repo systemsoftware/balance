@@ -1,5 +1,6 @@
 import SwiftUI
 internal import Combine
+internal import UniformTypeIdentifiers
 
 // MARK: - Models
 
@@ -403,54 +404,128 @@ struct BrowserHomepage: View {
     @State private var searchText = ""
 
     let columns = [GridItem(.adaptive(minimum: 120, maximum: 140), spacing: 20)]
+    
+    
+    @AppStorage("homeBackground", store:Config.sharedDefaults) var homeBackground: String = ""
 
+    @State private var showingFilePicker = false
+    @State private var showingURLPrompt = false
+    @State private var urlString = ""
+    
+    
     var body: some View {
-        ScrollView {
-            VStack(spacing: 50) {
-
-                // ── Header: Clock + Weather ──────────────────────────────
-                HStack(alignment: .top, spacing: 40) {
-                    ClockView()
-                }
-                .padding(.top, 60)
-                
-                     WeatherView()
-                         .padding(.top, 8)
-                         
-
-
-                // ── Bookmarks ────────────────────────────────────────────
-                if !store.items.isEmpty {
-                    VStack(alignment: .leading, spacing: 16) {
-                        Label("Bookmarks", systemImage: "bookmark.fill")
+        ZStack {
+            BackgroundImage(homeBackground:homeBackground)
+                .ignoresSafeArea()
+            
+            ScrollView {
+                VStack(spacing: 50) {
+                    
+                    HStack(alignment: .top, spacing: 40) {
+                        ClockView()
+                    }
+                    .padding(.top, 60)
+                    
+                    WeatherView()
+                        .padding(.top, 8)
+                    
+                    
+                    
+                    if !store.items.isEmpty {
+                        VStack(alignment: .leading, spacing: 16) {
+                            Label("Bookmarks", systemImage: "bookmark.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.secondary)
+                                .padding(.horizontal, 40)
+                            
+                            LazyVGrid(columns: columns, spacing: 30) {
+                                ForEach(store.items) { bookmark in
+                                    BookmarkCard(bookmark: bookmark)
+                                }
+                            }
+                            .padding(.horizontal, 40)
+                        }
+                    } else {
+                        emptyBookmarksState
+                    }
+                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Top Stories", systemImage: "newspaper.fill")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.secondary)
-                            .padding(.horizontal, 40)
-
-                        LazyVGrid(columns: columns, spacing: 30) {
-                            ForEach(store.items) { bookmark in
-                                BookmarkCard(bookmark: bookmark)
-                            }
-                        }
-                        .padding(.horizontal, 40)
+                        
+                        NewsView()
                     }
-                } else {
-                    emptyBookmarksState
+                    .padding(.horizontal, 40)
+                    
+                    Spacer(minLength: 50)
                 }
-
-                VStack(alignment: .leading, spacing: 12) {
-                    Label("Top Stories", systemImage: "newspaper.fill")
-                        .font(.system(size: 13, weight: .semibold))
-                        .foregroundColor(.secondary)
-
-                    NewsView()
-                }
-                .padding(.horizontal, 40)
-
-                Spacer(minLength: 50)
             }
         }
         .frame(minWidth: 680, minHeight: 600)
+        .contextMenu {
+            Menu("Background") {
+                Button {
+                    showingFilePicker = true
+                } label: {
+                    Label("Add from File", systemImage: "folder")
+                }
+
+                Button {
+                    urlString = homeBackground
+                    showingURLPrompt = true
+                } label: {
+                    Label("Add from URL", systemImage: "link")
+                }
+                
+                Divider()
+                
+                Button {
+                    homeBackground = ""
+                } label: {
+                    Label("Remove", systemImage: "trash")
+                }
+
+            }
+         }
+        .sheet(isPresented: $showingURLPrompt) {
+            NavigationStack {
+                Form {
+                    TextField("Image URL", text: $urlString)
+                        .autocorrectionDisabled()
+                        .padding(.horizontal)
+                        .padding(.bottom)
+                }
+                .navigationTitle("Background URL")
+                .toolbar {
+                    ToolbarItem(placement: .cancellationAction) {
+                        Button("Cancel") {
+                            showingURLPrompt = false
+                        }
+                    }
+
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Save") {
+                            homeBackground = urlString
+                            showingURLPrompt = false
+                        }
+                    }
+                }
+            }
+        }
+        .fileImporter(
+            isPresented: $showingFilePicker,
+            allowedContentTypes: [.image]
+        ) { result in
+            switch result {
+            case .success(let url):
+                homeBackground = url.absoluteString
+
+            case .failure(let error):
+                print(error)
+            }
+        }
+
     }
 
     // MARK: Subviews
@@ -469,6 +544,8 @@ struct BrowserHomepage: View {
         store.add(Bookmark(title: "SwiftUI", url: "https://developer.apple.com/xcode/swiftui/"))
         store.add(Bookmark(title: "HN",      url: "https://news.ycombinator.com"))
     }
+    
+    
 }
 
 // MARK: - Preview
@@ -476,5 +553,44 @@ struct BrowserHomepage: View {
 struct BrowserHomepage_Previews: PreviewProvider {
     static var previews: some View {
         BrowserHomepage()
+    }
+}
+
+struct BackgroundImage: View {
+    let homeBackground: String
+
+    var body: some View {
+        GeometryReader { geo in
+            content
+                .frame(width: geo.size.width, height: geo.size.height)
+                .clipped()
+        }
+        .ignoresSafeArea()
+    }
+
+    @ViewBuilder
+    private var content: some View {
+        if let url = URL(string: homeBackground),
+           url.scheme?.hasPrefix("http") == true {
+
+            AsyncImage(url: url) { image in
+                image
+                    .resizable()
+                    .scaledToFill()
+            } placeholder: {
+                Color.clear
+            }
+
+        } else if
+            let url = URL(string: homeBackground),
+            let image = NSImage(contentsOf: url) {
+
+            Image(nsImage: image)
+                .resizable()
+                .scaledToFill()
+
+        } else {
+            EmptyView()
+        }
     }
 }
