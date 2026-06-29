@@ -320,12 +320,6 @@ struct ContentView: View {
                     FindBarView(state:browserState)
                 }
                 
-                Button("") {
-                    showSuggestions.toggle()
-                }
-                .buttonStyle(.plain)
-                .keyboardShortcut("s", modifiers: [.command])
-            
                 HStack(spacing: 12) {
                     /*
                     ForEach(extensionManager.contexts, id: \.self) { context in
@@ -362,13 +356,13 @@ struct ContentView: View {
                     Button() {
                         showSuggestions.toggle()
                     } label: {
-                        Image(systemName: "keyboard.onehanded.right")
+                        Image(systemName: "character.cursor.ibeam")
                             .font(.title2)
                             .padding(Layout.controlPadding)
                     }
                     .buttonStyle(.plain)
                     .glassEffect(.regular.interactive(), in: .circle)
-                    .keyboardShortcut("s", modifiers: [.command, .shift])
+                    .keyboardShortcut("s", modifiers: [.command])
                         
 
                     Menu {
@@ -527,24 +521,25 @@ struct ContentView: View {
                             .keyboardShortcut("p", modifiers: [.command])
                             
                             Divider()
+                    
+                            
+                            Button("Reader Mode", systemImage: "eyeglasses") {
+                                showReader.toggle()
+                            }
+                            .keyboardShortcut("r", modifiers: [.command, .option])
+                            
+                            Divider()
                             
                             Button("Dev Tools", systemImage: "chevron.left.forwardslash.chevron.right") {
                                 let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
                                 inspector?.perform(NSSelectorFromString("show"))
                             }
                             .keyboardShortcut("i", modifiers: [.command, .option])
-                            
-                            Divider()
-                            
-                            Button("Reader Mode", systemImage: "doc.text") {
-                                showReader = true
-                            }
-                            .keyboardShortcut("r", modifiers: [.command, .option])
-                                                       
+                                                                                   
                         }
                             
                     } label: {
-                        Image(systemName: "line.3.horizontal.decrease.circle")
+                        Image(systemName: "ellipsis")
                             .font(.title2)
                     }
                     .menuStyle(.borderlessButton)
