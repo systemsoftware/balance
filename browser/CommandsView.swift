@@ -83,19 +83,19 @@ struct CommandsView: View {
                   systemImage: "eye.slash.fill",
                   action: .newPrivateWindow, showsChevron:false),
         
-            .init(name: "New Window At",
+            .init(name: "New Window At...",
                   systemImage: "macwindow.badge.plus",
                   action: .newWindowAt, showsChevron:true),
         
-            .init(name: "New Private Window At",
+            .init(name: "New Private Window At...",
                   systemImage: "eye.slash.fill",
                   action: .newPrivateWindowAt, showsChevron:true),
         
-            .init(name: "New Window With Profile",
+            .init(name: "New Window With Profile...",
                   systemImage: "person.fill",
                   action: .newWindowWithProfile, showsChevron:true),
         
-            .init(name: "Create Profile",
+            .init(name: "Create Profile...",
                   systemImage: "person.fill.badge.plus",
                   action: .newProfile, showsChevron:true)
     ]
@@ -164,7 +164,7 @@ struct CommandsView: View {
                                     row(
                                         title: mark.title,
                                         image: "bookmark",
-                                        showsChevron: true
+                                        showsChevron: false
                                     )
                                 }
                                 .buttonStyle(.plain)
@@ -205,7 +205,7 @@ struct CommandsView: View {
                             row(
                                 title: $0.title,
                                 image: "arrow.up.circle",
-                                showsChevron: true
+                                showsChevron: false
                             )
                         }
                     }
@@ -363,6 +363,10 @@ struct CommandsView: View {
             Spacer()
             
             if showsChevron {
+                Image(systemName: "chevron.right")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+            } else {
                 Image(systemName: "chevron.right")
                     .font(.caption2)
                     .foregroundStyle(.tertiary)

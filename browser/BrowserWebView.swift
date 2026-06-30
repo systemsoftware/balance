@@ -368,6 +368,10 @@ struct BrowserWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        config.preferences.setValue(true, forKey: "fullScreenEnabled")
+        if #available(macOS 12.3, *) {
+            config.preferences.isElementFullscreenEnabled = true
+        }
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         
         // Chrome Web Store integration
