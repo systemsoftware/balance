@@ -139,11 +139,33 @@ struct CommandsView: View {
             $0.title.localizedCaseInsensitiveContains(searchText)
         }
     }
+    
+    var filteredTabs: [NSWindow] {
+        let validWindows = NSApp.windows.filter { window in
+            window.styleMask.contains(.titled) && 
+            window.styleMask.contains(.resizable) && 
+            window.className != "NSPanel"
+        }
+        
+        if searchText.isEmpty {
+            return validWindows
+        } else {
+            return validWindows.filter { window in
+                window.title.localizedCaseInsensitiveContains(searchText)
+            }
+        }
+    }
     @State private var urlString = ""
     @State private var nameInput = ""
     @State private var iconInput = ""
     @State private var showNewProfile = false
     @State private var hideProfileList = false
+    
+    @AppStorage("paletteShowTabs", store:Config.sharedDefaults) var showTabs: Bool = true
+    @AppStorage("paletteShowBookmarks", store:Config.sharedDefaults) var showBookmarks: Bool = true
+    @AppStorage("paletteShowSearch", store:Config.sharedDefaults) var showSearch: Bool = true
+    @AppStorage("paletteShowCommands", store:Config.sharedDefaults) var showCommands: Bool = true
+    @AppStorage("paletteShowHistory", store:Config.sharedDefaults) var showHistory: Bool = true
     
     @Binding var searchQuery: String
     
@@ -152,9 +174,27 @@ struct CommandsView: View {
             switch screen {
             case .commands:
                 
-                Section() {
+                Section {
                     
-                    if !filteredBookmarks.isEmpty {
+                    if !filteredTabs.isEmpty && showTabs {
+                        Section("Tabs") {
+                            ForEach(filteredTabs, id: \.windowNumber) { window in
+                                Button(action: {
+                                    window.makeKeyAndOrderFront(nil)
+                                    dismiss()
+                                }) {
+                                    row(
+                                        title: window.title.isEmpty ? "Untitled Tab" : window.title,
+                                        image: "macwindow",
+                                        showsChevron: false
+                                    )
+                                }
+                                .buttonStyle(.plain)
+                            }
+                        }
+                    }
+                    
+                    if !filteredBookmarks.isEmpty && showBookmarks {
                         Section(header: Text("Bookmarks").padding(.top, 8)) {
                             ForEach(filteredBookmarks) { mark in
                                 Button {
@@ -172,16 +212,18 @@ struct CommandsView: View {
                         }
                     }
                     
-                    Section(header: Text("Search").padding(.top, 8)) {
-                        AutoFillView(searchTerm: $searchText, noContentAvView:true,
-                                     updateOther: Binding<String?>(
-                                         get: { searchQuery },
-                                         set: { searchQuery = $0 ?? "" }
-                                     )
-                        )
+                    if showSearch {
+                        Section(header: Text("Search").padding(.top, 8)) {
+                            AutoFillView(searchTerm: $searchText, noContentAvView:true,
+                                         updateOther: Binding<String?>(
+                                            get: { searchQuery },
+                                            set: { searchQuery = $0 ?? "" }
+                                         )
+                            )
+                        }
                     }
                     
-                    if !filteredCommands.isEmpty {
+                    if !filteredCommands.isEmpty && showCommands {
                         Section(header: Text("Commands").padding(.top, 8)) {
                             ForEach(filteredCommands) { command in
                                 Button {
@@ -197,16 +239,15 @@ struct CommandsView: View {
                             }
                         }
                     }
-                }
-                
-                if !filteredHistory.isEmpty {
-                    Section(header: Text("History").padding(.top, 8)) {
-                        ForEach(filteredHistory) {
-                            row(
-                                title: $0.title,
-                                image: "arrow.up.circle",
-                                showsChevron: false
-                            )
+                    if !filteredHistory.isEmpty && showHistory {
+                        Section(header: Text("History").padding(.top, 8)) {
+                            ForEach(filteredHistory) {
+                                row(
+                                    title: $0.title,
+                                    image: "arrow.up.circle",
+                                    showsChevron: false
+                                )
+                            }
                         }
                     }
                 }

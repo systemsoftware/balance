@@ -83,6 +83,7 @@ private struct ReloadButton: View {
 
 private struct TrustIndicator: View {
     let trust: SecTrust?
+    let url: URL?
     @Binding var isPresented: Bool
     var body: some View {
         Group {
@@ -93,7 +94,15 @@ private struct TrustIndicator: View {
                         Image(systemName: "lock.fill")
                     } else {
                         Image(systemName: "exclamationmark.triangle.fill")
+                            .foregroundColor(.red)
                     }
+                }
+                .buttonStyle(.plain)
+                .padding(.leading)
+            } else if url?.scheme == "http" {
+                Button(action: { isPresented.toggle() }) {
+                    Image(systemName: "exclamationmark.triangle.fill")
+                        .foregroundColor(.red)
                 }
                 .buttonStyle(.plain)
                 .padding(.leading)
@@ -183,6 +192,8 @@ struct ContentView: View {
     var initialURLString: String?
     
    @State private var splitURL: String = ""
+    
+    @AppStorage("paletteShowTabs", store:Config.sharedDefaults) var paletteShowTabs: Bool = true
     
     @AppStorage("showSidebar", store:Config.sharedDefaults) var showSidebar = true
     
@@ -320,11 +331,13 @@ struct ContentView: View {
                 
                 HStack{
                     if location?.absoluteString.starts(with: "http") == true {
-                        TrustIndicator(trust: browserState.webView?.serverTrust, isPresented: $showTrustInfo)
+                        TrustIndicator(trust: browserState.webView?.serverTrust, url: location, isPresented: $showTrustInfo)
                             .popover(isPresented: $showTrustInfo) {
-                                if let trust = browserState.webView?.serverTrust {
-                                    ServerTrustView(trust: trust, url: browserState.url)
+                                ServerTrustView(trust: browserState.webView?.serverTrust, url: browserState.url,
+                                                onAttemptHTTPS: {
+                                    location = URL(string: "https://" + location!.absoluteString.split(separator: ":")[1])
                                 }
+                                )
                             }
                     }
                     
@@ -470,12 +483,14 @@ struct ContentView: View {
                             
                             Divider()
                             
-                            Button() {
-                                      showTabSearch = true
-                            } label: {
-                                Label("Search Tabs", systemImage: "rectangle.and.text.magnifyingglass")
+                            if !paletteShowTabs {
+                                Button() {
+                                    showTabSearch = true
+                                } label: {
+                                    Label("Search Tabs", systemImage: "rectangle.and.text.magnifyingglass")
+                                }
+                                .keyboardShortcut("s", modifiers: [.command, .option])
                             }
-                            .keyboardShortcut("s", modifiers: [.command, .option])
                             
                             Divider()
                             

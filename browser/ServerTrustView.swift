@@ -2,13 +2,15 @@ import SwiftUI
 import Security
 
 struct ServerTrustView: View {
-    let trust: SecTrust
+    let trust: SecTrust?
     let url: URL?
     
     @StateObject private var store = SitePermissionStore.shared
     @State private var isTrusted: Bool = false
     @State private var certificates: [SecCertificate] = []
     @State private var errorMessage: String? = nil
+        
+    var onAttemptHTTPS: (() -> Void)?
     
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
@@ -32,17 +34,25 @@ struct ServerTrustView: View {
                     .font(.caption)
             }
             
-            Divider()
+            if !isTrusted {
+                Button("Attempt HTTPS Upgrade") {
+                    onAttemptHTTPS?()
+                }
+            }
             
-            Text("Certificate Chain")
-                .font(.subheadline)
-                .bold()
-            
-            ScrollView {
-                VStack(alignment: .leading, spacing: 8) {
-                    ForEach(0..<certificates.count, id: \.self) { index in
-                        let cert = certificates[index]
-                        CertificateRow(certificate: cert, isRoot: index == certificates.count - 1)
+            if !certificates.isEmpty {
+                Divider()
+                
+                Text("Certificate Chain")
+                    .font(.subheadline)
+                    .bold()
+                
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 8) {
+                        ForEach(0..<certificates.count, id: \.self) { index in
+                            let cert = certificates[index]
+                            CertificateRow(certificate: cert, isRoot: index == certificates.count - 1)
+                        }
                     }
                 }
             }
@@ -61,6 +71,7 @@ struct ServerTrustView: View {
                     permissionRow(title: "JavaScript", icon: "curlybraces.square", host: host, type: "javascript", isMedia: false, defaultState: .allow)
                 }
             }
+            Spacer()
         }
         .padding()
         .frame(width: 350, height: 400)
@@ -70,6 +81,11 @@ struct ServerTrustView: View {
     }
     
     private func evaluateTrust() {
+        guard let trust = trust else {
+            isTrusted = false
+            errorMessage = "This connection is not encrypted."
+            return
+        }
         var error: CFError?
         isTrusted = SecTrustEvaluateWithError(trust, &error)
         

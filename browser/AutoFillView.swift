@@ -62,7 +62,7 @@ struct AutoFillView: View {
                     .frame(maxWidth: .infinity, minHeight: 350)
                     .listRowBackground(Color.clear)
                 } else {
-                    Text("Type to get suggestions")
+                    Text("Type to get suggestions from \(engine.contains("google") ? "Google" : "DuckDuckGo")")
                         .foregroundStyle(.secondary)
                         .padding(.vertical, 6)
                 }

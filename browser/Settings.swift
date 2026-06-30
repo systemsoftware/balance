@@ -140,16 +140,6 @@ var Settings = [
             appStorageKey: "instructions",
         ),
     Setting(
-        name:"Advanced",
-        type:"header",
-        appStorageKey: ""
-    ),
-    Setting(
-            name: "User Agent",
-            type: "text",
-            appStorageKey: "userAgent",
-        ),
-    Setting(
         name:"Bookmark Bar",
         type:"header",
         appStorageKey: ""
@@ -177,7 +167,53 @@ var Settings = [
         type: "toggle",
         appStorageKey: "clearDownloadHistoryOnClose",
         defaultValueBool: true
-    )
+    ),
+    Setting(
+        name:"Palette",
+        type:"header",
+        appStorageKey: ""
+    ),
+    Setting(
+        name:"Tabs",
+        type:"toggle",
+        appStorageKey: "paletteShowTabs",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Bookmarks",
+        type:"toggle",
+        appStorageKey: "paletteShowBookmarks",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Search",
+        type:"toggle",
+        appStorageKey: "paletteShowSearch",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Commands",
+        type:"toggle",
+        appStorageKey: "paletteShowCommands",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"History",
+        type:"toggle",
+        appStorageKey: "paletteShowHistory",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Advanced",
+        type:"header",
+        appStorageKey: ""
+    ),
+    Setting(
+            name: "User Agent",
+            type: "text",
+            appStorageKey: "userAgent",
+        ),
+
 ]
 
 // MARK: Header

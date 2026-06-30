@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import SwiftData
+import AuthenticationServices
 
 var openWindows: [NSWindow] = []
 
@@ -120,6 +121,17 @@ class WindowDelegate: NSObject, NSWindowDelegate {
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationDidFinishLaunching(_ notification: Notification) {
+        if #available(macOS 13.3, *) {
+            let manager = ASAuthorizationWebBrowserPublicKeyCredentialManager()
+            if manager.authorizationStateForPlatformCredentials == .notDetermined {
+                Task {
+                        await manager.requestAuthorizationForPublicKeyCredentials()                   
+                }
+            }
+        }
+    }
+    
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
     }

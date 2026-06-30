@@ -374,6 +374,10 @@ struct BrowserWebView: NSViewRepresentable {
         }
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         
+        // Media configurations useful for DRM / FairPlay streams
+        config.mediaTypesRequiringUserActionForPlayback = []
+        config.allowsAirPlayForMediaPlayback = true
+        
         // Chrome Web Store integration
         config.userContentController.add(context.coordinator, name: "installExtension")
         
