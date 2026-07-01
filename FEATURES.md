@@ -1,0 +1,163 @@
+# Features
+
+Balance Browser combines a modern macOS browsing experience with productivity tools, AI capabilities, and powerful browsing features.
+
+
+
+## Productivity
+
+### Command Palette
+
+Instantly search for browser commands, execute actions, switch tabs, and navigate without leaving the keyboard.
+
+![Command Palette](images/palette.png)
+
+
+
+### Productive Sidebar
+
+A customizable sidebar that provides quick access to built-in tools such as Notes, History, Downloads, and your favorite pinned websites.
+
+![Sidebar](images/sidebar.png)
+
+
+
+### Split View
+
+View and interact with two websites simultaneously within a single window.
+
+![Split View](images/split.png)
+
+
+
+### Focus Mode
+
+A distraction-free browsing environment designed for reading, studying, or concentrating on a single task.
+
+![Focus Mode](images/focus.png)
+
+
+
+### Notepad
+
+A built-in scratchpad that lets you quickly capture ideas without leaving the browser.
+
+![Notepad](images/notes.png)
+
+
+
+## AI
+
+### Local AI Chat
+
+Chat with a local AI assistant directly inside the browser for brainstorming, coding assistance, writing, and general questions—all while keeping conversations on your device.
+
+![AI Chat](images/chat.png)
+
+
+
+### AI Page Summarization
+
+Generate concise summaries of articles and lengthy web pages using local Apple Foundation Models.
+
+![AI Summarization](images/summary.png)
+
+
+
+### Event Extraction
+
+Automatically detect event information from supported web pages and export it directly to your Calendar.
+
+![Event Extraction](images/events.png)
+
+
+### Map Workspace
+
+Extract locations and real-world entities from your open tabs and display them on an interactive map.
+
+![Map Workspace](images/map.png)
+
+## Browsing Experience
+
+### Smart Address Bar
+
+The address bar intelligently determines whether your input is:
+
+* A URL
+* A domain (such as `google.com`)
+* A search query
+
+It automatically performs the appropriate action without requiring prefixes.
+
+
+
+### Reader Mode
+
+Remove clutter and enjoy a clean reading experience powered by Readability.js.
+
+![Reader Mode](images/reader.png)
+
+
+
+### Native PDF Viewer
+
+Open and browse PDF documents directly inside the browser using PDFKit.
+
+
+
+### Advanced Tabs & Windows
+
+Manage browsing efficiently with features including:
+
+* Duplicate Tabs
+* Move Tabs to New Windows
+* Tab Search
+* Multiple Browser Windows
+
+
+
+### Profiles
+
+Keep browsing data separate using independent browser profiles.
+
+![Profiles](images/profile.png)
+
+### Extensions Support
+
+Install compatible extensions directly from the Chrome Web Store to extend browser functionality.
+
+![Extensions](images/ext.png)
+
+
+
+## Customization
+
+Balance Browser offers extensive customization options, including:
+
+* Homepage selection
+* User Agent switching
+* Bookmark Bar display modes
+* Persistent browser preferences
+* Sidebar customization
+
+
+
+## Privacy & Security
+
+Built-in protections include:
+
+* Content Blocking
+* Site Permission Management
+* Server Trust Verification
+* Local AI processing
+* Optional browsing history
+
+![Server Trust](images/servertrust.png)
+
+## Design
+
+### Liquid Glass UI
+
+A native macOS interface inspired by the latest system design language, featuring depth and translucency throughout the browser.
+
+![Design](images/design.png)

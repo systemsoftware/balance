@@ -1,119 +1,130 @@
 # Balance Browser
 
-**Balance Browser** is a streamlined, modern web browser for macOS built entirely with **SwiftUI** and **WebKit**. It focuses on a balanced workflow by integrating essential productivity tools—like notes, history, and AI directly into a customizable sidebar alongside a beautiful Liquid Glass interface.
+**Balance Browser** is a modern, productivity-focused web browser for macOS built with **SwiftUI** and **WebKit**. It combines a native macOS experience with integrated productivity tools—including AI, notes, history, and maps—all inside a customizable sidebar with a beautiful Liquid Glass interface.
 
-## Feature Showcase
+## Features
 
-### Command Palette
-Instantly access browser commands, execute actions, and navigate efficiently.
+### Productivity
+
+#### Command Palette
+
+Instantly search for browser commands, execute actions, and navigate efficiently.
 
 ![Command Palette](images/palette.png)
 
-### Productive Sidebar
-A multi-functional sidebar that hosts built-in tools like Notes, History, and Downloads, alongside your favorite pinned websites.
+#### Productive Sidebar
+
+Access Notes, History, Downloads, and your favorite pinned websites from a single customizable sidebar.
 
 ![Sidebar](images/sidebar.png)
 
-### Local AI Chat
-Engage with a local AI assistant directly in your browser. Ask questions, brainstorm, and get help seamlessly and locally.
+#### Split View
 
-![AI Chat](images/chat.png)
-
-### Split View
-Browse two websites at a time.
+Browse two websites side by side.
 
 ![Split View](images/split.png)
 
-### Map Workspace
-Automatically extract locations and real-world entities from your open tabs and plot them on an interactive map.
-![Map](images/map.png)
+* Focus Mode for distraction-free browsing
+* Built-in Notepad for quick notes
+* Advanced tab management with Tab Search and detachable windows
 
-### AI Page Summarization
-Quickly digest long articles or complex web pages using local Apple Foundation Models.
 
-![Summary](images/summary.png)
 
-### Event Extraction
-Intelligently detect event details on a page and instantly export them to your macOS Calendar.
+### AI
 
-![Events](images/events.png)
+#### Local AI Chat
 
-### Focus Mode
-A distraction-free environment designed to help you concentrate on a single task or reading material.
+Interact with a private, on-device AI assistant directly from your browser.
 
-![Focus](images/focus.png)
+![AI Chat](images/chat.png)
 
-### Smart Address Bar
-Intelligently handles direct URLs, domain shorthand (e.g., `google.com`), and automatically converts text queries into Google searches.
+#### AI Page Summarization
 
-### Liquid Glass UI
-A native macOS aesthetic utilizing depth and translucency.
+Quickly summarize long articles using local Apple Foundation Models.
 
-### Advanced Tabs & Windows
-Support for duplicating tabs, launching pages into new windows, and Tab Search for quickly finding open pages.
+* Event Extraction with one-click export to macOS Calendar
 
-### Notepad
-A built-in scratchpad right in the sidebar to jot down thoughts while you browse.
 
-![Notes](images/notes.png)
 
-### Native PDF Viewer
-Seamlessly read and view PDF documents directly within the browser with PDFKit.
+### Browsing
 
-### Reader Mode
-Distraction-free reading environment (powered by Readability.js).
+#### Map Workspace
 
-![Reader](images/reader.png)
+Extract locations and real-world entities from open tabs and visualize them on an interactive map.
 
-### Privacy & Security
-Built-in Content Blocking, Site Permissions management, and Server Trust verification.
+![Map Workspace](images/map.png)
 
-### Extensions Support
-Customize and extend the browser's capabilities.
+#### Reader Mode
 
-### Customizable Experience
-Modify how the browser identifies itself (User Agent Switching), adjust Bookmark Bar Modes, and manage your data with persistent storage.
+A clean reading experience powered by Readability.js.
 
-### Profiles
-Separate website data with distinct window profiles.
+![Reader Mode](images/reader.png)
+
+Additional browsing features include:
+
+* Smart Address Bar
+* Native PDF Viewer
+* Chrome Extension support
+* Multiple browser profiles
+* User Agent switching
+* Bookmark Bar customization
+* Persistent browser settings
+* Privacy controls with content blocking and site permissions
+* Native Liquid Glass interface
+
+
 
 ## Keyboard Shortcuts
 
-| Action | Shortcut |
-| :--- | :--- |
-| **Go Back** | `⌘ + [←]` |
-| **Go Forward** | `⌘ + [→]` |
-| **Reload Page** | `⌘ + R` |
-| **Find in Page** | `⌘ + F` |
-| **Share Link** | `⌘ + ⇧ + S` |
-| **Copy Page URL** | `⌘ + ⌃ + C` |
+| Action        | Shortcut |
+| ------------- | -------- |
+| Go Back       | `⌘ [`    |
+| Go Forward    | `⌘ ]`    |
+| Reload Page   | `⌘ R`    |
+| Find in Page  | `⌘ F`    |
+| Share Link    | `⌘ ⇧ S`  |
+| Copy Page URL | `⌘ ⌃ C`  |
+
+
 
 ## Tech Stack
 
-* **Framework**: SwiftUI
-* **Engine**: WebKit (`WKWebView`)
-* **Data Persistence**: SwiftData & AppStorage (UserDefaults)
-* **Interface**: AppKit integration for window management and clipboard control.
-* **Scripting**: JavaScript (Readability.js for Reader Mode)
+* **SwiftUI**
+* **WebKit** (`WKWebView`)
+* **SwiftData**
+* **AppStorage**
+* **AppKit**
+* **PDFKit**
+* **Readability.js**
+
+
+
+## Requirements
+
+* macOS 26.0 (Tahoe) or later
+* Xcode 26 or later
+
+
 
 ## Getting Started
 
-### Prerequisites
-* **macOS 26.0+** (Tahoe) or later 
-- Required for AppKit, Sidebar WebView, and Apple Foundation Models
-
-### Installation
 1. Clone the repository.
-2. Open the `.xcodeproj` in Xcode.
-3. Ensure the target is set to **macOS**.
-4. Build and Run (`⌘ + R`).
+2. Open the project in Xcode.
+3. Select the macOS target.
+4. Build and run (`⌘ R`).
 
 ### Configuration
-You can customize the default behavior via the `SettingsView` (accessible via the sidebar):
-* **Homepage**: Set your preferred landing page or use the local `home.html`.
-* **User Agent**: Switch between Safari, Chrome, or custom strings for specialized browsing.
-* **History**: Toggle "Record History" to browse privately without saving to the SwiftData store.
+
+Customize the browser from **Settings**, including:
+
+* Homepage
+* User Agent
+* History recording
+* Bookmark Bar mode
+* Browser preferences
+
+
 
 ## License
 
-This project is licensed under the MIT License - see the LICENSE file for details.
+Licensed under the MIT License. See **LICENSE** for details.

@@ -100,14 +100,12 @@ private struct TrustIndicator: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .padding(.leading)
             } else if url?.scheme == "http" {
                 Button(action: { isPresented.toggle() }) {
                     Image(systemName: "exclamationmark.triangle.fill")
                         .foregroundColor(.red)
                 }
                 .buttonStyle(.plain)
-                .padding(.leading)
             }
         }
     }
@@ -374,6 +372,7 @@ struct ContentView: View {
                                 }
                                 )
                             }
+                            .padding(.leading)
                     }
                     
                     AddressField(text: $urlInput, onSubmit: submitURL)
