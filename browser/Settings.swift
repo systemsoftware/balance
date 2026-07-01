@@ -215,12 +215,6 @@ var Settings = [
         appStorageKey: ""
     ),
     Setting(
-            name: "Use PDFKit",
-            type: "toggle",
-            appStorageKey: "usePDFKit",
-            defaultValueBool: true
-        ),
-    Setting(
             name: "User Agent",
             type: "text",
             appStorageKey: "userAgent",
@@ -232,7 +226,13 @@ var Settings = [
         defaultValueBool: true
     ),
     Setting(
-            name: "Show Tabs in Dock Menu",
+            name: "Use PDFKit",
+            type: "toggle",
+            appStorageKey: "usePDFKit",
+            defaultValueBool: true
+        ),
+    Setting(
+            name: "Show Tabs in Dock",
             type: "toggle",
             appStorageKey: "showTabsInDockMenu",
             defaultValueBool: false

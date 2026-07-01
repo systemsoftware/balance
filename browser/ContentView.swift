@@ -717,6 +717,11 @@ struct ContentView: View {
                                     Label("Scan Page For Events", systemImage: "qrcode")
                                 }
                                 
+                                Button {
+                                    createFocusWindow(with: url, userAgent: userAgent)
+                                } label: {
+                                    Label("Open in Focus", systemImage: "macwindow")
+                                }
                                 
                                 Button {
                                     

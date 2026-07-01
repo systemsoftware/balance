@@ -358,7 +358,7 @@ struct MapView: View {
                         self.isScanning = false
                         
                         if items.isEmpty {
-                            self.alertMessage = "Genuinely no POIs found on this page."
+                            self.alertMessage = "No POIs found on this page."
                             self.showingAlert = true
                         } else if let first = items.first {
                             self.position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: first.latitude, longitude: first.longitude), latitudinalMeters: 5000, longitudinalMeters: 5000))
