@@ -185,6 +185,7 @@ struct ContentView: View {
     @State private var userInput = ""
     
     @State private var scanningForEvents = false
+    @State private var summarizing = false
     
     @StateObject private var bookmarkStore = BookmarkStore()
     
@@ -546,6 +547,15 @@ struct ContentView: View {
                                                                 Button("In New Window", systemImage: "macwindow.badge.plus") {
                                                                     createNewWindow(with: url)
                                                                 }
+                                
+                                
+                                Divider()
+                                
+                                Button {
+                                    createFocusWindow(with: url, userAgent: userAgent)
+                                } label: {
+                                    Label("Open in Focus", systemImage: "macwindow")
+                                }
                                                                 
                             } label: {
                                 Label("Duplicate", systemImage: "plus.square.on.square")
@@ -709,6 +719,8 @@ struct ContentView: View {
                                 }
 
                                 
+                                Divider()
+                                
                                 Button {
                                     
                                     Task {
@@ -716,18 +728,14 @@ struct ContentView: View {
                                     }
                                     
                                 } label: {
-                                    Label("Scan Page For Events", systemImage: "qrcode")
-                                }
-                                
-                                Button {
-                                    createFocusWindow(with: url, userAgent: userAgent)
-                                } label: {
-                                    Label("Open in Focus", systemImage: "macwindow")
+                                    Label("Add Events to Calendar", systemImage: "calendar")
                                 }
                                 
                                 Button {
                                     Task {
+                                        summarizing = true
                                         await createSummaryWindow(state: browserState)
+                                        summarizing = false
                                     }
                                 } label: {
                                     Label("Summarize", systemImage: "text.line.3.summary")
@@ -740,6 +748,14 @@ struct ContentView: View {
                                     }
                                 } label: {
                                     Label("Cite", systemImage: "doc.text")
+                                }
+                                
+                                Divider()
+                                
+                                Button {
+                                    createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
+                                } label:{
+                                    Label("Source Code", systemImage:"curlybraces")
                                 }
                                 
                             } label: {
@@ -769,6 +785,14 @@ struct ContentView: View {
                     ProgressView()
                         .scaleEffect(0.5)
                     Text("Scanning for events...")
+                }
+            }
+            
+            if summarizing {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                    Text("Summarizing page...")
                 }
             }
             

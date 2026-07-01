@@ -6,18 +6,22 @@
 
 ### Command Palette
 Instantly access browser commands, execute actions, and navigate efficiently.
+
 ![Command Palette](images/palette.png)
 
 ### Productive Sidebar
 A multi-functional sidebar that hosts built-in tools like Notes, History, and Downloads, alongside your favorite pinned websites.
+
 ![Sidebar](images/sidebar.png)
 
 ### Local AI Chat
 Engage with a local AI assistant directly in your browser. Ask questions, brainstorm, and get help seamlessly and locally.
+
 ![AI Chat](images/chat.png)
 
 ### Split View
 Browse two websites at a time.
+
 ![Split View](images/split.png)
 
 ### Map Workspace
@@ -26,14 +30,17 @@ Automatically extract locations and real-world entities from your open tabs and 
 
 ### AI Page Summarization
 Quickly digest long articles or complex web pages using local Apple Foundation Models.
+
 ![Summary](images/summary.png)
 
 ### Event Extraction
 Intelligently detect event details on a page and instantly export them to your macOS Calendar.
+
 ![Events](images/events.png)
 
 ### Focus Mode
 A distraction-free environment designed to help you concentrate on a single task or reading material.
+
 ![Focus](images/focus.png)
 
 ### Smart Address Bar
