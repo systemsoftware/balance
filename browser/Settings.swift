@@ -140,6 +140,12 @@ var Settings = [
             appStorageKey: "instructions",
         ),
     Setting(
+        name:"Places from Tabs",
+        type:"toggle",
+        appStorageKey: "enableAIPlaces",
+        defaultValueBool: true
+    ),
+    Setting(
         name:"Bookmark Bar",
         type:"header",
         appStorageKey: ""
@@ -209,11 +215,22 @@ var Settings = [
         appStorageKey: ""
     ),
     Setting(
+            name: "Use PDFKit",
+            type: "toggle",
+            appStorageKey: "usePDFKit",
+            defaultValueBool: true
+        ),
+    Setting(
             name: "User Agent",
             type: "text",
             appStorageKey: "userAgent",
         ),
-
+    Setting(
+        name:"Preserve On Close",
+        type:"toggle",
+        appStorageKey: "preserveOnClose",
+        defaultValueBool: true
+    )
 ]
 
 // MARK: Header

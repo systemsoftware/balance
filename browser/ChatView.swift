@@ -10,59 +10,6 @@ struct ChatItem: Identifiable {
     let response: String
 }
 
-func getCleanText(from webView: WKWebView, completion: @escaping (String?) -> Void) {
-    let jsCode = """
-        (function() {
-            // Find main content area or fallback to body
-            let root = document.querySelector('article') || document.querySelector('main') || document.body;
-            let clone = root.cloneNode(true);
-            
-            // Remove common useless elements
-            let selectors = [
-                'nav', 'header', 'footer', 'aside', 'script', 'style', 'noscript', 
-                'svg', 'button', 'form', 'iframe',
-                '[role="navigation"]', '[role="banner"]', '[role="contentinfo"]',
-                '.nav', '.header', '.footer', '.sidebar', '.menu', '.ad', '.advertisement', '.comments',
-                '#nav', '#header', '#footer', '#sidebar', '#menu', '#comments'
-            ];
-            
-            clone.querySelectorAll(selectors.join(', ')).forEach(el => el.remove());
-            
-            // Append to a hidden div to properly extract innerText (preserves block spacing)
-            // We cannot use display:none or visibility:hidden because innerText relies on layout
-            let tempDiv = document.createElement('div');
-            tempDiv.style.position = 'fixed';
-            tempDiv.style.left = '-9999px';
-            tempDiv.style.top = '-9999px';
-            tempDiv.style.width = '1px';
-            tempDiv.style.height = '1px';
-            tempDiv.style.overflow = 'hidden';
-            tempDiv.style.opacity = '0';
-            tempDiv.style.pointerEvents = 'none';
-            tempDiv.appendChild(clone);
-            document.body.appendChild(tempDiv);
-            
-            let text = tempDiv.innerText;
-            
-            document.body.removeChild(tempDiv);
-            
-            // Remove excessive newlines and tabs to save tokens
-            return text.replace(/\\t+/g, ' ')
-                       .replace(/\\n{3,}/g, '\\n\\n')
-                       .trim();
-        })()
-    """
-    
-    webView.evaluateJavaScript(jsCode) { (result, error) in
-        if let error = error {
-            print("Extraction error: \(error.localizedDescription)")
-            completion(nil)
-            return
-        }
-        completion(result as? String)
-    }
-}
-
 
 struct ChatView: View {
     @AppStorage("instructions", store: Config.sharedDefaults) var inst: String = ""
@@ -146,7 +93,7 @@ struct ChatView: View {
                     
                     if let webView = contentView.browserState.webView {
                         
-                        getCleanText(from: webView) { cleanedText in
+                        webView.getCleanText { cleanedText in
                             
                             if let content = cleanedText {
                                 self.CurrentPage = content

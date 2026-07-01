@@ -7,6 +7,7 @@ import ZIPFoundation
 final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var url: URL?
     @Published var title: String = ""
+    @Published var customTitle: String? = nil
     @Published var isLoading: Bool = false
     @Published var progress: Double = 0.0
     @Published var canGoBack: Bool = false
@@ -17,6 +18,12 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var findQuery: String = ""
     @Published var findMatchCount: Int = 0
     @Published var isAudioMuted: Bool = false
+    
+    @Published var scrollX: Int = 0
+    @Published var scrollY: Int = 0
+    var restoredScrollX: Int?
+    var restoredScrollY: Int?
+
     
     // MARK: - WKWebExtensionTab
     
@@ -360,6 +367,7 @@ struct BrowserWebView: NSViewRepresentable {
     
     var priv: Bool = false
     var profile = ""
+    var userAgent: String = ""
 
     func makeCoordinator() -> Coordinator {
         Coordinator(state: state)
@@ -455,6 +463,20 @@ struct BrowserWebView: NSViewRepresentable {
         let script = WKUserScript(source: cwsScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
         config.userContentController.addUserScript(script)
         
+        let scrollObserverScript = """
+        window.addEventListener('scroll', () => {
+            clearTimeout(window.scrollTimeout);
+            window.scrollTimeout = setTimeout(() => {
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.scrollObserver) {
+                    window.webkit.messageHandlers.scrollObserver.postMessage({x: window.scrollX, y: window.scrollY});
+                }
+            }, 250);
+        });
+        """
+        let scrollScript = WKUserScript(source: scrollObserverScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+        config.userContentController.addUserScript(scrollScript)
+        config.userContentController.add(context.coordinator, name: "scrollObserver")
+        
         WebExtensionManager.shared.loadAllFromDisk()
         WebExtensionManager.shared.activeTab = state
         
@@ -486,11 +508,16 @@ struct BrowserWebView: NSViewRepresentable {
         config.webExtensionController?.delegate = context.coordinator
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
+        if !userAgent.isEmpty {
+            webView.customUserAgent = userAgent
+        }
         webView.state = state
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
 
-        state.attach(webView)
+        DispatchQueue.main.async {
+            state.attach(webView)
+        }
         
         let manager = WebExtensionManager.shared
         let extController = manager.controller(for: profileContext)
@@ -657,6 +684,13 @@ struct BrowserWebView: NSViewRepresentable {
                 if let url = URL(string: downloadURLString) {
                     CRXInstaller.install(fromRemote: url)
                 }
+            } else if message.name == "scrollObserver", let dict = message.body as? [String: Any] {
+                if let x = dict["x"] as? NSNumber, let y = dict["y"] as? NSNumber {
+                    DispatchQueue.main.async {
+                        self.state.scrollX = x.intValue
+                        self.state.scrollY = y.intValue
+                    }
+                }
             }
         }
 
@@ -674,7 +708,9 @@ struct BrowserWebView: NSViewRepresentable {
                     self.state.progress = webView.estimatedProgress
                     self.state.isLoading = webView.isLoading
                 case "title":
-                    self.state.title = webView.title ?? "Page"
+                    if self.state.customTitle == nil {
+                        self.state.title = webView.title ?? "Page"
+                    }
                 case "URL":
                     self.state.url = webView.url
                     if let extController = webView.configuration.webExtensionController {
@@ -707,7 +743,14 @@ struct BrowserWebView: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             state.isLoading = false
             state.url = webView.url
-            state.title = webView.title ?? "Page"
+            if state.customTitle == nil {
+                state.title = webView.title ?? "Page"
+            }
+            if let x = state.restoredScrollX, let y = state.restoredScrollY {
+                webView.evaluateJavaScript("window.scrollTo(\(x), \(y));", completionHandler: nil)
+                state.restoredScrollX = nil
+                state.restoredScrollY = nil
+            }
         }
 
 

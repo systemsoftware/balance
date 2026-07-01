@@ -176,7 +176,7 @@ struct CommandsView: View {
                 
                 Section {
                     
-                    if !filteredTabs.isEmpty && showTabs {
+                    if filteredTabs.count > 1 && showTabs {
                         Section("Tabs") {
                             ForEach(filteredTabs, id: \.windowNumber) { window in
                                 Button(action: {

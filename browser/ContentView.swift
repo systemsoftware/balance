@@ -3,6 +3,7 @@ import WebKit
 import Foundation
 import AppKit
 import SwiftData
+import FoundationModels
 
 // MARK: - Layout Constants
 enum Layout {
@@ -30,7 +31,8 @@ let builtInSidebar = [
     SidebarItem(icon:"clock.arrow.trianglehead.counterclockwise.rotate.90", view:"HistoryView"),
     SidebarItem(icon:"folder", view:"DownloadsView"),
     SidebarItem(icon:"puzzlepiece.extension", view:"ExtensionsView"),
-    SidebarItem(icon:"hand.raised", view:"ContentBlockerView")
+    SidebarItem(icon:"hand.raised", view:"ContentBlockerView"),
+    SidebarItem(icon:"map", view:"MapView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -182,6 +184,8 @@ struct ContentView: View {
     @State private var showingSidebarAddAlert = false
     @State private var userInput = ""
     
+    @State private var scanningForEvents = false
+    
     @StateObject private var bookmarkStore = BookmarkStore()
     
     @State private var sidebarPage = WebPage()
@@ -194,6 +198,8 @@ struct ContentView: View {
    @State private var splitURL: String = ""
     
     @AppStorage("paletteShowTabs", store:Config.sharedDefaults) var paletteShowTabs: Bool = true
+    
+    @AppStorage("usePDFKit", store:Config.sharedDefaults) var usePDFKit: Bool = true
     
     @AppStorage("showSidebar", store:Config.sharedDefaults) var showSidebar = true
     
@@ -245,10 +251,22 @@ struct ContentView: View {
         }
     }
 
-    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "") {
-        if(initialURL != nil) { initialURLString = initialURL?.absoluteString } else { print("nil initial url") }
-        priv = pvt
-        bProfile = profile
+    var tabID: String
+    var restoredState: TabSessionState?
+
+    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "", tabID: String = UUID().uuidString, restoredState: TabSessionState? = nil) {
+        self.tabID = tabID
+        self.restoredState = restoredState
+        
+        let initURLString = restoredState?.url ?? initialURL?.absoluteString
+        if(initURLString != nil) { initialURLString = initURLString } else { print("nil initial url") }
+        
+        self._location = State(initialValue: initURLString != nil ? URL(string: initURLString!) : nil)
+        self._splitURL = State(initialValue: restoredState?.splitURL ?? "")
+        self._sidebarURL = State(initialValue: restoredState?.sidebarURL != nil ? URL(string: restoredState!.sidebarURL!) : nil)
+        
+        priv = restoredState?.isPrivate ?? pvt
+        bProfile = restoredState?.profile ?? profile
         bProfileIcon = profileIcon
         
         if bProfile.isEmpty && !defaultProfile.isEmpty {
@@ -259,6 +277,20 @@ struct ContentView: View {
         if !bProfile.isEmpty {
             bProfileName = profiles.first(where: { $0.id.uuidString == bProfile })?.name
         }
+        
+        let initialBrowserState = BrowserState()
+        if let state = restoredState {
+            initialBrowserState.restoredScrollX = state.scrollX
+            initialBrowserState.restoredScrollY = state.scrollY
+        }
+        self._browserState = StateObject(wrappedValue: initialBrowserState)
+        
+        let initialSplitState = BrowserState()
+        if let state = restoredState {
+            initialSplitState.restoredScrollX = state.splitScrollX
+            initialSplitState.restoredScrollY = state.splitScrollY
+        }
+        self._splitState = StateObject(wrappedValue: initialSplitState)
     }
     
     @State var showSuggestions = false
@@ -502,14 +534,21 @@ struct ContentView: View {
                             .keyboardShortcut("m", modifiers: [.command, .shift])
                             
                             Divider()
+                           
                             
-                                                            Button("Duplicate Tab", systemImage: "plus.square.on.square") {
-                                                                createNewTab(with: url)
-                                                            }
-                                                            Button("Duplicate in New Window", systemImage: "macwindow.badge.plus") {
-                                                                createNewWindow(with: url)
-                                                            }
-                                                            
+                            Menu {
+                                
+                                                                Button("In This Window", systemImage: "plus.square.on.square") {
+                                                                    createNewTab(with: url)
+                                                                }
+                                                                Button("In New Window", systemImage: "macwindow.badge.plus") {
+                                                                    createNewWindow(with: url)
+                                                                }
+                                                                
+                            } label: {
+                                Label("Duplicate", systemImage: "plus.square.on.square")
+                            }
+                            
                                                             Divider()
                                                             
                                                             Button("Copy Page URL", systemImage: "doc.on.doc") {
@@ -595,21 +634,25 @@ struct ContentView: View {
                             
                             Divider()
 
-                            
-                                                            Button("Add to Bookmarks", systemImage: "star") {
-                                                                bookmarkStore.add(Bookmark(
-                                                                    title: url.host() ?? "Unnamed",
-                                                                    url: url.absoluteString
-                                                                ))
-                                                            }
-                                                            .keyboardShortcut("b", modifiers: [.command, .shift])
-                            
-                            
-                            Button("Add to Sidebar", systemImage: "sidebar.left") {
-                                sidebarStore.add(SidebarItem(
-                                    icon: "https://www.google.com/s2/favicons?domain=\(location?.host() ?? "")",
-                                    url: location
-                                ))
+                            Menu() {
+                                
+                                                                Button("Bookmarks", systemImage: "star") {
+                                                                    bookmarkStore.add(Bookmark(
+                                                                        title: url.host() ?? "Unnamed",
+                                                                        url: url.absoluteString
+                                                                    ))
+                                                                }
+                                                                .keyboardShortcut("b", modifiers: [.command, .shift])
+                                
+                                
+                                Button("Sidebar", systemImage: "sidebar.left") {
+                                    sidebarStore.add(SidebarItem(
+                                        icon: "https://www.google.com/s2/favicons?domain=\(location?.host() ?? "")",
+                                        url: location
+                                    ))
+                                }
+                            } label: {
+                                Label("Add Page To", systemImage: "plus")
                             }
 
                             Divider()
@@ -629,11 +672,54 @@ struct ContentView: View {
                             
                             Divider()
                             
-                            Button("Dev Tools", systemImage: "chevron.left.forwardslash.chevron.right") {
-                                let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
-                                inspector?.perform(NSSelectorFromString("show"))
+                            Menu {
+                                Button("Dev Tools", systemImage: "chevron.left.forwardslash.chevron.right") {
+                                    let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
+                                    inspector?.perform(NSSelectorFromString("show"))
+                                }
+                                .keyboardShortcut("i", modifiers: [.command, .option])
+                                
+                                
+                                Button() {
+                                    let alert = NSAlert()
+                                    alert.informativeText = "Enter new tab name:"
+                                    alert.addButton(withTitle: "Rename")
+                                    alert.addButton(withTitle: "Cancel")
+                                    
+                                    let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+                                    input.stringValue = browserState.customTitle ?? browserState.title
+                                    input.placeholderString = browserState.webView?.title ?? "Page"
+                                    alert.accessoryView = input
+                                    alert.window.initialFirstResponder = input
+                                    
+                                    if alert.runModal() == .alertFirstButtonReturn {
+                                        let newTitle = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                                        if newTitle.isEmpty {
+                                            browserState.customTitle = nil
+                                            browserState.title = browserState.webView?.title ?? "Page"
+                                        } else {
+                                            browserState.customTitle = newTitle
+                                            browserState.title = newTitle
+                                        }
+                                    }
+                                } label: {
+                                    Label("Rename Tab", systemImage: "pencil")
+                                }
+
+                                
+                                Button {
+                                    
+                                    Task {
+                                        await scanEvents()
+                                    }
+                                    
+                                } label: {
+                                    Label("Scan Page For Events", systemImage: "qrcode")
+                                }
+                                
+                            } label: {
+                                Label("More", systemImage: "ellipsis")
                             }
-                            .keyboardShortcut("i", modifiers: [.command, .option])
                                                                                    
                         }
                             
@@ -652,6 +738,14 @@ struct ContentView: View {
             .padding(.horizontal, Layout.outerPadding)
             .padding(.vertical, 8) 
             .frame(maxWidth: .infinity)
+            
+            if scanningForEvents {
+                HStack {
+                    ProgressView()
+                        .scaleEffect(0.5)
+                    Text("Scanning for events...")
+                }
+            }
             
             if(shouldShowBookmarks) {
                 HStack {
@@ -686,20 +780,28 @@ struct ContentView: View {
                         }
                         
                         HStack(spacing: 8) {
-                            BrowserWebView(request:URLRequest(url:URL(string:homepage)!), state: browserState, priv:priv, profile:bProfile)
-                                .roundedBorderStyleNoFrame()
-                                .transition(.opacity)
-                                .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
-                                .onChange(of: browserState.url) { oldValue, newValue in
-                                    handleURLChange(from: oldValue, to: newValue)
+                          
+                            ZStack {
+                                BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
+                                    .roundedBorderStyleNoFrame()
+                                    .transition(.opacity)
+                                    .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
+                                    .onChange(of: browserState.url) { oldValue, newValue in
+                                        handleURLChange(from: oldValue, to: newValue)
+                                    }
+                                
+                                    .userActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
+                                        configureUserActivity(userActivity)
+                                    }
+
+                                if let url = browserState.url ?? location, url.pathExtension.lowercased() == "pdf" && usePDFKit {
+                                    PDFKitRepresentedView(url: url)
+                                      
                                 }
-                            // 2. Keep userActivity lightweight by calling a separate function
-                                .userActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
-                                    configureUserActivity(userActivity)
-                                }
+                            }
                             
                             if !splitURL.isEmpty {
-                                BrowserWebView(request:URLRequest(url:URL(string:splitURL)!), state: splitState, priv:priv, profile:bProfile)
+                                BrowserWebView(request:URLRequest(url:URL(string:splitURL) ?? URL(string: "about:blank")!), state: splitState, priv:priv, profile:bProfile, userAgent: userAgent)
                                     .roundedBorderStyleNoFrame()
                                     .transition(.opacity)
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
@@ -739,7 +841,7 @@ struct ContentView: View {
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("Note"):
-                                NoteView()
+                                NoteView(tabID: tabID)
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("History"):
@@ -756,6 +858,10 @@ struct ContentView: View {
                                 
                             case let str where str.contains("ContentBlocker"):
                                 ContentBlockerView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("Map"):
+                                MapView(browserState: browserState)
                                     .roundedBorderStyle()
                                 
                             default:
@@ -844,10 +950,11 @@ struct ContentView: View {
             if let initialURLString {
                 print("has initialURLString: \(initialURLString)")
                 location = URL(string:initialURLString)
+                urlInput = initialURLString
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                print("Attempting to load homepage: \(homepage)")
+                NSLog("Attempting to load homepage: \(homepage)")
                 
                 if homepage == "default-home" {
                     browserState.title = "Home"
@@ -866,9 +973,9 @@ struct ContentView: View {
             guard let url = newValue else { return }
             if let web = browserState.webView {
                 web.customUserAgent = userAgent
-                web.load(URLRequest(url: url))
+                NSLog("LOADING URL: (url.absoluteString)"); web.load(URLRequest(url: url))
             } else{
-                print("no webview")
+                NSLog("NO WEBVIEW FOUND")
             }
         } .onAppear {
             sidebarPage.customUserAgent = userAgent
@@ -878,14 +985,50 @@ struct ContentView: View {
                 location = url
             }
         }
-
-        
+        .onAppear {
+            updateTabState()
+        }
+        .background(WindowAccessor { window in
+            if let window = window, window.identifier?.rawValue != tabID {
+                window.identifier = NSUserInterfaceItemIdentifier(tabID)
+                window.delegate = WindowDelegate.shared
+                if !openWindows.contains(window) {
+                    openWindows.append(window)
+                }
+            }
+        })
+        .onChange(of: location) { _, _ in updateTabState() }
+        .onChange(of: splitURL) { _, _ in updateTabState() }
+        .onChange(of: sidebarURL) { _, _ in updateTabState() }
+        .onChange(of: showSidebar) { _, _ in updateTabState() }
+        .onChange(of: browserState.scrollX) { _, _ in updateTabState() }
+        .onChange(of: browserState.scrollY) { _, _ in updateTabState() }
+        .onChange(of: splitState.scrollX) { _, _ in updateTabState() }
+        .onChange(of: splitState.scrollY) { _, _ in updateTabState() }
         
     }
     
     @AppStorage("searchURL", store:Config.sharedDefaults) var searchURL = "https://www.google.com/search?q="
 
     // MARK: - Helper Methods
+    
+    private func updateTabState() {
+        let state = TabSessionState(
+            tabID: tabID,
+            url: browserState.url?.absoluteString ?? location?.absoluteString,
+            splitURL: splitURL.isEmpty ? nil : splitURL,
+            sidebarURL: sidebarURL?.absoluteString,
+            showSidebar: showSidebar,
+            profile: bProfile,
+            isPrivate: priv,
+            scrollX: browserState.scrollX,
+            scrollY: browserState.scrollY,
+            splitScrollX: splitState.scrollX,
+            splitScrollY: splitState.scrollY
+        )
+        TabRegistry.shared.states[tabID] = state
+    }
+    
     private func submitURL() {
         let trimmed = urlInput.trimmingCharacters(in: .whitespaces)
      //   guard !trimmed.isEmpty else { return }
@@ -923,6 +1066,117 @@ struct ContentView: View {
         operation.run()
     }
     
+    private func scanEvents() async {
+        
+        scanningForEvents = true
+        
+        let calendar = Calendar.current
+        let currentYear = calendar.component(.year, from: Date())
+        let currentDateString = ISO8601DateFormatter().string(from: Date())
+        
+        let text = await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                browserState.webView?.getCleanText { result in
+                    continuation.resume(returning: result ?? "")
+                }
+            }
+        }
+        
+        let prompt = """
+        You are an event extraction system.
+
+        Extract ALL events from the text.
+
+        Return ONLY valid JSON in this format:
+
+        {
+          "events": [
+            {
+              "name": "",
+              "start": "yyyy-MM-dd:HH:mm:ss",
+              "end": "yyyy-MM-dd:HH:mm:ss",
+              "location": "",
+              "notes": ""
+            }
+          ]
+        }
+
+        Rules:
+        - If end time is unknown, infer a reasonable duration (default 2 hours)
+        - Use ISO 8601 format for all dates: yyyy-MM-dd'T'HH:mm:ss
+        - If no year assume \(currentYear), unless that passed \(currentDateString), then \(currentYear+1)
+        - If only date is provided, assume 18:00 start
+        - If no events exist, return {"events":[]}
+
+        Text:
+        \(insertEventDelimiters(String(text.prefix(2500))))
+        """
+        
+
+        let opts = GenerationOptions(
+            sampling: .greedy,
+            temperature: 0.0
+        )
+        
+        let session = LanguageModelSession()
+        
+        
+        do {
+            let result = try await session.respond(to: prompt, options:opts).content
+            let cleanRes = cleanJSON(result)
+            
+            let data = Data(cleanRes.utf8)
+            let decoded = try JSONDecoder().decode(EventExtraction.self, from: data)
+
+            guard !decoded.events.isEmpty else { return }
+            
+            scanningForEvents = false
+            
+            let calManager = MacCalendarManager()
+
+            if decoded.events.count == 1 {
+                let e = decoded.events[0]
+                calManager.presentAddEventPopup(
+                    title: e.name,
+                    startDateString: e.start,
+                    endDateString: e.end,
+                    location: e.location,
+                    notes: e.notes
+                )
+            } else {
+                showEventPicker(events: decoded.events) { selected in
+                    calManager.presentAddEventPopup(
+                        title: selected.name,
+                        startDateString: selected.start,
+                        endDateString: selected.end,
+                        location: selected.location,
+                        notes: selected.notes
+                    )
+                }
+            }
+            
+        } catch {
+            print(error)
+            scanningForEvents = false
+        }
+        
+    }
+
+    func cleanJSON(_ raw: String) -> String {
+        var text = raw.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        if text.hasPrefix("```") {
+            if let firstNewline = text.firstIndex(of: "\n") {
+                text = String(text[text.index(after: firstNewline)...])
+            }
+        }
+
+        if let range = text.range(of: "```", options: .backwards) {
+            text.removeSubrange(range)
+        }
+
+        return text.trimmingCharacters(in: .whitespacesAndNewlines)
+    }
 
     private func configureUserActivity(_ userActivity: NSUserActivity) {
         if let scheme = browserState.url?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
@@ -934,6 +1188,7 @@ struct ContentView: View {
         guard let newURL = newValue else { return }
         
         urlInput = newURL.absoluteString
+        updateTabState()
         
         if priv == true { return }
         
@@ -952,3 +1207,14 @@ struct ContentView: View {
     
 }
 
+import SwiftUI
+
+struct WindowAccessor: NSViewRepresentable {
+    let callback: (NSWindow?) -> Void
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView()
+        DispatchQueue.main.async { self.callback(view.window) }
+        return view
+    }
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}

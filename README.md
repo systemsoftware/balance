@@ -6,7 +6,8 @@
 
 * **Smart Address Bar**: Intelligently handles direct URLs, domain shorthand (e.g., `google.com`), and automatically converts text queries into Google searches.
 * **Productive Sidebar**: A multi-functional sidebar that supports:
-    * **Built-in Views**: Instant access to Local AI Chat (Apple Foundation Models), Bookmarks, Settings, Notes, History, and Downloads.
+    * **Built-in Views**: Instant access to Local AI Chat, Map Workspace, Bookmarks, Settings, Notes, History, and Downloads.
+    * **Map Workspace (Places from Tabs)**: A dedicated sidebar map view powered by local Apple Foundation Models that scans your open tabs for real-world entities (restaurants, landmarks, stores, etc.) and plots them alongside their source URL. Save your favorite spots to your persistent PlaceStore!
     * **Web Pins**: Pin any website (like Spotify, Slack, or Discord) to the sidebar for split-screen browsing.
 * **Liquid Glass UI**: A native macOS aesthetic utilizing depth and translucency.
 * **Advanced Tabs & Windows**: Support for duplicating tabs, launching pages into new windows, and **Tab Search** for quickly finding open pages.

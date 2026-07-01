@@ -20,20 +20,42 @@ struct browserApp: App {
     var downloadStore = DownloadStore()
     
     var body: some Scene {
+        let firstTab = SessionManager.shared.popInitialTabState()
+        
         WindowGroup {
-            ContentView()
+            if let firstTab = firstTab {
+                ContentView(
+                    initialURL: firstTab.url != nil ? URL(string: firstTab.url!) : nil,
+                    pvt: firstTab.isPrivate,
+                    profile: firstTab.profile,
+                    tabID: firstTab.tabID ?? UUID().uuidString,
+                    restoredState: firstTab
+                )
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     print("App is about to close.")
                     if(clearHistoryOnClose) {
                         HistoryManager.clearAllHistory()
                     }
-                    
                     if(clearDownloadHistoryOnClose) {
                         for download in downloadStore.items {
                             downloadStore.remove(id: download.id)
                         }
                     }
                 }
+            } else {
+                ContentView()
+                    .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                        print("App is about to close.")
+                        if(clearHistoryOnClose) {
+                            HistoryManager.clearAllHistory()
+                        }
+                        if(clearDownloadHistoryOnClose) {
+                            for download in downloadStore.items {
+                                downloadStore.remove(id: download.id)
+                            }
+                        }
+                    }
+            }
         }
         .modelContainer(for: [HistoryItem.self]) 
         .commands {
@@ -71,12 +93,14 @@ func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = 
     
     newWindow.title = "Balance"
     
-    let contentView = ContentView(initialURL: url, pvt:pvt, profile:profile, profileIcon:profileIcon ?? "person.fill")
+    let tabID = UUID().uuidString
+    let contentView = ContentView(initialURL: url, pvt:pvt, profile:profile, profileIcon:profileIcon ?? "person.fill", tabID: tabID)
     
     newWindow.isReleasedWhenClosed = false
     newWindow.contentView = NSHostingView(rootView: contentView)
     
     newWindow.delegate = WindowDelegate.shared
+    newWindow.identifier = NSUserInterfaceItemIdentifier(tabID)
     
     openWindows.append(newWindow)
     
@@ -89,7 +113,8 @@ func createNewTab(with url: URL? = nil) {
         return
     }
     
-    let contentView = ContentView(initialURL: url)
+    let tabID = UUID().uuidString
+    let contentView = ContentView(initialURL: url, tabID: tabID)
     
     let newWindow = NSWindow(
         contentRect: currentWindow.frame,
@@ -103,6 +128,7 @@ func createNewTab(with url: URL? = nil) {
     newWindow.isReleasedWhenClosed = false
     newWindow.contentView = NSHostingView(rootView: contentView)
     newWindow.delegate = WindowDelegate.shared
+    newWindow.identifier = NSUserInterfaceItemIdentifier(tabID)
     
     openWindows.append(newWindow)
     
@@ -115,7 +141,17 @@ class WindowDelegate: NSObject, NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
+            // If this is the last open window, save the session BEFORE removing it
+            // so that if the app terminates, the session isn't empty!
+            if openWindows.count == 1 {
+                SessionManager.shared.saveSession()
+            }
             openWindows.removeAll { $0 == window }
+            if let tabID = window.identifier?.rawValue {
+                if Config.sharedDefaults?.bool(forKey: "preserveOnClose") != true {
+                    Config.sharedDefaults?.removeObject(forKey: "note_\(tabID)")
+                }
+            }
         }
     }
 }
@@ -130,10 +166,21 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
             }
         }
+        
+        DispatchQueue.main.async {
+            if let session = SessionManager.shared.getSessionState() {
+                _ = SessionManager.shared.restoreSession(from: session)
+            }
+        }
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
         return true
+    }
+    
+    func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        SessionManager.shared.saveSession()
+        return .terminateNow
     }
     
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {
