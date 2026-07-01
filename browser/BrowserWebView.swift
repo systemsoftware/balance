@@ -588,11 +588,25 @@ struct BrowserWebView: NSViewRepresentable {
                 print("Error reading directory: \(error.localizedDescription)")
             }
         
-        webView.load(request)
+        context.coordinator.lastLoadedRequestURL = request.url
+        if let url = request.url, url.isFileURL, url.absoluteString.hasPrefix("file://") {
+            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        } else {
+            webView.load(request)
+        }
         return webView
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {}
+    func updateNSView(_ nsView: WKWebView, context: Context) {
+        if context.coordinator.lastLoadedRequestURL != request.url {
+            context.coordinator.lastLoadedRequestURL = request.url
+            if let url = request.url, url.isFileURL, url.absoluteString.hasPrefix("file://") {
+                nsView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+            } else {
+                nsView.load(request)
+            }
+        }
+    }
 
     static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
         nsView.removeObserver(coordinator, forKeyPath: "estimatedProgress")
@@ -613,6 +627,7 @@ struct BrowserWebView: NSViewRepresentable {
 
         let state: BrowserState
         var downloads: Set<WKDownload> = []
+        var lastLoadedRequestURL: URL?
 
         init(state: BrowserState) {
             self.state = state
@@ -871,11 +886,15 @@ struct BrowserWebView: NSViewRepresentable {
                      windowFeatures: WKWindowFeatures) -> WKWebView? {
 
             if let url = navigationAction.request.url {
-                if let host = webView.url?.host {
-                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .block)
-                    if popupSetting == .block {
-                        print("Blocked popup to \(url)")
-                        return nil
+                let isLinkActivated = navigationAction.navigationType == .linkActivated
+                
+                if !isLinkActivated {
+                    if let host = webView.url?.host {
+                        let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .block)
+                        if popupSetting == .block {
+                            print("Blocked popup to \(url)")
+                            return nil
+                        }
                     }
                 }
                 

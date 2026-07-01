@@ -205,6 +205,8 @@ struct ContentView: View {
     
     @State private var showFindNavigator = false
     @State private var showTrustInfo = false
+    
+    @State private var currentUserActivity: NSUserActivity?
 
     @Namespace private var backforwardNamespace
     @Namespace private var sidebarNamespace
@@ -724,6 +726,14 @@ struct ContentView: View {
                                 }
                                 
                                 Button {
+                                    Task {
+                                        await createSummaryWindow(state: browserState)
+                                    }
+                                } label: {
+                                    Label("Summarize", systemImage: "text.line.3.summary")
+                                }
+                                
+                                Button {
                                     
                                     Task {
                                         await cite()
@@ -803,10 +813,6 @@ struct ContentView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                                     .onChange(of: browserState.url) { oldValue, newValue in
                                         handleURLChange(from: oldValue, to: newValue)
-                                    }
-                                
-                                    .userActivity(NSUserActivityTypeBrowsingWeb) { userActivity in
-                                        configureUserActivity(userActivity)
                                     }
 
                                 if let url = browserState.url ?? location, url.pathExtension.lowercased() == "pdf" && usePDFKit {
@@ -969,8 +975,6 @@ struct ContentView: View {
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                NSLog("Attempting to load homepage: \(homepage)")
-                
                 if homepage == "default-home" {
                     browserState.title = "Home"
                 } else if let url = URL(string: homepage) {
@@ -985,12 +989,9 @@ struct ContentView: View {
             sidebarPage.customUserAgent = userAgent
             if(sidebarURL != nil) { sidebarPage.load(sidebarURL!) }
         }.onChange(of: location) { _, newValue in
-            guard let url = newValue else { return }
+            guard newValue != nil else { return }
             if let web = browserState.webView {
                 web.customUserAgent = userAgent
-                NSLog("LOADING URL: (url.absoluteString)"); web.load(URLRequest(url: url))
-            } else{
-                NSLog("NO WEBVIEW FOUND")
             }
         } .onAppear {
             sidebarPage.customUserAgent = userAgent
@@ -1266,17 +1267,22 @@ struct ContentView: View {
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 
-    private func configureUserActivity(_ userActivity: NSUserActivity) {
-        if let scheme = browserState.url?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
-            userActivity.webpageURL = browserState.url
-        }
-    }
-
     private func handleURLChange(from oldValue: URL?, to newValue: URL?) {
         guard let newURL = newValue else { return }
         
         urlInput = newURL.absoluteString
         updateTabState()
+        
+        if let scheme = newURL.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+            if currentUserActivity == nil {
+                currentUserActivity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
+            }
+            currentUserActivity?.webpageURL = newURL
+            currentUserActivity?.becomeCurrent()
+        } else {
+            currentUserActivity?.invalidate()
+            currentUserActivity = nil
+        }
         
         if priv == true { return }
         

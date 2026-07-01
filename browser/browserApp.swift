@@ -63,7 +63,7 @@ struct browserApp: App {
         .onChange(of: showTabsInDockMenu) { _, _ in
             updateDockMenuTabsVisibility()
         }
-        .modelContainer(for: [HistoryItem.self]) 
+        .modelContainer(HistoryManager.sharedContainer)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Tab") {
