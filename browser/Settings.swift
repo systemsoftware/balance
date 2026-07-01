@@ -230,7 +230,13 @@ var Settings = [
         type:"toggle",
         appStorageKey: "preserveOnClose",
         defaultValueBool: true
-    )
+    ),
+    Setting(
+            name: "Show Tabs in Dock Menu",
+            type: "toggle",
+            appStorageKey: "showTabsInDockMenu",
+            defaultValueBool: false
+        ),
 ]
 
 // MARK: Header

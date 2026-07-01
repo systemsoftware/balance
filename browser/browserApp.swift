@@ -15,6 +15,9 @@ struct browserApp: App {
     @AppStorage("clearDownloadHistoryOnClose", store:Config.sharedDefaults)
     var clearDownloadHistoryOnClose: Bool = true
     
+    @AppStorage("showTabsInDockMenu", store:Config.sharedDefaults)
+    var showTabsInDockMenu: Bool = false
+    
     @Environment(\.modelContext) private var modelContext
     
     var downloadStore = DownloadStore()
@@ -56,6 +59,9 @@ struct browserApp: App {
                         }
                     }
             }
+        }
+        .onChange(of: showTabsInDockMenu) { _, _ in
+            updateDockMenuTabsVisibility()
         }
         .modelContainer(for: [HistoryItem.self]) 
         .commands {
@@ -105,6 +111,7 @@ func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = 
     openWindows.append(newWindow)
     
     newWindow.makeKeyAndOrderFront(nil)
+    updateDockMenuTabsVisibility()
 }
 
 func createNewTab(with url: URL? = nil) {
@@ -134,10 +141,19 @@ func createNewTab(with url: URL? = nil) {
     
     currentWindow.addTabbedWindow(newWindow, ordered: .above)
     newWindow.makeKeyAndOrderFront(nil)
+    updateDockMenuTabsVisibility()
 }
 
 class WindowDelegate: NSObject, NSWindowDelegate {
     static let shared = WindowDelegate()
+    
+    func windowDidBecomeMain(_ notification: Notification) {
+        updateDockMenuTabsVisibility()
+    }
+    
+    func windowDidBecomeKey(_ notification: Notification) {
+        updateDockMenuTabsVisibility()
+    }
     
     func windowWillClose(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
@@ -151,6 +167,21 @@ class WindowDelegate: NSObject, NSWindowDelegate {
                 if Config.sharedDefaults?.bool(forKey: "preserveOnClose") != true {
                     Config.sharedDefaults?.removeObject(forKey: "note_\(tabID)")
                 }
+            }
+        }
+    }
+}
+
+func updateDockMenuTabsVisibility() {
+    let showTabs = Config.sharedDefaults?.object(forKey: "showTabsInDockMenu") as? Bool ?? false
+    for window in openWindows {
+        if showTabs {
+            window.isExcludedFromWindowsMenu = false
+        } else {
+            if let tabGroup = window.tabGroup {
+                window.isExcludedFromWindowsMenu = (tabGroup.selectedWindow != window)
+            } else {
+                window.isExcludedFromWindowsMenu = false
             }
         }
     }
