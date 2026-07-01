@@ -77,7 +77,7 @@ var Settings = [
             ])
         ),
     Setting(
-            name:"Autofill Engine",
+            name:"Autocomplete Engine",
             type:"dropdownString",
             appStorageKey:"autofillEngine",
             defaultValueString: "https://ac.duckduckgo.com/ac/?&type=list&q=",
