@@ -1100,7 +1100,58 @@ struct ContentView: View {
         .onChange(of: browserState.scrollY) { _, _ in updateTabState() }
         .onChange(of: splitState.scrollX) { _, _ in updateTabState() }
         .onChange(of: splitState.scrollY) { _, _ in updateTabState() }
-        
+        .focusedSceneValue(\.dispatchBrowserCommand) { command in
+            switch command {
+            case .palette: showCommands = true
+            case .searchTabs: showTabSearch = true
+            case .toggleFind: showFindNavigator.toggle()
+            case .zoomIn: browserState.zoomIn()
+            case .zoomOut: browserState.zoomOut()
+            case .resetZoom: browserState.resetZoom()
+            case .toggleMute: browserState.toggleMute()
+            case .duplicateTab: if let url = location { createNewTab(with: url) }
+            case .duplicateWindow: if let url = location { createNewWindow(with: url) }
+            case .openInFocus: if let url = location { createFocusWindow(with: url, userAgent: userAgent) }
+            case .copyURL:
+                if let url = location {
+                    NSPasteboard.general.clearContents()
+                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                }
+            case .printPage: printCurrentPage()
+            case .toggleReader: showReader.toggle()
+            case .renameTab:
+                let alert = NSAlert()
+                alert.informativeText = "Enter new tab name:"
+                alert.addButton(withTitle: "Rename")
+                alert.addButton(withTitle: "Cancel")
+                let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+                input.stringValue = browserState.customTitle ?? browserState.title
+                input.placeholderString = browserState.webView?.title ?? "Page"
+                alert.accessoryView = input
+                alert.window.initialFirstResponder = input
+                if alert.runModal() == .alertFirstButtonReturn {
+                    let newTitle = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                    if newTitle.isEmpty {
+                        browserState.customTitle = nil
+                        browserState.title = browserState.webView?.title ?? "Page"
+                    } else {
+                        browserState.customTitle = newTitle
+                        browserState.title = newTitle
+                    }
+                }
+            case .showDevTools:
+                let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
+                inspector?.perform(NSSelectorFromString("show"))
+            case .supportDirectory:
+                if let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                    NSWorkspace.shared.open(url)
+                }
+            case .sourceCode: createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
+            case .summarize: Task { summarizing = true; await createSummaryWindow(state: browserState); summarizing = false }
+            case .addEvents: Task { await scanEvents() }
+            case .cite: Task { await cite() }
+            }
+        }
     }
     
     @AppStorage("searchURL", store:Config.sharedDefaults) var searchURL = "https://www.google.com/search?q="

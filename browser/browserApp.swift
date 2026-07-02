@@ -76,6 +76,7 @@ struct browserApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            BrowserCommands()
         }
         
         SwiftUI.Settings {
@@ -254,4 +255,211 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     @objc func newWindowForTab(_ sender: Any?) {
         createNewTab()
     }
+}
+
+enum MenuBarSection: String, CaseIterable {
+    case browser = "Browser"
+    case page = "Page"
+}
+
+enum BrowserCommand: String, CaseIterable {
+    // Browser
+    case palette, searchTabs
+    // Page
+    case toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
+    case duplicateTab, duplicateWindow, openInFocus
+    case copyURL, printPage, toggleReader, renameTab
+    case showDevTools, supportDirectory, sourceCode
+    case summarize, addEvents, cite
+    
+    var title: String {
+        switch self {
+        case .palette: return "Palette"
+        case .searchTabs: return "Search Tabs"
+        case .toggleFind: return "Find In Page"
+        case .zoomIn: return "In"
+        case .zoomOut: return "Out"
+        case .resetZoom: return "Reset"
+        case .toggleMute: return "Mute"
+        case .duplicateTab: return "In This Window"
+        case .duplicateWindow: return "In New Window"
+        case .openInFocus: return "Open in Focus"
+        case .copyURL: return "Copy URL"
+        case .printPage: return "Print"
+        case .toggleReader: return "Reader"
+        case .renameTab: return "Rename"
+        case .showDevTools: return "Dev Tools"
+        case .supportDirectory: return "App Data"
+        case .sourceCode: return "Source"
+        case .summarize: return "Summarize"
+        case .addEvents: return "Add to Calendar"
+        case .cite: return "Cite"
+        }
+    }
+    
+    var section: MenuBarSection {
+        switch self {
+        case .palette, .searchTabs:
+            return .browser
+        default:
+            return .page
+        }
+    }
+    
+    var submenu: String? {
+        switch self {
+        case .zoomIn, .zoomOut, .resetZoom:
+            return "Zoom"
+        case .duplicateTab, .duplicateWindow, .openInFocus:
+            return "Duplicate"
+        case .showDevTools, .supportDirectory, .sourceCode:
+            return "Developer"
+        case .summarize, .addEvents, .cite:
+            return "AI"
+        default:
+            return nil
+        }
+    }
+    
+    var shortcut: KeyboardShortcut? {
+        switch self {
+        case .palette: return KeyboardShortcut("k", modifiers: [.command])
+        case .searchTabs: return KeyboardShortcut("s", modifiers: [.command, .option])
+        case .toggleFind: return KeyboardShortcut("f", modifiers: [.command])
+        case .zoomIn: return KeyboardShortcut("+", modifiers: [.command])
+        case .zoomOut: return KeyboardShortcut("-", modifiers: [.command])
+        case .toggleMute: return KeyboardShortcut("m", modifiers: [.command, .shift])
+        case .copyURL: return KeyboardShortcut("c", modifiers: [.command, .control])
+        case .printPage: return KeyboardShortcut("p", modifiers: [.command])
+        case .toggleReader: return KeyboardShortcut("r", modifiers: [.command, .option])
+        case .showDevTools: return KeyboardShortcut("i", modifiers: [.command, .option])
+        default: return nil
+        }
+    }
+    
+    var requiresDividerAfter: Bool {
+        switch self {
+        case .palette, .searchTabs: return true
+        case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab: return true
+        case .zoomOut, .duplicateWindow: return true
+        case .showDevTools, .supportDirectory: return true
+        case .summarize, .addEvents: return true
+        default: return false
+        }
+    }
+}
+
+struct BrowserCommandDispatcherKey: FocusedValueKey {
+    typealias Value = (BrowserCommand) -> Void
+}
+
+extension FocusedValues {
+    var dispatchBrowserCommand: ((BrowserCommand) -> Void)? {
+        get { self[BrowserCommandDispatcherKey.self] }
+        set { self[BrowserCommandDispatcherKey.self] = newValue }
+    }
+}
+
+struct BrowserCommands: Commands {
+    @FocusedValue(\.dispatchBrowserCommand) var dispatch
+    
+    var body: some Commands {
+        CommandMenu("Browser") {
+            MenuContent(section: .browser, dispatch: dispatch)
+        }
+        CommandMenu("Page") {
+            MenuContent(section: .page, dispatch: dispatch)
+        }
+    }
+}
+
+struct MenuContent: View {
+    let section: MenuBarSection
+    let dispatch: ((BrowserCommand) -> Void)?
+    
+    var body: some View {
+        let commands = BrowserCommand.allCases.filter { $0.section == section }
+        let itemsAndGroups = getItemsAndGroups(from: commands)
+        
+        ForEach(itemsAndGroups, id: \.id) { itemOrGroup in
+            if let group = itemOrGroup as? MenuGroup {
+                Menu(group.name) {
+                    ForEach(group.commands, id: \.self) { cmd in
+                        CommandButton(command: cmd, dispatch: dispatch)
+                    }
+                }
+                if group.requiresDividerAfter {
+                    Divider()
+                }
+            } else if let item = itemOrGroup as? MenuItem {
+                CommandButton(command: item.command, dispatch: dispatch)
+                if item.command.requiresDividerAfter {
+                    Divider()
+                }
+            }
+        }
+    }
+}
+
+struct CommandButton: View {
+    let command: BrowserCommand
+    let dispatch: ((BrowserCommand) -> Void)?
+    
+    var body: some View {
+        Button(command.title) {
+            dispatch?(command)
+        }
+        .keyboardShortcut(command.shortcut)
+    }
+}
+
+protocol MenuElement: Identifiable {
+    var id: String { get }
+}
+
+struct MenuItem: MenuElement {
+    let command: BrowserCommand
+    var id: String { command.rawValue }
+}
+
+struct MenuGroup: MenuElement {
+    let name: String
+    let commands: [BrowserCommand]
+    var id: String { name }
+    var requiresDividerAfter: Bool {
+        commands.last?.requiresDividerAfter ?? false
+    }
+}
+
+func getItemsAndGroups(from commands: [BrowserCommand]) -> [any MenuElement] {
+    var result: [any MenuElement] = []
+    var currentSubmenu: String? = nil
+    var currentGroupCommands: [BrowserCommand] = []
+    
+    for command in commands {
+        if let submenu = command.submenu {
+            if currentSubmenu != submenu {
+                if let current = currentSubmenu {
+                    result.append(MenuGroup(name: current, commands: currentGroupCommands))
+                }
+                currentSubmenu = submenu
+                currentGroupCommands = [command]
+            } else {
+                currentGroupCommands.append(command)
+            }
+        } else {
+            if let current = currentSubmenu {
+                result.append(MenuGroup(name: current, commands: currentGroupCommands))
+                currentSubmenu = nil
+                currentGroupCommands = []
+            }
+            result.append(MenuItem(command: command))
+        }
+    }
+    
+    if let current = currentSubmenu {
+        result.append(MenuGroup(name: current, commands: currentGroupCommands))
+    }
+    
+    return result
 }
