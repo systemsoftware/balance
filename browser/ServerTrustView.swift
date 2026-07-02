@@ -77,6 +77,7 @@ struct ServerTrustView: View {
                         .bold()
                     
                     VStack(spacing: 12) {
+                        permissionRow(title: "Location", icon: "location", host: host, type: "location", isMedia: true)
                         permissionRow(title: "Camera", icon: "camera", host: host, type: "camera", isMedia: true)
                         permissionRow(title: "Microphone", icon: "mic", host: host, type: "microphone", isMedia: true)
                         permissionRow(title: "Pop-ups", icon: "macwindow.on.rectangle", host: host, type: "popups", isMedia: false, defaultState: .block)

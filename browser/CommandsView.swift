@@ -554,13 +554,21 @@ struct CommandsView: View {
             encoding: .utf8
         )!
         
-        let store = WKWebsiteDataStore(forIdentifier: profile.id)
-        
-        let types = WKWebsiteDataStore.allWebsiteDataTypes()
-        
-        store.fetchDataRecords(ofTypes: types) { records in
-            store.removeData(ofTypes: types, for: records) {
-                print("Profile data wiped")
+        if #available(macOS 14.0, *) {
+            WKWebsiteDataStore.remove(forIdentifier: profile.id) { error in
+                if let error = error {
+                    print("Failed to remove profile data store: \(error)")
+                } else {
+                    print("Profile data wiped completely")
+                }
+            }
+        } else {
+            let store = WKWebsiteDataStore(forIdentifier: profile.id)
+            let types = WKWebsiteDataStore.allWebsiteDataTypes()
+            store.fetchDataRecords(ofTypes: types) { records in
+                store.removeData(ofTypes: types, for: records) {
+                    print("Profile data cleared")
+                }
             }
         }
     }}

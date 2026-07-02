@@ -3,6 +3,7 @@ import WebKit
 import AppKit
 internal import Combine
 import ZIPFoundation
+import CoreLocation
 
 final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var url: URL?
@@ -477,6 +478,72 @@ struct BrowserWebView: NSViewRepresentable {
         config.userContentController.addUserScript(scrollScript)
         config.userContentController.add(context.coordinator, name: "scrollObserver")
         
+        let locationScript = """
+        (function() {
+            let locationCallbacks = {};
+            let watchCallbacks = {};
+            let callbackIdCounter = 0;
+
+            navigator.geolocation.getCurrentPosition = function(success, error, options) {
+                const state = prompt("BALANCE_INTERNAL_LOCATION_CHECK");
+                if (state === 'Deny') {
+                    if (error) error({ code: 1, message: 'User denied Geolocation' });
+                    return;
+                }
+                
+                const id = ++callbackIdCounter;
+                locationCallbacks[id] = { success: success, error: error };
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.balanceLocation) {
+                    window.webkit.messageHandlers.balanceLocation.postMessage({ type: 'get', id: id });
+                }
+            };
+
+            navigator.geolocation.watchPosition = function(success, error, options) {
+                const state = prompt("BALANCE_INTERNAL_LOCATION_CHECK");
+                if (state === 'Deny') {
+                    if (error) error({ code: 1, message: 'User denied Geolocation' });
+                    return 0;
+                }
+                const id = ++callbackIdCounter;
+                watchCallbacks[id] = { success: success, error: error };
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.balanceLocation) {
+                    window.webkit.messageHandlers.balanceLocation.postMessage({ type: 'watch', id: id });
+                }
+                return id;
+            };
+
+            navigator.geolocation.clearWatch = function(id) {
+                delete watchCallbacks[id];
+                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.balanceLocation) {
+                    window.webkit.messageHandlers.balanceLocation.postMessage({ type: 'clear', id: id });
+                }
+            };
+
+            window.__balanceLocationCallback = function(id, errCode, lat, lng, acc) {
+                const cb = locationCallbacks[id] || watchCallbacks[id];
+                if (!cb) return;
+                
+                if (errCode === 0) {
+                    if (cb.success) {
+                        cb.success({
+                            coords: { latitude: lat, longitude: lng, accuracy: acc },
+                            timestamp: Date.now()
+                        });
+                    }
+                } else {
+                    if (cb.error) cb.error({ code: errCode, message: 'Location error' });
+                }
+                
+                if (locationCallbacks[id]) {
+                    delete locationCallbacks[id];
+                }
+            };
+        })();
+        """
+        let locScript = WKUserScript(source: locationScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        config.userContentController.addUserScript(locScript)
+        config.userContentController.add(context.coordinator, name: "balanceLocation")
+        
         WebExtensionManager.shared.loadAllFromDisk()
         WebExtensionManager.shared.activeTab = state
         
@@ -621,9 +688,10 @@ struct BrowserWebView: NSViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKWebExtensionControllerDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKWebExtensionControllerDelegate, CLLocationManagerDelegate {
         
         let downloadStore = DownloadStore()
+        var locationManager: CLLocationManager?
 
         let state: BrowserState
         var downloads: Set<WKDownload> = []
@@ -631,6 +699,39 @@ struct BrowserWebView: NSViewRepresentable {
 
         init(state: BrowserState) {
             self.state = state
+            super.init()
+        }
+        
+        var activeLocationRequests: [(id: Int, isWatch: Bool)] = []
+        
+        func sendLocationToJS(id: Int, location: CLLocation) {
+            let lat = location.coordinate.latitude
+            let lng = location.coordinate.longitude
+            let acc = location.horizontalAccuracy
+            state.webView?.evaluateJavaScript("if (window.__balanceLocationCallback) window.__balanceLocationCallback(\(id), 0, \(lat), \(lng), \(acc));", completionHandler: nil)
+        }
+        
+        func sendLocationErrorToJS(id: Int, errorCode: Int) {
+            state.webView?.evaluateJavaScript("if (window.__balanceLocationCallback) window.__balanceLocationCallback(\(id), \(errorCode), 0, 0, 0);", completionHandler: nil)
+        }
+
+        func locationManager(_ manager: CLLocationManager, didUpdateLocations locations: [CLLocation]) {
+            guard let loc = locations.last else { return }
+            for req in activeLocationRequests {
+                sendLocationToJS(id: req.id, location: loc)
+            }
+            activeLocationRequests.removeAll { !$0.isWatch }
+            if activeLocationRequests.isEmpty {
+                manager.stopUpdatingLocation()
+            }
+        }
+        
+        func locationManager(_ manager: CLLocationManager, didFailWithError error: Error) {
+            for req in activeLocationRequests {
+                sendLocationErrorToJS(id: req.id, errorCode: 2)
+            }
+            activeLocationRequests.removeAll()
+            manager.stopUpdatingLocation()
         }
         
         // MARK: - WKWebExtensionControllerDelegate
@@ -704,6 +805,31 @@ struct BrowserWebView: NSViewRepresentable {
                     DispatchQueue.main.async {
                         self.state.scrollX = x.intValue
                         self.state.scrollY = y.intValue
+                    }
+                }
+            } else if message.name == "balanceLocation", let dict = message.body as? [String: Any] {
+                guard let type = dict["type"] as? String, let id = dict["id"] as? Int else { return }
+                
+                DispatchQueue.main.async {
+                    if type == "clear" {
+                        self.activeLocationRequests.removeAll { $0.id == id }
+                        if self.activeLocationRequests.isEmpty {
+                            self.locationManager?.stopUpdatingLocation()
+                        }
+                        return
+                    }
+                    
+                    self.activeLocationRequests.append((id: id, isWatch: type == "watch"))
+                    
+                    if self.locationManager == nil {
+                        self.locationManager = CLLocationManager()
+                        self.locationManager?.delegate = self
+                    }
+                    self.locationManager?.requestWhenInUseAuthorization()
+                    self.locationManager?.startUpdatingLocation()
+                    
+                    if let loc = self.locationManager?.location {
+                        self.sendLocationToJS(id: id, location: loc)
                     }
                 }
             }
@@ -962,6 +1088,45 @@ struct BrowserWebView: NSViewRepresentable {
                      defaultText: String?,
                      initiatedByFrame frame: WKFrameInfo,
                      completionHandler: @escaping (String?) -> Void) {
+
+            if prompt == "BALANCE_INTERNAL_LOCATION_CHECK" {
+                if let host = webView.url?.host {
+                    let state = SitePermissionStore.shared.mediaPermission(for: host, type: "location")
+                    
+                    let handleAllow = {
+                        if self.locationManager == nil {
+                            self.locationManager = CLLocationManager()
+                            self.locationManager?.delegate = self
+                        }
+                        self.locationManager?.requestWhenInUseAuthorization()
+                        // On macOS, sometimes the prompt doesn't appear until you actually request the location.
+                        self.locationManager?.startUpdatingLocation()
+                    }
+                    
+                    if state == .ask {
+                        let alert = NSAlert()
+                        alert.messageText = "Allow \"\(host)\" to use your location?"
+                        alert.addButton(withTitle: "Allow")
+                        alert.addButton(withTitle: "Deny")
+                        let result = alert.runModal()
+                        let newState: PermissionState = (result == .alertFirstButtonReturn) ? .allow : .deny
+                        SitePermissionStore.shared.setMediaPermission(for: host, type: "location", state: newState)
+                        
+                        if newState == .allow {
+                            handleAllow()
+                        }
+                        completionHandler(newState.rawValue)
+                    } else {
+                        if state == .allow {
+                            handleAllow()
+                        }
+                        completionHandler(state.rawValue)
+                    }
+                } else {
+                    completionHandler("Ask")
+                }
+                return
+            }
 
             let alert = NSAlert()
             alert.messageText = prompt
