@@ -207,6 +207,9 @@ class WindowDelegate: NSObject, NSWindowDelegate {
             }
             openWindows.removeAll { $0 == window }
             if let tabID = window.identifier?.rawValue {
+                if let state = TabRegistry.shared.states[tabID] {
+                    SessionManager.shared.lastClosedURL = state.url
+                }
                 if Config.sharedDefaults?.bool(forKey: "preserveOnClose") != true {
                     Config.sharedDefaults?.removeObject(forKey: "note_\(tabID)")
                 }
@@ -301,7 +304,7 @@ enum MenuBarSection: String, CaseIterable {
 
 enum BrowserCommand: String, CaseIterable {
     // Browser
-    case palette, searchTabs
+    case palette, searchTabs, reopenLastTab
     // Page
     case toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
@@ -313,6 +316,7 @@ enum BrowserCommand: String, CaseIterable {
         switch self {
         case .palette: return "Palette"
         case .searchTabs: return "Search Tabs"
+        case .reopenLastTab: return "Reopen Closed Tab"
         case .toggleFind: return "Find In Page"
         case .zoomIn: return "In"
         case .zoomOut: return "Out"
@@ -335,7 +339,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var section: MenuBarSection {
         switch self {
-        case .palette, .searchTabs:
+        case .palette, .searchTabs, .reopenLastTab:
             return .browser
         default:
             return .page
@@ -361,6 +365,7 @@ enum BrowserCommand: String, CaseIterable {
         switch self {
         case .palette: return KeyboardShortcut("k", modifiers: [.command])
         case .searchTabs: return KeyboardShortcut("s", modifiers: [.command, .option])
+        case .reopenLastTab: return KeyboardShortcut("t", modifiers: [.command, .shift])
         case .toggleFind: return KeyboardShortcut("f", modifiers: [.command])
         case .zoomIn: return KeyboardShortcut("+", modifiers: [.command])
         case .zoomOut: return KeyboardShortcut("-", modifiers: [.command])
@@ -375,7 +380,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var requiresDividerAfter: Bool {
         switch self {
-        case .palette, .searchTabs: return true
+        case .palette, .searchTabs, .reopenLastTab: return true
         case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab: return true
         case .zoomOut, .duplicateWindow: return true
         case .showDevTools: return true

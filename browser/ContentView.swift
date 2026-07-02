@@ -317,6 +317,8 @@ struct ContentView: View {
     
     @State var commandSearchText = ""
     
+    @State private var latestItem: HistoryItem?
+    
     var body: some View {
         VStack(spacing: 0) {
             // MARK: - Address Bar
@@ -890,6 +892,14 @@ struct ContentView: View {
                 }
                 .padding(Layout.outerPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
+                .task {
+                    var descriptor = FetchDescriptor<HistoryItem>(
+                        sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+                    )
+                    descriptor.fetchLimit = 1
+                    
+                    latestItem = try? modelContext.fetch(descriptor).first
+                }
                 
                 
                 // MARK: - Sidebar
@@ -1127,6 +1137,12 @@ struct ContentView: View {
             case .summarize: Task { summarizing = true; await createSummaryWindow(state: browserState); summarizing = false }
             case .addEvents: Task { await scanEvents() }
             case .cite: Task { await cite() }
+            case .reopenLastTab:
+                if let urlStr = SessionManager.shared.lastClosedURL, let url = URL(string: urlStr) {
+                    createNewTab(with:url)
+                } else {
+                    print("no last tab")
+                }
             }
         }
     }

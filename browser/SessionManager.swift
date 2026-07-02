@@ -36,6 +36,7 @@ class SessionManager {
     
     var isRestoring = false
     var restoredIDs: [String] = []
+    var lastClosedURL: String? = nil
     
     func saveSession() {
         print("saveSession: appGroupIdentifier = \(Config.appGroupIdentifier)")
