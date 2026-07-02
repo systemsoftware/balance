@@ -794,6 +794,16 @@ struct ContentView: View {
                                         Label("Source Code", systemImage:"curlybraces")
                                     }
                                     
+                                    Divider()
+                                    
+                                    Button {
+                                        if let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                                            NSWorkspace.shared.open(url)
+                                        }
+                                    } label: {
+                                        Label("App Data", systemImage:"folder.badge.gearshape")
+                                    }
+                                    
                                 } label: {
                                     Label("More", systemImage: "ellipsis")
                                 }

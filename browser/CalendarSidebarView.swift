@@ -8,6 +8,8 @@ class CalendarViewModel: ObservableObject {
     
     let eventStore = EKEventStore()
     
+    @Published var days: Int = 2
+    
     init() {
         self.authorizationStatus = EKEventStore.authorizationStatus(for: .event)
     }
@@ -36,7 +38,7 @@ class CalendarViewModel: ObservableObject {
     
     var isAuthorized: Bool {
         let status = EKEventStore.authorizationStatus(for: .event)
-        if #available(macOS 14.0, iOS 17.0, *) {
+        if #available(macOS 14.0, *) {
             return status == .fullAccess || status == .writeOnly
         } else {
             return status == .authorized
@@ -51,7 +53,7 @@ class CalendarViewModel: ObservableObject {
         let now = Date()
         let startOfDay = Calendar.current.startOfDay(for: now)
         var components = DateComponents()
-        components.day = 2
+        components.day = days
         components.second = -1
         let endOfTomorrow = Calendar.current.date(byAdding: components, to: startOfDay)!
         
@@ -80,6 +82,17 @@ struct CalendarSidebarView: View {
                 .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundColor(.secondary)
+                
+                
+                    Picker("Days",selection: $viewModel.days) {
+                        ForEach(2...30, id: \.self) {
+                            Text("\($0)")
+                        }
+                    }
+                    .pickerStyle(.menu)
+                    .font(.caption)
+                    
+                
             }
             .padding()
 
@@ -138,11 +151,11 @@ struct CalendarSidebarView: View {
     
     private func timeString(for event: EKEvent) -> String {
         let formatter = DateFormatter()
-        formatter.dateStyle = .none
-        formatter.timeStyle = .short
+        formatter.dateStyle = .short
+        formatter.timeStyle = event.isAllDay ? .none : .medium
         
         if event.isAllDay {
-            return "All Day"
+            return "\(formatter.string(from: event.startDate)) - All Day"
         } else {
             let start = formatter.string(from: event.startDate)
             let end = formatter.string(from: event.endDate)
