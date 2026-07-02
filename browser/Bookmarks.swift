@@ -64,20 +64,39 @@ struct BookmarksView: View {
     @StateObject private var store = BookmarkStore()
     
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
-    var sidebarWidth: Int = 300
+    var sidebarWidth: Int = 345
 
-    @State private var showAddSheet = false
+    @State var showAddSheet: Bool = false
+    @Binding var showAddBookmark: Bool
     @State private var urlInput: String = ""
     @State private var titleInput: String = ""
+    
+    var isSettings = false
 
     var body: some View {
         VStack(spacing: 0) {
             
-            HStack{
-                Text("Bookmarks")
-                    .font(.system(.headline, design: .rounded))
-                Spacer()
-            }.padding(.top).padding(.leading)
+            if !isSettings {
+                HStack {
+                    Text("Bookmarks")
+                        .font(.system(.headline, design: .rounded))
+                    Spacer()
+                    
+                    Button() {
+                        showAddSheet = true
+                    } label: {
+                        Label("New", systemImage: "plus")
+                    }
+                    .buttonStyle(.plain)
+                    .font(.caption)
+                    .foregroundColor(.secondary)
+                    .menuStyle(.borderlessButton)
+                    .fixedSize()
+                }
+                .padding(.horizontal)
+                .padding(.top)
+            }
+
             
             ScrollView {
                 if store.items.isEmpty {
@@ -93,25 +112,13 @@ struct BookmarksView: View {
                             )
                         }
                     }
-                    .padding(16)
+                    .padding(isSettings ? 5 : 16)
                 }
             }
             .frame(minWidth: CGFloat(sidebarWidth))
 
-            // Footer Section
-            GlassCard {
-                Button(action: { showAddSheet = true }) {
-                    Label("Add Bookmark", systemImage: "plus.circle.fill")
-                        .font(.system(size: 13, weight: .bold))
-                        .frame(maxWidth: .infinity)
-                        .frame(height: 38)
-                }
-                .buttonStyle(.glassProminent)
-            }
-            .padding(16)
         }
         .background(Color.black.opacity(0.03))
-        // Using a Sheet instead of two alerts for a better UX
         .sheet(isPresented: $showAddSheet) {
             AddBookmarkSheet(url: $urlInput, title: $titleInput) {
                 let newBookmark = Bookmark(title: titleInput, url: urlInput)
@@ -119,6 +126,15 @@ struct BookmarksView: View {
                 urlInput = ""
                 titleInput = ""
                 showAddSheet = false
+            }
+        }
+        .sheet(isPresented: $showAddBookmark) {
+            AddBookmarkSheet(url: $urlInput, title: $titleInput) {
+                let newBookmark = Bookmark(title: titleInput, url: urlInput)
+                store.add(newBookmark)
+                urlInput = ""
+                titleInput = ""
+                showAddBookmark = false
             }
         }
     }

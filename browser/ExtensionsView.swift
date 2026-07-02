@@ -6,7 +6,7 @@ struct ExtensionsView: View {
     @ObservedObject private var manager = WebExtensionManager.shared
     
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
-    var sidebarWidth: Int = 300
+    var sidebarWidth: Int = 345
     
     @State private var errorMessage: String?
     @State private var isInstalling: Bool = false

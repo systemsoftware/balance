@@ -4,7 +4,7 @@ internal import UniformTypeIdentifiers
 
 struct ContentBlockerView: View {
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
-    var sidebarWidth: Int = 300
+    var sidebarWidth: Int = 345
     
     @State private var errorMessage: String?
     @State private var isInstalling: Bool = false

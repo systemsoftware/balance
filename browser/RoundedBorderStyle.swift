@@ -7,7 +7,7 @@ struct RoundedBorderStyle: ViewModifier {
     var color: Color = .gray
     
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
-    private var sidebarWidth: Int = 300
+    private var sidebarWidth: Int = 345
 
     func body(content: Content) -> some View {
         content

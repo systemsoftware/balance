@@ -75,7 +75,7 @@ struct DownloadsView: View {
     @StateObject private var downloadStore = DownloadStore()
     
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
-    var sidebarWidth: Int = 300
+    var sidebarWidth: Int = 345
     
     @State private var showAddSheet = false
     @State private var urlInput: String = ""

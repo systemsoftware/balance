@@ -84,21 +84,7 @@ struct CommandsView: View {
     
     @State private var bookmarkStore = BookmarkStore()
     
-    @AppStorage("profiles", store: Config.sharedDefaults)
-    private var profilesJSON = "[]"
-    
-    private var profiles: [Profile] {
-        get {
-            (try? JSONDecoder().decode([Profile].self,
-                                       from: Data(profilesJSON.utf8))) ?? []
-        }
-        set {
-            profilesJSON = String(
-                data: try! JSONEncoder().encode(newValue),
-                encoding: .utf8
-            )!
-        }
-    }
+    var showData = true
     
     let commands: [Command] = [
         .init(name: "New Tab",
@@ -124,10 +110,6 @@ struct CommandsView: View {
             .init(name: "New Window With Profile...",
                   systemImage: "person.fill",
                   action: .newWindowWithProfile, showsChevron:true),
-        
-            .init(name: "Create Profile...",
-                  systemImage: "person.fill.badge.plus",
-                  action: .newProfile, showsChevron:true)
     ]
     
     var filteredCommands: [Command] {
@@ -140,16 +122,6 @@ struct CommandsView: View {
         }
     }
     
-    var filteredProfiles: [Profile] {
-        if searchText.isEmpty {
-            return profiles
-        }
-        
-        return profiles.filter {
-            $0.name.localizedCaseInsensitiveContains(searchText)
-        }
-    }
-    
     var filteredBookmarks: [Bookmark] {
         if searchText.isEmpty {
             return bookmarkStore.items
@@ -159,7 +131,7 @@ struct CommandsView: View {
             $0.title.localizedCaseInsensitiveContains(searchText)
         }
     }
-        
+    
     var filteredHistory: [HistoryItem] {
         if searchText.isEmpty {
             return historyItems
@@ -172,8 +144,8 @@ struct CommandsView: View {
     
     var filteredTabs: [NSWindow] {
         let validWindows = NSApp.windows.filter { window in
-            window.styleMask.contains(.titled) && 
-            window.styleMask.contains(.resizable) && 
+            window.styleMask.contains(.titled) &&
+            window.styleMask.contains(.resizable) &&
             window.className != "NSPanel"
         }
         
@@ -186,8 +158,6 @@ struct CommandsView: View {
         }
     }
     @State private var urlString = ""
-    @State private var nameInput = ""
-    @State private var iconInput = ""
     @State private var showNewProfile = false
     @State private var hideProfileList = false
     
@@ -208,7 +178,7 @@ struct CommandsView: View {
         }
         return CommandSection.allCases
     }
-
+    
     private var sectionOrderBinding: Binding<[CommandSection]> {
         Binding(
             get: { sectionOrder },
@@ -222,7 +192,7 @@ struct CommandsView: View {
     }
     
     @State private var draggingSection: CommandSection?
-
+    
     @ViewBuilder
     private func sectionHeader(title: String, section: CommandSection) -> some View {
         HStack {
@@ -238,215 +208,188 @@ struct CommandsView: View {
         .onDrop(of: [.plainText], delegate: SectionDropDelegate(item: section, items: sectionOrderBinding, draggedItem: $draggingSection))
     }
     
-    var body: some View {
+    @ViewBuilder
+    private var tabsSection: some View {
+        if (!showData || (searchText.isEmpty ? filteredTabs.count > 1 : !filteredTabs.isEmpty)) && showTabs {
+            Section(header: sectionHeader(title: "Tabs", section: .tabs)) {
+                if showData {
+                    ForEach(filteredTabs, id: \.windowNumber) { window in
+                        Button(action: {
+                            window.makeKeyAndOrderFront(nil)
+                            dismiss()
+                        }) {
+                            row(
+                                title: window.title.isEmpty ? "Untitled Tab" : window.title,
+                                image: "macwindow",
+                                showsChevron: false
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var bookmarksSection: some View {
+        if (!showData || !filteredBookmarks.isEmpty) && showBookmarks {
+            Section(header: sectionHeader(title: "Bookmarks", section: .bookmarks)) {
+                if showData {
+                    ForEach(filteredBookmarks) { mark in
+                        Button {
+                            createNewTab(with: URL(string:mark.url))
+                            dismiss()
+                        } label: {
+                            row(
+                                title: mark.title,
+                                image: "bookmark",
+                                showsChevron: false
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var searchSection: some View {
+        if showSearch {
+            Section(header: sectionHeader(title: "Search", section: .search)) {
+                if showData {
+                    AutoFillView(searchTerm: $searchText, noContentAvView:true,
+                                 updateOther: Binding<String?>(
+                                    get: { searchQuery },
+                                    set: { searchQuery = $0 ?? "" }
+                                 )
+                    )
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var commandsSection: some View {
+        if (!showData || !filteredCommands.isEmpty) && showCommands {
+            Section(header: sectionHeader(title: "Commands", section: .commands)) {
+                if showData {
+                    ForEach(filteredCommands) { command in
+                        Button {
+                            perform(command.action)
+                        } label: {
+                            row(
+                                title: command.name,
+                                image: command.systemImage,
+                                showsChevron: command.showsChevron
+                            )
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+            }
+        }
+    }
+    
+    @ViewBuilder
+    private var historySection: some View {
+        if (!showData || !filteredHistory.isEmpty) && showHistory {
+            Section(header: sectionHeader(title: "History", section: .history)) {
+                if showData {
+                    ForEach(filteredHistory) {
+                        row(
+                            title: $0.title,
+                            image: "arrow.up.circle",
+                            showsChevron: false
+                        )
+                    }
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var commandsScreen: some View {
+        Section {
+            ForEach(sectionOrder) { section in
+                switch section {
+                case .tabs: tabsSection
+                case .bookmarks: bookmarksSection
+                case .search: searchSection
+                case .commands: commandsSection
+                case .history: historySection
+                }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private var profilesScreen: some View {
+        ProfileView(searchText: $searchText, hideProfileList: $hideProfileList, showNewProfile: $showNewProfile)
+        
+        HStack {
+            Button("Cancel") {
+                urlString = ""
+                showNewProfile = false
+                screen = .commands
+            }
+            .padding(.trailing, 3)
+            
+            if !showNewProfile {
+                Button("Create Profile") {
+                    showNewProfile = true
+                }
+            }
+        }
+        .padding(.top)
+    }
+
+    @ViewBuilder
+    private func enterURLScreen(privateMode: Bool) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            Text("Open URL")
+                .font(.headline)
+            
+            TextField("https://example.com", text: $urlString)
+                .textFieldStyle(.roundedBorder)
+            
+            HStack {
+                Spacer()
+                
+                Button("Cancel") {
+                    urlString = ""
+                    screen = .commands
+                }
+                
+                Button("Open") {
+                    createNewWindow(
+                        with: URL(string: urlString),
+                        pvt: privateMode
+                    )
+                    dismiss()
+                }
+                .disabled(urlString.isEmpty)
+            }
+        }
+        .padding()
+    }
+
+    @ViewBuilder
+    var contentList: some View {
         List {
             switch screen {
             case .commands:
-                
-                Section {
-                    ForEach(sectionOrder) { section in
-                        switch section {
-                        case .tabs:
-                            if (searchText.isEmpty ? filteredTabs.count > 1 : !filteredTabs.isEmpty) && showTabs {
-                                Section(header: sectionHeader(title: "Tabs", section: .tabs)) {
-                                    ForEach(filteredTabs, id: \.windowNumber) { window in
-                                        Button(action: {
-                                            window.makeKeyAndOrderFront(nil)
-                                            dismiss()
-                                        }) {
-                                            row(
-                                                title: window.title.isEmpty ? "Untitled Tab" : window.title,
-                                                image: "macwindow",
-                                                showsChevron: false
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        case .bookmarks:
-                            if !filteredBookmarks.isEmpty && showBookmarks {
-                                Section(header: sectionHeader(title: "Bookmarks", section: .bookmarks)) {
-                                    ForEach(filteredBookmarks) { mark in
-                                        Button {
-                                            createNewTab(with: URL(string:mark.url))
-                                            dismiss()
-                                        } label: {
-                                            row(
-                                                title: mark.title,
-                                                image: "bookmark",
-                                                showsChevron: false
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        case .search:
-                            if showSearch {
-                                Section(header: sectionHeader(title: "Search", section: .search)) {
-                                    AutoFillView(searchTerm: $searchText, noContentAvView:true,
-                                                 updateOther: Binding<String?>(
-                                                    get: { searchQuery },
-                                                    set: { searchQuery = $0 ?? "" }
-                                                 )
-                                    )
-                                }
-                            }
-                        case .commands:
-                            if !filteredCommands.isEmpty && showCommands {
-                                Section(header: sectionHeader(title: "Commands", section: .commands)) {
-                                    ForEach(filteredCommands) { command in
-                                        Button {
-                                            perform(command.action)
-                                        } label: {
-                                            row(
-                                                title: command.name,
-                                                image: command.systemImage,
-                                                showsChevron: command.showsChevron
-                                            )
-                                        }
-                                        .buttonStyle(.plain)
-                                    }
-                                }
-                            }
-                        case .history:
-                            if !filteredHistory.isEmpty && showHistory {
-                                Section(header: sectionHeader(title: "History", section: .history)) {
-                                    ForEach(filteredHistory) {
-                                        row(
-                                            title: $0.title,
-                                            image: "arrow.up.circle",
-                                            showsChevron: false
-                                        )
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
+                commandsScreen
             case .profiles:
-                Section("Profiles") {
-                    if !hideProfileList {
-                        if !filteredProfiles.isEmpty {
-                            ForEach(filteredProfiles) { profile in
-                                Button {
-                                    createNewWindow(profile: profile.id.uuidString, profileIcon:profile.icon.isEmpty ? "person.fill" : profile.icon)
-                                    dismiss()
-                                } label: {
-                                    row(
-                                        title: profile.name,
-                                        image: profile.icon.isEmpty ? "person.fill" : profile.icon,
-                                    )
-                                }
-                                .buttonStyle(.plain)
-                                .contextMenu {
-                                    Button(role: .destructive) {
-                                        deleteProfile(profile)
-                                    } label: {
-                                        Label("Delete Profile", systemImage: "trash")
-                                    }
-                                }
-                            }
-                        } else {
-                            row(
-                                title: "No Profiles",
-                                image: "person.slash.fill",
-                            )
-                            .foregroundStyle(.gray)
-                        }
-                    }
-                }
-                
-                if showNewProfile {
-                    Section {
-                        VStack(alignment: .leading, spacing: 10) {
-                            
-                            Text("New Profile")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                            
-                            VStack(spacing: 8) {
-                                TextField("Name", text: $nameInput)
-                                    .textFieldStyle(.roundedBorder)
-                                
-                                TextField("Icon (optional SF Symbol)", text: $iconInput)
-                                    .textFieldStyle(.roundedBorder)
-                            }
-                            
-                            Button {
-                                guard !nameInput.isEmpty else { return }
-                                addProfile(name: nameInput, icon: iconInput.isEmpty ? "person.crop.circle" : iconInput)
-                                
-                                nameInput = ""
-                                iconInput = ""
-                            } label: {
-                                HStack {
-                                    Image(systemName: "plus.circle.fill")
-                                    Text("Create Profile")
-                                    Spacer()
-                                }
-                            }
-                            .buttonStyle(.borderedProminent)
-                            .controlSize(.regular)
-                            .disabled(nameInput.isEmpty)
-                        }
-                        .padding(.vertical, 6)
-                    }
-                }
-                HStack {
-                    Button("Cancel") {
-                        urlString = ""
-                        showNewProfile = false
-                        screen = .commands
-                    }
-                    .padding(.trailing, 3)
-                    
-                    if !showNewProfile {
-                        Button("Create Profile") {
-                            showNewProfile = true
-                        }
-                    }
-                }
-                .padding(.top)
-
-                
+                profilesScreen
             case .enterURL(let privateMode):
-                VStack(alignment: .leading, spacing: 16) {
-                    Text("Open URL")
-                        .font(.headline)
-                    
-                    TextField("https://example.com", text: $urlString)
-                        .textFieldStyle(.roundedBorder)
-                    
-                    HStack {
-                        Spacer()
-                        
-                        Button("Cancel") {
-                            urlString = ""
-                            screen = .commands
-                        }
-                        
-                        Button("Open") {
-                            createNewWindow(
-                                with: URL(string: urlString),
-                                pvt: privateMode
-                            )
-                            dismiss()
-                        }
-                        .disabled(urlString.isEmpty)
-                    }
-                }
-                .padding()
-                
+                enterURLScreen(privateMode: privateMode)
             }
         }
         .listStyle(.inset)
         .navigationTitle(screen == .commands ? "Palette" : "Select Profile")
-        .searchable(
-            text: $searchText,
-            prompt: screen == .commands ? "Search" : screen == .profiles ? "Search profiles" : "Cannot search"
-        )
+        
         .toolbar {
             if screen == .profiles {
                 ToolbarItem(placement: .navigation) {
@@ -462,33 +405,18 @@ struct CommandsView: View {
         .frame(minWidth: 420, minHeight: 350)
     }
     
-    @ViewBuilder
-    private func row(
-        title: String,
-        image: String,
-        showsChevron: Bool = false
-    ) -> some View {
-        HStack(spacing: 10) {
-            Image(systemName: image)
-                .foregroundStyle(.secondary)
-                .frame(width: 18)
-            
-            Text(title)
-            
-            Spacer()
-            
-            if showsChevron {
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.secondary)
-            } else {
-                Image(systemName: "chevron.right")
-                    .font(.caption2)
-                    .foregroundStyle(.tertiary)
-            }
+    var body: some View {
+        if showData {
+            contentList
+                .searchable(
+                    text: $searchText,
+                    prompt: screen == .commands ? "Search" : screen == .profiles ? "Search profiles" : "Cannot search"
+                )
+        } else {
+            contentList
         }
-        .padding(.vertical, 6)
     }
+    
     
     private func perform(_ action: Command.Action) {
         switch action {
@@ -521,6 +449,154 @@ struct CommandsView: View {
             screen = .profiles
             showNewProfile = true
             hideProfileList = true
+        }
+    }
+
+}
+
+
+struct ProfileView: View {
+    
+    
+    @AppStorage("profiles", store: Config.sharedDefaults)
+    private var profilesJSON = "[]"
+    
+    @Environment(\.dismiss) var dismiss
+        
+    private var profiles: [Profile] {
+        get {
+            (try? JSONDecoder().decode([Profile].self,
+                                       from: Data(profilesJSON.utf8))) ?? []
+        }
+        set {
+            profilesJSON = String(
+                data: try! JSONEncoder().encode(newValue),
+                encoding: .utf8
+            )!
+        }
+    }
+    
+    @State var nameInput: String = ""
+    @State var iconInput: String = ""
+    
+    @Binding var searchText: String
+    
+    @Binding var hideProfileList: Bool
+    @Binding var showNewProfile: Bool
+    
+    @State var showAdvancedIcon = false
+    
+    
+    var showHeader = true
+    
+    var filteredProfiles: [Profile] {
+        if searchText.isEmpty {
+            return profiles
+        }
+        
+        return profiles.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText)
+        }
+    }
+    
+    var body: some View {
+        Section {
+            if !hideProfileList {
+                if !filteredProfiles.isEmpty {
+                    ForEach(filteredProfiles) { profile in
+                        Button {
+                            createNewWindow(profile: profile.id.uuidString, profileIcon:profile.icon.isEmpty ? "person.fill" : profile.icon)
+                            dismiss()
+                        } label: {
+                            row(
+                                title: profile.name,
+                                image: profile.icon.isEmpty ? "person.fill" : profile.icon,
+                            )
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button(role: .destructive) {
+                                deleteProfile(profile)
+                            } label: {
+                                Label("Delete Profile", systemImage: "trash")
+                            }
+                        }
+                    }
+                } else {
+                    row(
+                        title: "No Profiles",
+                        image: "person.slash.fill",
+                    )
+                    .foregroundStyle(.gray)
+                }
+            }
+        } header: {
+            if showHeader {
+                Text("Profile")
+            }
+        }
+        
+        if showNewProfile {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    
+                    Text("New Profile")
+                    
+                    VStack(alignment: .leading, spacing: 8) {
+                        TextField("Name", text: $nameInput)
+                            .textFieldStyle(.roundedBorder)
+                        
+                        HStack {
+                            Text("Icon")
+                            
+                            Spacer()
+                            
+                            Picker("", selection: $iconInput) {
+                                Text("Default").tag("")
+                                Text("Person").tag("person.crop.circle")
+                                Text("Briefcase").tag("briefcase.fill")
+                                Text("Graduation Cap").tag("graduationcap.fill")
+                                Text("Book").tag("book.fill")
+                                Text("Globe").tag("globe")
+                                Text("Star").tag("star.fill")
+                                Text("Heart").tag("heart.fill")
+                                Text("Gamepad").tag("gamecontroller.fill")
+                                Text("Terminal").tag("terminal.fill")
+                            }
+                        }
+                        
+                        Button("Advanced Icon") {
+                            showAdvancedIcon.toggle()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        
+                        if showAdvancedIcon {
+                            TextField("Input any SF Symbol name", text: $iconInput)
+                                .textFieldStyle(.roundedBorder)
+                        }
+                    }
+                    
+                    Button {
+                        guard !nameInput.isEmpty else { return }
+                        addProfile(name: nameInput, icon: iconInput.isEmpty ? "person.crop.circle" : iconInput)
+                        
+                        nameInput = ""
+                        iconInput = ""
+                    } label: {
+                        HStack {
+                            Image(systemName: "plus.circle.fill")
+                            Text("Create Profile")
+                            Spacer()
+                        }
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .controlSize(.regular)
+                    .disabled(nameInput.isEmpty)
+                }
+                .padding(.vertical, 6)
+            }
         }
     }
     
@@ -571,4 +647,33 @@ struct CommandsView: View {
                 }
             }
         }
-    }}
+    }
+}
+
+@ViewBuilder
+func row(
+    title: String,
+    image: String,
+    showsChevron: Bool = false
+) -> some View {
+    HStack(spacing: 10) {
+        Image(systemName: image)
+            .foregroundStyle(.secondary)
+            .frame(width: 18)
+        
+        Text(title)
+        
+        Spacer()
+        
+        if showsChevron {
+            Image(systemName: "chevron.right")
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+        } else {
+            Image(systemName: "chevron.right")
+                .font(.caption2)
+                .foregroundStyle(.tertiary)
+        }
+    }
+    .padding(.vertical, 6)
+}

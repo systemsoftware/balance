@@ -18,9 +18,23 @@ struct browserApp: App {
     @AppStorage("showTabsInDockMenu", store:Config.sharedDefaults)
     var showTabsInDockMenu: Bool = false
     
+    @AppStorage("themePreference", store:Config.sharedDefaults)
+    var themePreference: String = "system"
+    
     @Environment(\.modelContext) private var modelContext
     
     var downloadStore = DownloadStore()
+    
+    private func applyTheme(_ theme: String) {
+        switch theme {
+        case "dark":
+            NSApp.appearance = NSAppearance(named: .darkAqua)
+        case "light":
+            NSApp.appearance = NSAppearance(named: .aqua)
+        default:
+            NSApp.appearance = nil
+        }
+    }
     
     var body: some Scene {
         let firstTab = SessionManager.shared.popInitialTabState()
@@ -34,6 +48,12 @@ struct browserApp: App {
                     tabID: firstTab.tabID ?? UUID().uuidString,
                     restoredState: firstTab
                 )
+                .onAppear {
+                    applyTheme(themePreference)
+                }
+                .onChange(of: themePreference) { _, newValue in
+                    applyTheme(newValue)
+                }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     print("App is about to close.")
                     if(clearHistoryOnClose) {
@@ -47,7 +67,13 @@ struct browserApp: App {
                 }
             } else {
                 ContentView()
-                    .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
+                    .onAppear {
+                    applyTheme(themePreference)
+                }
+                .onChange(of: themePreference) { _, newValue in
+                    applyTheme(newValue)
+                }
+                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                         print("App is about to close.")
                         if(clearHistoryOnClose) {
                             HistoryManager.clearAllHistory()
@@ -120,9 +146,17 @@ func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = 
     updateDockMenuTabsVisibility()
 }
 
-func createNewTab(with url: URL? = nil) {
-    guard let currentWindow = NSApp.mainWindow ?? NSApp.windows.first else {
-        createNewWindow()
+func createNewTab(with url: URL? = nil, inBackground: Bool = false) {
+    let browserWindows = NSApp.windows.filter { openWindows.contains($0) }
+    let targetWindow: NSWindow?
+    if let main = NSApp.mainWindow, openWindows.contains(main) {
+        targetWindow = main
+    } else {
+        targetWindow = browserWindows.first
+    }
+    
+    guard let currentWindow = targetWindow else {
+        createNewWindow(with: url)
         return
     }
     
@@ -145,8 +179,11 @@ func createNewTab(with url: URL? = nil) {
     
     openWindows.append(newWindow)
     
-    currentWindow.addTabbedWindow(newWindow, ordered: .above)
-    newWindow.makeKeyAndOrderFront(nil)
+    let background = inBackground && (Config.sharedDefaults?.bool(forKey: "openLinksInBackground") ?? false)
+    currentWindow.addTabbedWindow(newWindow, ordered: background ? .below : .above)
+    if !background {
+        newWindow.makeKeyAndOrderFront(nil)
+    }
     updateDockMenuTabsVisibility()
 }
 
@@ -269,7 +306,7 @@ enum BrowserCommand: String, CaseIterable {
     case toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
     case copyURL, printPage, toggleReader, renameTab
-    case showDevTools, supportDirectory, sourceCode
+    case showDevTools
     case summarize, addEvents, cite
     
     var title: String {
@@ -289,10 +326,9 @@ enum BrowserCommand: String, CaseIterable {
         case .toggleReader: return "Reader"
         case .renameTab: return "Rename"
         case .showDevTools: return "Dev Tools"
-        case .supportDirectory: return "App Data"
-        case .sourceCode: return "Source"
+
         case .summarize: return "Summarize"
-        case .addEvents: return "Add to Calendar"
+        case .addEvents: return "Add Events to Calendar"
         case .cite: return "Cite"
         }
     }
@@ -312,7 +348,7 @@ enum BrowserCommand: String, CaseIterable {
             return "Zoom"
         case .duplicateTab, .duplicateWindow, .openInFocus:
             return "Duplicate"
-        case .showDevTools, .supportDirectory, .sourceCode:
+        case .showDevTools:
             return "Developer"
         case .summarize, .addEvents, .cite:
             return "AI"
@@ -342,7 +378,7 @@ enum BrowserCommand: String, CaseIterable {
         case .palette, .searchTabs: return true
         case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab: return true
         case .zoomOut, .duplicateWindow: return true
-        case .showDevTools, .supportDirectory, .sourceCode: return true
+        case .showDevTools: return true
         case .summarize, .addEvents: return true
         default: return false
         }

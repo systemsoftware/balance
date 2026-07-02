@@ -8,7 +8,7 @@ class CalendarViewModel: ObservableObject {
     
     let eventStore = EKEventStore()
     
-    @Published var days: Int = 2
+    @AppStorage("calDays", store:Config.sharedDefaults) var days: Int = 2
     
     init() {
         self.authorizationStatus = EKEventStore.authorizationStatus(for: .event)

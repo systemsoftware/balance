@@ -40,10 +40,11 @@ struct NoteView: View {
                         }
                     }
                 }
-            }.padding()
                 .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundColor(.secondary)
+            }.padding()
+
             
             Picker("", selection: $noteScope) {
                 ForEach(

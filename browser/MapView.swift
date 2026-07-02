@@ -12,9 +12,7 @@ struct MapView: View {
     @State private var selectedResult: PlaceItem?
     
     @StateObject private var placeStore = PlaceStore()
-    
-    @AppStorage("enableAIPlaces", store: Config.sharedDefaults) var enableAIPlaces: Bool = true
-    
+        
     @State private var isScanning = false
     @State private var session: LanguageModelSession?
     @State private var showingAlert = false
@@ -57,7 +55,6 @@ struct MapView: View {
             .padding(10)
             .background(Color(NSColor.controlBackgroundColor))
             
-            if enableAIPlaces {
                 Divider()
                 HStack {
                     if isScanning {
@@ -93,7 +90,6 @@ struct MapView: View {
                 .padding(.horizontal, 10)
                 .padding(.vertical, 6)
                 .background(Color(NSColor.controlBackgroundColor))
-            }
             
             Divider()
             

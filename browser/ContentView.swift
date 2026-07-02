@@ -156,7 +156,7 @@ struct ContentView: View {
     @Environment(\.modelContext) private var modelContext
 
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
-    private var sidebarWidth: Int = 300
+    private var sidebarWidth: Int = 345
     
     @AppStorage("userAgent", store:Config.sharedDefaults)
     private var userAgent: String = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
@@ -508,12 +508,7 @@ struct ContentView: View {
                                 Label("Palette", systemImage: "command.square")
                             }
                             .keyboardShortcut("k", modifiers: [.command])
-                            
-                            
-                            Divider()
-                            
-                            Toggle("Sidebar",isOn:$showSidebar)
-                            
+                                                        
                             Divider()
                             
                             if let url = location {
@@ -727,6 +722,7 @@ struct ContentView: View {
                                     }
                                     .keyboardShortcut("i", modifiers: [.command, .option])
                                     
+                                    Divider()
                                     
                                     Button() {
                                         let alert = NSAlert()
@@ -786,23 +782,6 @@ struct ContentView: View {
                                         Label("Cite", systemImage: "doc.text")
                                     }
                                     
-                                    Divider()
-                                    
-                                    Button {
-                                        createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
-                                    } label:{
-                                        Label("Source Code", systemImage:"curlybraces")
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    Button {
-                                        if let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-                                            NSWorkspace.shared.open(url)
-                                        }
-                                    } label: {
-                                        Label("App Data", systemImage:"folder.badge.gearshape")
-                                    }
                                     
                                 } label: {
                                     Label("More", systemImage: "ellipsis")
@@ -915,6 +894,8 @@ struct ContentView: View {
                 
                 // MARK: - Sidebar
                 
+                @State var falseBinding = false
+                
                 HStack(spacing: 8) {
                     if let sidebarURL {
                         if sidebarURL.absoluteString.contains(".view") {
@@ -925,11 +906,11 @@ struct ContentView: View {
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("Bookmark"):
-                                BookmarksView()
+                                BookmarksView(showAddBookmark:$falseBinding)
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("Settings"):
-                                SettingsView()
+                                SettingsView(activeProfile: bProfile)
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("Note"):
@@ -1142,11 +1123,7 @@ struct ContentView: View {
             case .showDevTools:
                 let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
                 inspector?.perform(NSSelectorFromString("show"))
-            case .supportDirectory:
-                if let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-                    NSWorkspace.shared.open(url)
-                }
-            case .sourceCode: createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
+
             case .summarize: Task { summarizing = true; await createSummaryWindow(state: browserState); summarizing = false }
             case .addEvents: Task { await scanEvents() }
             case .cite: Task { await cite() }

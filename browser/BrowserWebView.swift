@@ -318,7 +318,7 @@ final class BrowserWKWebView: WKWebView {
         """) { value, _ in
             guard let urlString = value as? String, let url = URL(string: urlString) else { return }
             DispatchQueue.main.async {
-                createNewTab(with: url)
+                createNewTab(with: url, inBackground: true)
             }
         }
     }
@@ -544,6 +544,12 @@ struct BrowserWebView: NSViewRepresentable {
         config.userContentController.addUserScript(locScript)
         config.userContentController.add(context.coordinator, name: "balanceLocation")
         
+        let dntEnabled = Config.sharedDefaults?.bool(forKey: "doNotTrack") ?? false
+        if dntEnabled {
+            let dntScript = WKUserScript(source: "Object.defineProperty(navigator, 'doNotTrack', { get: function() { return '1'; } });", injectionTime: .atDocumentStart, forMainFrameOnly: false)
+            config.userContentController.addUserScript(dntScript)
+        }
+        
         WebExtensionManager.shared.loadAllFromDisk()
         WebExtensionManager.shared.activeTab = state
         
@@ -578,6 +584,9 @@ struct BrowserWebView: NSViewRepresentable {
         if !userAgent.isEmpty {
             webView.customUserAgent = userAgent
         }
+        
+        let defaultZoom = (Config.sharedDefaults?.object(forKey: "defaultPageZoom") as? Int) ?? 100
+        webView.pageZoom = CGFloat(defaultZoom) / 100.0
         webView.state = state
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
@@ -665,6 +674,11 @@ struct BrowserWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
+        let defaultZoom = (Config.sharedDefaults?.object(forKey: "defaultPageZoom") as? Int) ?? 100
+        let targetZoom = CGFloat(defaultZoom) / 100.0
+        if nsView.pageZoom != targetZoom {
+            nsView.pageZoom = targetZoom
+        }
         if context.coordinator.lastLoadedRequestURL != request.url {
             context.coordinator.lastLoadedRequestURL = request.url
             if let url = request.url, url.isFileURL, url.absoluteString.hasPrefix("file://") {
@@ -908,6 +922,17 @@ struct BrowserWebView: NSViewRepresentable {
                 print("decidePolicyFor:", url.absoluteString)
             }
             
+            if let url = navigationAction.request.url {
+                let httpsOnly = Config.sharedDefaults?.bool(forKey: "httpsOnly") ?? false
+                if httpsOnly && url.scheme == "http" {
+                    if let httpsUrl = URL(string: url.absoluteString.replacingOccurrences(of: "http://", with: "https://")) {
+                        decisionHandler(.cancel, preferences)
+                        webView.load(URLRequest(url: httpsUrl))
+                        return
+                    }
+                }
+            }
+            
             if let host = navigationAction.request.url?.host {
                 let jsSetting = SitePermissionStore.shared.setting(for: host, type: "javascript", defaultState: .allow)
                 preferences.allowsContentJavaScript = (jsSetting == .allow)
@@ -974,15 +999,16 @@ struct BrowserWebView: NSViewRepresentable {
             panel.nameFieldStringValue = filename
 
             panel.begin { [weak self] result in
-                    if result == .OK, let url = panel.url {
-                        // SET DOWNLOAD TO HERE:
-                        // Store the path where the file is actually going to be saved
-                        self?.downloadTo[download] = url.path
-                        completionHandler(url)
-                    } else {
-                        completionHandler(nil)
+                if result == .OK, let url = panel.url {
+                    if FileManager.default.fileExists(atPath: url.path) {
+                        try? FileManager.default.removeItem(at: url)
                     }
+                    self?.downloadTo[download] = url.path
+                    completionHandler(url)
+                } else {
+                    completionHandler(nil)
                 }
+            }
         }
 
                 func downloadDidFinish(_ download: WKDownload) {
@@ -1025,7 +1051,7 @@ struct BrowserWebView: NSViewRepresentable {
                 }
                 
                 DispatchQueue.main.async {
-                    createNewTab(with: url)
+                    createNewTab(with: url, inBackground: true)
                 }
             }
             return nil
@@ -1142,6 +1168,24 @@ struct BrowserWebView: NSViewRepresentable {
             completionHandler(result == .alertFirstButtonReturn ? input.stringValue : nil)
         }
         
+        func webView(_ webView: WKWebView,
+                     runOpenPanelWith parameters: WKOpenPanelParameters,
+                     initiatedByFrame frame: WKFrameInfo,
+                     completionHandler: @escaping ([URL]?) -> Void) {
+            
+            let openPanel = NSOpenPanel()
+            openPanel.canChooseFiles = true
+            openPanel.canChooseDirectories = parameters.allowsDirectories
+            openPanel.allowsMultipleSelection = parameters.allowsMultipleSelection
+            
+            openPanel.begin { result in
+                if result == .OK {
+                    completionHandler(openPanel.urls)
+                } else {
+                    completionHandler(nil)
+                }
+            }
+        }
 
     }
 }
