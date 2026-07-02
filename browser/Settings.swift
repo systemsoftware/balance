@@ -844,10 +844,8 @@ struct SettingsSectionContent: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if def.id == "browsing" {
-                if !profiles.isEmpty {
+            if def.id == "profiles" && !profiles.isEmpty {
                     profilePickerRow
-                }
             }
 
             ForEach(settingsForCategory) { setting in
