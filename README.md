@@ -40,7 +40,7 @@ Interact with a private, on-device AI assistant directly from your browser.
 
 #### AI Page Summarization
 
-Quickly summarize long articles using local Apple Foundation Models.
+* Quickly summarize long articles using local Apple Foundation Models.
 
 * Event Extraction with one-click export to macOS Calendar
 

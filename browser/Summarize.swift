@@ -23,6 +23,15 @@ func createSummaryWindow(state:BrowserState) async {
     
     let session = LanguageModelSession()
     
+    if text.isEmpty {
+        Task {
+            let a = NSAlert()
+            a.messageText = "No text found"
+            a.runModal()
+        }
+        return
+    }
+    
     let prompt = String("Summarize this page: \(text)".prefix(3000))
     
     do {

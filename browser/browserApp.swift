@@ -77,6 +77,11 @@ struct browserApp: App {
                 .keyboardShortcut("n", modifiers: .command)
             }
         }
+        
+        SwiftUI.Settings {
+            SettingsView(isStandalone: true)
+                .frame(minWidth: 400, minHeight: 400)
+        }
     }
 }
 

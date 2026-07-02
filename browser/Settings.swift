@@ -1,7 +1,7 @@
 import SwiftUI
 
 struct Setting: Codable, Identifiable {
-    var id = UUID()
+    var id: String { appStorageKey.isEmpty ? "header-\(name)" : appStorageKey }
     var name: String
     var type: String // "slider", "toggle", "text"
     var appStorageKey: String
@@ -207,6 +207,59 @@ var Settings = [
         name:"History",
         type:"toggle",
         appStorageKey: "paletteShowHistory",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Toolbar",
+        type:"header",
+        appStorageKey:""
+    ),
+    Setting(
+        name:"Share Button",
+        type:"toggle",
+        appStorageKey: "showShareInToolbar",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Reload Button",
+        type:"toggle",
+        appStorageKey: "showReloadInToolbar",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Address Bar",
+        type:"toggle",
+        appStorageKey: "showAddrBarInToolbar",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Navigation Buttons",
+        type:"toggle",
+        appStorageKey: "showNavInToolbar",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Search Button",
+        type:"toggle",
+        appStorageKey: "showSearchButtonInToolbar",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Autocomplete Button",
+        type:"toggle",
+        appStorageKey: "showAutocompleteInToolbar",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"Extensions Button",
+        type:"toggle",
+        appStorageKey: "showExtInToolbar",
+        defaultValueBool: true
+    ),
+    Setting(
+        name:"More Menu",
+        type:"toggle",
+        appStorageKey: "showMoreInToolbar",
         defaultValueBool: true
     ),
     Setting(
@@ -418,6 +471,7 @@ struct TextFieldRow: View {
     }
 }
 struct SettingsView: View {
+    var isStandalone: Bool = false
     @StateObject private var store = BookmarkStore()
     
     @AppStorage("sidebarWidth", store:Config.sharedDefaults)
@@ -427,6 +481,18 @@ struct SettingsView: View {
     
     @AppStorage("profiles", store: Config.sharedDefaults)
     private var profilesJSON = "[]"
+    
+    @State private var searchText: String = ""
+    
+    var filteredSettings: [Setting] {
+        if searchText.isEmpty {
+            return Settings
+        }
+        
+        return Settings.filter {
+            $0.name.localizedCaseInsensitiveContains(searchText) || $0.type == "header"
+        }
+    }
     
     private var profiles: [Profile] {
         get {
@@ -450,28 +516,43 @@ struct SettingsView: View {
                 Spacer()
             }.padding(.leading)
             
-            ScrollView {
-                VStack(alignment: .leading, spacing: 12) {
-                    
-                    Header(text:"Browsing")
-                        .padding(.horizontal)
-                        .padding(.top)
-                    Picker("Default Profile", selection: $defaultProfile) {
-                        Text("None").tag("")
-
-                        ForEach(profiles) { profile in
-                            Text(profile.name)
-                                .tag(profile.id.uuidString)
+            SearchInputView(text: $searchText)
+                .padding(.horizontal)
+                .padding(.top)
+            ScrollViewReader { proxy in
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 12) {
+                        
+                        Header(text:"Browsing")
+                            .padding(.horizontal)
+                            .padding(.top)
+                        
+                        if searchText.isEmpty || "Default Profile".localizedCaseInsensitiveContains(searchText) {
+                            Picker("Default Profile", selection: $defaultProfile) {
+                                Text("None").tag("")
+                                
+                                ForEach(profiles) { profile in
+                                    Text(profile.name)
+                                        .tag(profile.id.uuidString)
+                                }
+                            }
+                            .padding(.horizontal)
+                        }
+                        
+                        ForEach(filteredSettings) { setting in
+                            SettingRow(setting: setting)
+                                .padding(.horizontal)
                         }
                     }
-                    .padding(.horizontal)
-                    
-                    ForEach(Settings) { setting in
-                        SettingRow(setting: setting)
-                            .padding(.horizontal)
-                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
                 }
-            }.frame(width:CGFloat(sidebarWidth))
+                .frame(maxWidth: isStandalone ? .infinity : CGFloat(sidebarWidth))
+                .onChange(of: searchText) {
+
+                    proxy.scrollTo("top", anchor: .top)
+
+                }
+            }
         }.padding(.vertical)
     }
 }

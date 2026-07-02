@@ -1,9 +1,11 @@
 import SwiftUI
+import WebKit
 
 enum NoteScope: String, CaseIterable, Identifiable {
     case global = "Global"
     case currentTab = "This Tab"
     case ephemeral = "Ephemeral"
+    case domain = "Domain"
     
     var id: String { self.rawValue }
 }
@@ -13,6 +15,8 @@ struct NoteView: View {
     
     @State var tabNote = ""
     var tabID: String = ""
+    
+    var browserState: BrowserState
 
     @State var noteScope: NoteScope = .global
     
@@ -30,20 +34,34 @@ struct NoteView: View {
                         Config.sharedDefaults?.set("", forKey: "note_\(tabID)")
                     case .ephemeral:
                         tabNote = ""
+                    case .domain:
+                        if let domain = browserState.webView?.url?.domainID {
+                            Config.sharedDefaults?.set("", forKey: "note_\(domain)")
+                        }
                     }
                 }
-                
-                Picker("Scope", selection: $noteScope) {
-                    ForEach(NoteScope.allCases) { scope in
-                        Text(scope.rawValue).tag(scope)
-                    }
-                }
-                .pickerStyle(.menu)
-                .frame(width: 130)
             }.padding()
                 .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundColor(.secondary)
+            
+            Picker("", selection: $noteScope) {
+                ForEach(
+                    NoteScope.allCases.filter {
+                        $0 != .domain || browserState.url?.domainID != nil
+                    }
+                ) { scope in
+                    let MAX_CHAR = 10
+                    if scope == .domain {
+                        Text("\((browserState.url!.domainID!).prefix(MAX_CHAR))\(browserState.url!.domainID!.count > MAX_CHAR ? "..." : "")").tag(scope)
+                    } else {
+                        Text(scope.rawValue).tag(scope)
+                    }
+                }
+            }
+            .pickerStyle(.palette)
+            .padding(.horizontal)
+            .padding(.leading, -4)
             
             noteEditor
                 .scrollContentBackground(.hidden)
@@ -64,6 +82,10 @@ struct NoteView: View {
             }
         case .ephemeral:
             TextEditor(text: $tabNote)
+        case .domain:
+            if let domain = browserState.webView?.url?.domainID {
+                TabNoteEditor(tabID: domain)
+            }
         }
     }
 }
@@ -79,5 +101,16 @@ struct TabNoteEditor: View {
     
     var body: some View {
         TextEditor(text: $text)
+    }
+}
+
+extension URL {
+    var domainID: String? {
+        guard var hostString = self.host?.lowercased() else { return nil }
+        
+        if hostString.hasPrefix("www.") {
+            hostString.removeFirst(4)
+        }
+        return hostString
     }
 }

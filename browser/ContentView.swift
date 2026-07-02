@@ -32,7 +32,8 @@ let builtInSidebar = [
     SidebarItem(icon:"folder", view:"DownloadsView"),
     SidebarItem(icon:"puzzlepiece.extension", view:"ExtensionsView"),
     SidebarItem(icon:"hand.raised", view:"ContentBlockerView"),
-    SidebarItem(icon:"map", view:"MapView")
+    SidebarItem(icon:"map", view:"MapView"),
+    SidebarItem(icon:"antenna.radiowaves.left.and.right", view:"RSSView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -206,6 +207,16 @@ struct ContentView: View {
     @State private var showTrustInfo = false
     
     @State private var currentUserActivity: NSUserActivity?
+    
+    @AppStorage("showExtInToolbar", store:Config.sharedDefaults) var showExtInToolbar = true
+    @AppStorage("showAutocompleteInToolbar", store:Config.sharedDefaults) var showAutocompleteInToolbar = true
+    @AppStorage("showShareInToolbar", store:Config.sharedDefaults) var showShareInToolbar = true
+    @AppStorage("showSearchButtonInToolbar", store:Config.sharedDefaults) var showSearchButtonInToolbar = true
+    @AppStorage("showNavInToolbar", store:Config.sharedDefaults) var showNavInToolbar = true
+    @AppStorage("showMoreInToolbar", store:Config.sharedDefaults) var showMoreInToolbar = true
+    @AppStorage("showAddrBarInToolbar", store:Config.sharedDefaults) var showAddrBarInToolbar = true
+    @AppStorage("showReloadInToolbar", store:Config.sharedDefaults) var showReloadInToolbar = true
+
 
     @Namespace private var backforwardNamespace
     @Namespace private var sidebarNamespace
@@ -307,7 +318,7 @@ struct ContentView: View {
         VStack(spacing: 0) {
             // MARK: - Address Bar
             HStack(spacing: 8) {
-                if location != nil {
+                if location != nil && showNavInToolbar {
                     GlassEffectContainer {
                         HStack(spacing: 0) {
                             if(browserState.canGoBack){
@@ -323,7 +334,7 @@ struct ContentView: View {
                                 .keyboardShortcut(.leftArrow, modifiers: .command)
                             }
                             
-                            if(browserState.canGoForward) {
+                            if browserState.canGoForward {
                                 Button(action: {
                                     Task {
                                         browserState.webView?.goForward()
@@ -340,10 +351,10 @@ struct ContentView: View {
                         }
                     }
                 }
-           
-
+                
+                
                 if location != nil {
-                    if location?.absoluteString.starts(with: "http") == true {
+                    if location?.absoluteString.starts(with: "http") == true && showShareInToolbar {
                         ShareLink(item: location!) {
                             Image(systemName: "square.and.arrow.up")
                                 .padding(Layout.controlPadding)
@@ -353,99 +364,113 @@ struct ContentView: View {
                         .keyboardShortcut("s", modifiers: [.command, .shift])
                         
                     }
-                    ReloadButton(state: browserState) {
-                        if browserState.isLoading  {
-                            browserState.webView?.stopLoading()
-                        } else {
-                            browserState.webView?.reload()
+                    
+                    if showReloadInToolbar {
+                        ReloadButton(state: browserState) {
+                            if browserState.isLoading  {
+                                browserState.webView?.stopLoading()
+                            } else {
+                                browserState.webView?.reload()
+                            }
                         }
                     }
                 }
                 
-                HStack{
-                    if location?.absoluteString.starts(with: "http") == true {
-                        TrustIndicator(trust: browserState.webView?.serverTrust, url: location, isPresented: $showTrustInfo)
-                            .popover(isPresented: $showTrustInfo) {
-                                ServerTrustView(trust: browserState.webView?.serverTrust, url: browserState.url,
-                                                onAttemptHTTPS: {
-                                    location = URL(string: "https://" + location!.absoluteString.split(separator: ":")[1])
+                
+                
+                if showAddrBarInToolbar {
+                    
+                    HStack{
+                        if location?.absoluteString.starts(with: "http") == true {
+                            TrustIndicator(trust: browserState.webView?.serverTrust, url: location, isPresented: $showTrustInfo)
+                                .popover(isPresented: $showTrustInfo) {
+                                    ServerTrustView(trust: browserState.webView?.serverTrust, url: browserState.url,
+                                                    onAttemptHTTPS: {
+                                        location = URL(string: "https://" + location!.absoluteString.split(separator: ":")[1])
+                                    }
+                                    )
                                 }
-                                )
+                                .padding(.leading)
+                        }
+                        
+                        AddressField(text: $urlInput, onSubmit: submitURL)
+                        
+                        
+                        Spacer()
+                        
+                        
+                        if priv {
+                            Image(systemName:"eye.slash.fill")
+                                .help("Private Mode")
+                                .padding(0.25)
+                        }
+                        
+                        
+                        if let pIcon = bProfileIcon {
+                            Image(systemName: pIcon)
+                                .help("Profile: \(bProfileName ?? "")")
+                                .padding(.trailing, 10)
+                        }
+                    }
+                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
+                    .popover(isPresented: $showSuggestions) {
+                        AutoFillPopover(searchTerm: $urlInput)
+                    }
+                    .sheet(isPresented: $showCommands) {
+                        VStack(spacing: 0) {
+                            CommandsView(searchText:$commandSearchText, searchQuery: $urlInput)
+                            Button("Close") {
+                                showCommands = false
                             }
-                            .padding(.leading)
+                            .padding()
+                            .buttonStyle(.borderedProminent)
+                            .tint(.red)
+                        }
+                        .frame(width: 450, height: 600)
                     }
                     
-                    AddressField(text: $urlInput, onSubmit: submitURL)
-                    
-                    Spacer()
-                    
-                    
-                    if priv {
-                        Image(systemName:"eye.slash.fill")
-                            .help("Private Mode")
-                            .padding(0.25)
-                    }
-                    
-                    
-                    if let pIcon = bProfileIcon {
-                        Image(systemName: pIcon)
-                            .help("Profile: \(bProfileName ?? "")")
-                            .padding(.trailing, 10)
-                    }
-                }
-                .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
-                .popover(isPresented: $showSuggestions) {
-                    AutoFillPopover(searchTerm: $urlInput)
-                }
-                .sheet(isPresented: $showCommands) {
-                    VStack(spacing: 0) {
-                        CommandsView(searchText:$commandSearchText, searchQuery: $urlInput)
+                    .sheet(isPresented: $showTabSearch) {
+                        TabSearchView()
                         Button("Close") {
-                            showCommands = false
+                            showTabSearch = false
                         }
                         .padding()
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
                     }
-                    .frame(width: 450, height: 600)
                 }
                 
-                .sheet(isPresented: $showTabSearch) {
-                    TabSearchView()
-                    Button("Close") {
-                        showTabSearch = false
-                    }
-                    .padding()
-                    .buttonStyle(.borderedProminent)
-                    .tint(.red)
-                }
-           
                 
                 if(showFindNavigator) {
                     FindBarView(state:browserState)
                 }
                 
-                HStack(spacing: 12) {
-                    Button(action: submitURL) {
-                        Image(systemName: "magnifyingglass")
-                            .font(.title2)
-                            .padding(Layout.controlPadding)
+                if showSearchButtonInToolbar {
+                    HStack(spacing: 12) {
+                        Button(action: submitURL) {
+                            Image(systemName: "magnifyingglass")
+                                .font(.title2)
+                                .padding(Layout.controlPadding)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .circle)
                     }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .circle)
+                }
                     
-                    Button() {
-                        showSuggestions.toggle()
-                    } label: {
-                        Image(systemName: "character.cursor.ibeam")
-                            .font(.title2)
-                            .padding(Layout.controlPadding)
+                    if showAutocompleteInToolbar {
+                        Button() {
+                            showSuggestions.toggle()
+                        } label: {
+                            Image(systemName: "character.cursor.ibeam")
+                                .font(.title2)
+                                .padding(Layout.controlPadding)
+                        }
+                        .buttonStyle(.plain)
+                        .glassEffect(.regular.interactive(), in: .circle)
+                        .keyboardShortcut("s", modifiers: [.command])
                     }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .circle)
-                    .keyboardShortcut("s", modifiers: [.command])
                     
-                    if browserState.url != nil && browserState.url?.isFileURL == false {
+                    if browserState.url != nil && browserState.url?.isFileURL == false && showExtInToolbar {
                         Button(action: {
                             showExtensionsPopover.toggle()
                         }) {
@@ -460,319 +485,321 @@ struct ContentView: View {
                                 .frame(width: 350, height: 450)
                         }
                     }
-                        
-
-                    Menu {
-                        
-                        
-                        Button() {
-                                  showCommands = true
-                        } label: {
-                            Label("Palette", systemImage: "command.square")
-                        }
-                              .keyboardShortcut("k", modifiers: [.command])
-                        
-                        
-                        Divider()
-                        
-                        Toggle("Sidebar",isOn:$showSidebar)
-                        
-                        Divider()
-                      
-                        if let url = location {
-                            
-                            Button() {
-                                showFindNavigator = !showFindNavigator
-                            } label: {
-                                Label(showFindNavigator ? "Hide Find In Page" : "Find In Page", systemImage: "magnifyingglass")
-                            }
-                            .keyboardShortcut("f", modifiers: .command)
-                            Divider()
-                            
-                            Menu() {
-                                Button() {
-                                    browserState.zoomIn()
-                                } label: {
-                                    Label("In", systemImage:"plus.magnifyingglass")
-                                }
-                                .keyboardShortcut("+", modifiers: .command)
-                                
-                                Button() {
-                                    browserState.zoomOut()
-                                } label: {
-                                    Label("Out", systemImage:"minus.magnifyingglass")
-                                }
-                                .keyboardShortcut("-", modifiers: .command)
-                                
-                                Divider()
-                                
-                                Button() {
-                                    browserState.resetZoom()
-                                } label: {
-                                    Label("Reset", systemImage: "arrow.clockwise.circle")
-                                }
-                            } label: {
-                                Label("Zoom", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
-                            }
-                            
-                            Divider()
-                            
-                            if !paletteShowTabs {
-                                Button() {
-                                    showTabSearch = true
-                                } label: {
-                                    Label("Search Tabs", systemImage: "rectangle.and.text.magnifyingglass")
-                                }
-                                .keyboardShortcut("s", modifiers: [.command, .option])
-                            }
-                            
-                            Divider()
-                            
-                            Button() {
-                                browserState.toggleMute()
-                            } label: {
-                                browserState.isAudioMuted ? Label("Unmute Tab", systemImage:"speaker.slash") : Label("Mute Tab", systemImage:"speaker")
-                            }
-                            .keyboardShortcut("m", modifiers: [.command, .shift])
-                            
-                            Divider()
-                           
-                            
-                            Menu {
-                                
-                                                                Button("In This Window", systemImage: "plus.square.on.square") {
-                                                                    createNewTab(with: url)
-                                                                }
-                                                                Button("In New Window", systemImage: "macwindow.badge.plus") {
-                                                                    createNewWindow(with: url)
-                                                                }
-                                
-                                
-                                Divider()
-                                
-                                Button {
-                                    createFocusWindow(with: url, userAgent: userAgent)
-                                } label: {
-                                    Label("Open in Focus", systemImage: "macwindow")
-                                }
-                                                                
-                            } label: {
-                                Label("Duplicate", systemImage: "plus.square.on.square")
-                            }
-                            
-                                                            Divider()
-                                                            
-                                                            Button("Copy Page URL", systemImage: "doc.on.doc") {
-                                                                NSPasteboard.general.clearContents()
-                                                                NSPasteboard.general.setString(url.absoluteString, forType: .string)
-                                                            }
-                                                            .keyboardShortcut("c", modifiers: [.command, .control])
-                            
-                            Divider()
-                            
-                            Menu() {
-                                if(splitURL.isEmpty) {
-                                    Button() {
-                                        let alert = NSAlert()
-                                        alert.informativeText = "Enter split view URL:"
-                                        alert.addButton(withTitle: "Go")
-                                        alert.addButton(withTitle: "Cancel")
-                                        
-                                        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                                        input.placeholderString = "https://example.com"
-                                        alert.accessoryView = input
-                                        alert.window.initialFirstResponder = input
-                                        
-                                        if alert.runModal() == .alertFirstButtonReturn {
-                                            
-                                            splitURL = input.stringValue
-                                            
-                                        }
-                                    } label: {
-                                        Label("Open", systemImage: "plus")
-                                    }
-                                } else {
-                                    
-                                    Button() {
-                                        createNewTab(with:URL(string:splitURL))
-                                    } label: {
-                                        Label("Copy to New Tab", systemImage: "plus.square.on.square")
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    Button() {
-                                        splitURL = ""
-
-                                        let alert = NSAlert()
-                                        alert.informativeText = "Enter split view URL:"
-                                        alert.addButton(withTitle: "Go")
-                                        alert.addButton(withTitle: "Cancel")
-                                        
-                                        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                                        input.placeholderString = "https://example.com"
-                                        alert.accessoryView = input
-                                        alert.window.initialFirstResponder = input
-                                        
-                                        if alert.runModal() == .alertFirstButtonReturn {
-                                            splitURL = input.stringValue
-                                            
-                                        }
-                                        
-                                    } label: {
-                                        Label("Change", systemImage: "link.badge.plus")
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    Button() {
-                                        splitState.toggleMute()
-                                    } label: {
-                                        splitState.isAudioMuted ? Label("Unmute", systemImage:"speaker.slash") : Label("Mute", systemImage:"speaker")
-                                    }
-                                    Divider()
-                                    
-                                    Button() {
-                                        splitURL = ""
-                                    } label: {
-                                        Label("Close", systemImage: "xmark")
-                                    }
-                                }
-                            } label: {
-                                Label("Split View", systemImage: "rectangle.split.2x1")
-                            }
-                            
-                            
-                            Divider()
-
-                            Menu() {
-                                
-                                                                Button("Bookmarks", systemImage: "star") {
-                                                                    bookmarkStore.add(Bookmark(
-                                                                        title: url.host() ?? "Unnamed",
-                                                                        url: url.absoluteString
-                                                                    ))
-                                                                }
-                                                                .keyboardShortcut("b", modifiers: [.command, .shift])
-                                
-                                
-                                Button("Sidebar", systemImage: "sidebar.left") {
-                                    sidebarStore.add(SidebarItem(
-                                        icon: "https://www.google.com/s2/favicons?domain=\(location?.host() ?? "")",
-                                        url: location
-                                    ))
-                                }
-                            } label: {
-                                Label("Add Page To", systemImage: "plus")
-                            }
-
-                            Divider()
-                            
-                            Button("Print Page", systemImage: "printer") {
-                                printCurrentPage()
-                            }
-                            .keyboardShortcut("p", modifiers: [.command])
-                            
-                            Divider()
                     
+                    
+                    if showMoreInToolbar {
+                        Menu {
                             
-                            Button("Reader Mode", systemImage: "eyeglasses") {
-                                showReader.toggle()
+                            
+                            Button() {
+                                showCommands = true
+                            } label: {
+                                Label("Palette", systemImage: "command.square")
                             }
-                            .keyboardShortcut("r", modifiers: [.command, .option])
+                            .keyboardShortcut("k", modifiers: [.command])
+                            
                             
                             Divider()
                             
-                            Menu {
-                                Button("Dev Tools", systemImage: "chevron.left.forwardslash.chevron.right") {
-                                    let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
-                                    inspector?.perform(NSSelectorFromString("show"))
-                                }
-                                .keyboardShortcut("i", modifiers: [.command, .option])
-                                
+                            Toggle("Sidebar",isOn:$showSidebar)
+                            
+                            Divider()
+                            
+                            if let url = location {
                                 
                                 Button() {
-                                    let alert = NSAlert()
-                                    alert.informativeText = "Enter new tab name:"
-                                    alert.addButton(withTitle: "Rename")
-                                    alert.addButton(withTitle: "Cancel")
+                                    showFindNavigator = !showFindNavigator
+                                } label: {
+                                    Label(showFindNavigator ? "Hide Find In Page" : "Find In Page", systemImage: "magnifyingglass")
+                                }
+                                .keyboardShortcut("f", modifiers: .command)
+                                Divider()
+                                
+                                Menu() {
+                                    Button() {
+                                        browserState.zoomIn()
+                                    } label: {
+                                        Label("In", systemImage:"plus.magnifyingglass")
+                                    }
+                                    .keyboardShortcut("+", modifiers: .command)
                                     
-                                    let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                                    input.stringValue = browserState.customTitle ?? browserState.title
-                                    input.placeholderString = browserState.webView?.title ?? "Page"
-                                    alert.accessoryView = input
-                                    alert.window.initialFirstResponder = input
+                                    Button() {
+                                        browserState.zoomOut()
+                                    } label: {
+                                        Label("Out", systemImage:"minus.magnifyingglass")
+                                    }
+                                    .keyboardShortcut("-", modifiers: .command)
                                     
-                                    if alert.runModal() == .alertFirstButtonReturn {
-                                        let newTitle = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                                        if newTitle.isEmpty {
-                                            browserState.customTitle = nil
-                                            browserState.title = browserState.webView?.title ?? "Page"
-                                        } else {
-                                            browserState.customTitle = newTitle
-                                            browserState.title = newTitle
+                                    Divider()
+                                    
+                                    Button() {
+                                        browserState.resetZoom()
+                                    } label: {
+                                        Label("Reset", systemImage: "arrow.clockwise.circle")
+                                    }
+                                } label: {
+                                    Label("Zoom", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
+                                }
+                                
+                                Divider()
+                                
+                                if !paletteShowTabs {
+                                    Button() {
+                                        showTabSearch = true
+                                    } label: {
+                                        Label("Search Tabs", systemImage: "rectangle.and.text.magnifyingglass")
+                                    }
+                                    .keyboardShortcut("s", modifiers: [.command, .option])
+                                }
+                                
+                                Divider()
+                                
+                                Button() {
+                                    browserState.toggleMute()
+                                } label: {
+                                    browserState.isAudioMuted ? Label("Unmute Tab", systemImage:"speaker.slash") : Label("Mute Tab", systemImage:"speaker")
+                                }
+                                .keyboardShortcut("m", modifiers: [.command, .shift])
+                                
+                                Divider()
+                                
+                                
+                                Menu {
+                                    
+                                    Button("In This Window", systemImage: "plus.square.on.square") {
+                                        createNewTab(with: url)
+                                    }
+                                    Button("In New Window", systemImage: "macwindow.badge.plus") {
+                                        createNewWindow(with: url)
+                                    }
+                                    
+                                    
+                                    Divider()
+                                    
+                                    Button {
+                                        createFocusWindow(with: url, userAgent: userAgent)
+                                    } label: {
+                                        Label("Open in Focus", systemImage: "macwindow")
+                                    }
+                                    
+                                } label: {
+                                    Label("Duplicate", systemImage: "plus.square.on.square")
+                                }
+                                
+                                Divider()
+                                
+                                Button("Copy Page URL", systemImage: "doc.on.doc") {
+                                    NSPasteboard.general.clearContents()
+                                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                                }
+                                .keyboardShortcut("c", modifiers: [.command, .control])
+                                
+                                Divider()
+                                
+                                Menu() {
+                                    if(splitURL.isEmpty) {
+                                        Button() {
+                                            let alert = NSAlert()
+                                            alert.informativeText = "Enter split view URL:"
+                                            alert.addButton(withTitle: "Go")
+                                            alert.addButton(withTitle: "Cancel")
+                                            
+                                            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+                                            input.placeholderString = "https://example.com"
+                                            alert.accessoryView = input
+                                            alert.window.initialFirstResponder = input
+                                            
+                                            if alert.runModal() == .alertFirstButtonReturn {
+                                                
+                                                splitURL = input.stringValue
+                                                
+                                            }
+                                        } label: {
+                                            Label("Open", systemImage: "plus")
+                                        }
+                                    } else {
+                                        
+                                        Button() {
+                                            createNewTab(with:URL(string:splitURL))
+                                        } label: {
+                                            Label("Copy to New Tab", systemImage: "plus.square.on.square")
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        Button() {
+                                            splitURL = ""
+                                            
+                                            let alert = NSAlert()
+                                            alert.informativeText = "Enter split view URL:"
+                                            alert.addButton(withTitle: "Go")
+                                            alert.addButton(withTitle: "Cancel")
+                                            
+                                            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+                                            input.placeholderString = "https://example.com"
+                                            alert.accessoryView = input
+                                            alert.window.initialFirstResponder = input
+                                            
+                                            if alert.runModal() == .alertFirstButtonReturn {
+                                                splitURL = input.stringValue
+                                                
+                                            }
+                                            
+                                        } label: {
+                                            Label("Change", systemImage: "link.badge.plus")
+                                        }
+                                        
+                                        Divider()
+                                        
+                                        Button() {
+                                            splitState.toggleMute()
+                                        } label: {
+                                            splitState.isAudioMuted ? Label("Unmute", systemImage:"speaker.slash") : Label("Mute", systemImage:"speaker")
+                                        }
+                                        Divider()
+                                        
+                                        Button() {
+                                            splitURL = ""
+                                        } label: {
+                                            Label("Close", systemImage: "xmark")
                                         }
                                     }
                                 } label: {
-                                    Label("Rename Tab", systemImage: "pencil")
+                                    Label("Split View", systemImage: "rectangle.split.2x1")
                                 }
-
+                                
                                 
                                 Divider()
                                 
-                                Button {
+                                Menu() {
                                     
-                                    Task {
-                                        await scanEvents()
+                                    Button("Bookmarks", systemImage: "star") {
+                                        bookmarkStore.add(Bookmark(
+                                            title: url.host() ?? "Unnamed",
+                                            url: url.absoluteString
+                                        ))
                                     }
+                                    .keyboardShortcut("b", modifiers: [.command, .shift])
                                     
-                                } label: {
-                                    Label("Add Events to Calendar", systemImage: "calendar")
-                                }
-                                
-                                Button {
-                                    Task {
-                                        summarizing = true
-                                        await createSummaryWindow(state: browserState)
-                                        summarizing = false
-                                    }
-                                } label: {
-                                    Label("Summarize", systemImage: "text.line.3.summary")
-                                }
-                                
-                                Button {
                                     
-                                    Task {
-                                        await cite()
+                                    Button("Sidebar", systemImage: "sidebar.left") {
+                                        sidebarStore.add(SidebarItem(
+                                            icon: "https://www.google.com/s2/favicons?domain=\(location?.host() ?? "")",
+                                            url: location
+                                        ))
                                     }
                                 } label: {
-                                    Label("Cite", systemImage: "doc.text")
+                                    Label("Add Page To", systemImage: "plus")
                                 }
                                 
                                 Divider()
                                 
-                                Button {
-                                    createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
-                                } label:{
-                                    Label("Source Code", systemImage:"curlybraces")
+                                Button("Print Page", systemImage: "printer") {
+                                    printCurrentPage()
+                                }
+                                .keyboardShortcut("p", modifiers: [.command])
+                                
+                                Divider()
+                                
+                                
+                                Button("Reader Mode", systemImage: "eyeglasses") {
+                                    showReader.toggle()
+                                }
+                                .keyboardShortcut("r", modifiers: [.command, .option])
+                                
+                                Divider()
+                                
+                                Menu {
+                                    Button("Dev Tools", systemImage: "chevron.left.forwardslash.chevron.right") {
+                                        let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
+                                        inspector?.perform(NSSelectorFromString("show"))
+                                    }
+                                    .keyboardShortcut("i", modifiers: [.command, .option])
+                                    
+                                    
+                                    Button() {
+                                        let alert = NSAlert()
+                                        alert.informativeText = "Enter new tab name:"
+                                        alert.addButton(withTitle: "Rename")
+                                        alert.addButton(withTitle: "Cancel")
+                                        
+                                        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
+                                        input.stringValue = browserState.customTitle ?? browserState.title
+                                        input.placeholderString = browserState.webView?.title ?? "Page"
+                                        alert.accessoryView = input
+                                        alert.window.initialFirstResponder = input
+                                        
+                                        if alert.runModal() == .alertFirstButtonReturn {
+                                            let newTitle = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+                                            if newTitle.isEmpty {
+                                                browserState.customTitle = nil
+                                                browserState.title = browserState.webView?.title ?? "Page"
+                                            } else {
+                                                browserState.customTitle = newTitle
+                                                browserState.title = newTitle
+                                            }
+                                        }
+                                    } label: {
+                                        Label("Rename Tab", systemImage: "pencil")
+                                    }
+                                    
+                                    
+                                    Divider()
+                                    
+                                    Button {
+                                        
+                                        Task {
+                                            await scanEvents()
+                                        }
+                                        
+                                    } label: {
+                                        Label("Add Events to Calendar", systemImage: "calendar")
+                                    }
+                                    
+                                    Button {
+                                        Task {
+                                            summarizing = true
+                                            await createSummaryWindow(state: browserState)
+                                            summarizing = false
+                                        }
+                                    } label: {
+                                        Label("Summarize", systemImage: "text.line.3.summary")
+                                    }
+                                    
+                                    Button {
+                                        
+                                        Task {
+                                            await cite()
+                                        }
+                                    } label: {
+                                        Label("Cite", systemImage: "doc.text")
+                                    }
+                                    
+                                    Divider()
+                                    
+                                    Button {
+                                        createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
+                                    } label:{
+                                        Label("Source Code", systemImage:"curlybraces")
+                                    }
+                                    
+                                } label: {
+                                    Label("More", systemImage: "ellipsis")
                                 }
                                 
-                            } label: {
-                                Label("More", systemImage: "ellipsis")
                             }
-                                                                                   
-                        }
                             
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .font(.title2)
+                        } label: {
+                            Image(systemName: "ellipsis")
+                                .font(.title2)
+                        }
+                        .menuStyle(.borderlessButton)
+                        .menuIndicator(.hidden)
+                        .frame(width: 40, height: 40)
+                        .glassEffect(.regular.interactive(), in: .circle)
                     }
-                    .menuStyle(.borderlessButton)
-                    .menuIndicator(.hidden)
-                    .frame(width: 40, height: 40)
-                    .glassEffect(.regular.interactive(), in: .circle)
-                }
-                
+                    
+                    
                 
             }
             .padding(.horizontal, Layout.outerPadding)
@@ -885,7 +912,7 @@ struct ContentView: View {
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("Note"):
-                                NoteView(tabID: tabID)
+                                NoteView(tabID: tabID, browserState:browserState)
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("History"):
@@ -906,6 +933,10 @@ struct ContentView: View {
                                 
                             case let str where str.contains("Map"):
                                 MapView(browserState: browserState)
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("RSS"):
+                                RSSView()
                                     .roundedBorderStyle()
                                 
                             default:

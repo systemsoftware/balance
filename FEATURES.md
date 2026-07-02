@@ -8,7 +8,7 @@ Balance Browser combines a modern macOS browsing experience with productivity to
 
 ### Command Palette
 
-Instantly search for browser commands, execute actions, switch tabs, and navigate without leaving the keyboard.
+Instantly search for browser commands, execute actions, and switch tabs.
 
 ![Command Palette](images/palette.png)
 
@@ -50,7 +50,7 @@ A built-in scratchpad that lets you quickly capture ideas without leaving the br
 
 ### Local AI Chat
 
-Chat with a local AI assistant directly inside the browser for brainstorming, coding assistance, writing, and general questions—all while keeping conversations on your device.
+Chat with a local AI assistant directly inside the browser for brainstorming, coding assistance, writing, and general questions. All conversations stay on your device.
 
 ![AI Chat](images/chat.png)
 
@@ -103,7 +103,11 @@ Remove clutter and enjoy a clean reading experience powered by Readability.js.
 
 Open and browse PDF documents directly inside the browser using PDFKit.
 
+### RSS Feeds
 
+Add RSS feeds to your Sidebar.
+
+![RSS Feeds](images/rss.png)
 
 ### Advanced Tabs & Windows
 

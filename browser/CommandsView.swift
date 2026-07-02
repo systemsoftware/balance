@@ -1,6 +1,36 @@
 import SwiftUI
 import WebKit
 import SwiftData
+internal import UniformTypeIdentifiers
+
+enum CommandSection: String, CaseIterable, Identifiable, Codable {
+    case tabs, bookmarks, search, commands, history
+    var id: String { rawValue }
+}
+
+struct SectionDropDelegate: DropDelegate {
+    let item: CommandSection
+    @Binding var items: [CommandSection]
+    @Binding var draggedItem: CommandSection?
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedItem = nil
+        return true
+    }
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedItem = self.draggedItem,
+              draggedItem != item,
+              let from = items.firstIndex(of: draggedItem),
+              let to = items.firstIndex(of: item) else {
+            return
+        }
+        
+        withAnimation {
+            self.items.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+        }
+    }
+}
 
 
 struct Command: Identifiable {
@@ -169,84 +199,128 @@ struct CommandsView: View {
     
     @Binding var searchQuery: String
     
+    @AppStorage("paletteSectionOrder", store: Config.sharedDefaults) private var sectionOrderJSON = "[\"tabs\",\"bookmarks\",\"search\",\"commands\",\"history\"]"
+    
+    private var sectionOrder: [CommandSection] {
+        if let data = sectionOrderJSON.data(using: .utf8),
+           let order = try? JSONDecoder().decode([CommandSection].self, from: data) {
+            return order
+        }
+        return CommandSection.allCases
+    }
+
+    private var sectionOrderBinding: Binding<[CommandSection]> {
+        Binding(
+            get: { sectionOrder },
+            set: { newValue in
+                if let data = try? JSONEncoder().encode(newValue),
+                   let json = String(data: data, encoding: .utf8) {
+                    self.sectionOrderJSON = json
+                }
+            }
+        )
+    }
+    
+    @State private var draggingSection: CommandSection?
+
+    @ViewBuilder
+    private func sectionHeader(title: String, section: CommandSection) -> some View {
+        HStack {
+            Text(title)
+            Spacer()
+        }
+        .padding(.top, 8)
+        .contentShape(Rectangle())
+        .onDrag {
+            self.draggingSection = section
+            return NSItemProvider(object: section.rawValue as NSString)
+        }
+        .onDrop(of: [.plainText], delegate: SectionDropDelegate(item: section, items: sectionOrderBinding, draggedItem: $draggingSection))
+    }
+    
     var body: some View {
         List {
             switch screen {
             case .commands:
                 
                 Section {
-                    
-                    if (searchText.isEmpty ? filteredTabs.count > 1 : !filteredTabs.isEmpty) && showTabs {
-                        Section("Tabs") {
-                            ForEach(filteredTabs, id: \.windowNumber) { window in
-                                Button(action: {
-                                    window.makeKeyAndOrderFront(nil)
-                                    dismiss()
-                                }) {
-                                    row(
-                                        title: window.title.isEmpty ? "Untitled Tab" : window.title,
-                                        image: "macwindow",
-                                        showsChevron: false
+                    ForEach(sectionOrder) { section in
+                        switch section {
+                        case .tabs:
+                            if (searchText.isEmpty ? filteredTabs.count > 1 : !filteredTabs.isEmpty) && showTabs {
+                                Section(header: sectionHeader(title: "Tabs", section: .tabs)) {
+                                    ForEach(filteredTabs, id: \.windowNumber) { window in
+                                        Button(action: {
+                                            window.makeKeyAndOrderFront(nil)
+                                            dismiss()
+                                        }) {
+                                            row(
+                                                title: window.title.isEmpty ? "Untitled Tab" : window.title,
+                                                image: "macwindow",
+                                                showsChevron: false
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        case .bookmarks:
+                            if !filteredBookmarks.isEmpty && showBookmarks {
+                                Section(header: sectionHeader(title: "Bookmarks", section: .bookmarks)) {
+                                    ForEach(filteredBookmarks) { mark in
+                                        Button {
+                                            createNewTab(with: URL(string:mark.url))
+                                            dismiss()
+                                        } label: {
+                                            row(
+                                                title: mark.title,
+                                                image: "bookmark",
+                                                showsChevron: false
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
+                                }
+                            }
+                        case .search:
+                            if showSearch {
+                                Section(header: sectionHeader(title: "Search", section: .search)) {
+                                    AutoFillView(searchTerm: $searchText, noContentAvView:true,
+                                                 updateOther: Binding<String?>(
+                                                    get: { searchQuery },
+                                                    set: { searchQuery = $0 ?? "" }
+                                                 )
                                     )
                                 }
-                                .buttonStyle(.plain)
                             }
-                        }
-                    }
-                    
-                    if !filteredBookmarks.isEmpty && showBookmarks {
-                        Section(header: Text("Bookmarks").padding(.top, 8)) {
-                            ForEach(filteredBookmarks) { mark in
-                                Button {
-                                    createNewTab(with: URL(string:mark.url))
-                                    dismiss()
-                                } label: {
-                                    row(
-                                        title: mark.title,
-                                        image: "bookmark",
-                                        showsChevron: false
-                                    )
+                        case .commands:
+                            if !filteredCommands.isEmpty && showCommands {
+                                Section(header: sectionHeader(title: "Commands", section: .commands)) {
+                                    ForEach(filteredCommands) { command in
+                                        Button {
+                                            perform(command.action)
+                                        } label: {
+                                            row(
+                                                title: command.name,
+                                                image: command.systemImage,
+                                                showsChevron: command.showsChevron
+                                            )
+                                        }
+                                        .buttonStyle(.plain)
+                                    }
                                 }
-                                .buttonStyle(.plain)
                             }
-                        }
-                    }
-                    
-                    if showSearch {
-                        Section(header: Text("Search").padding(.top, 8)) {
-                            AutoFillView(searchTerm: $searchText, noContentAvView:true,
-                                         updateOther: Binding<String?>(
-                                            get: { searchQuery },
-                                            set: { searchQuery = $0 ?? "" }
-                                         )
-                            )
-                        }
-                    }
-                    
-                    if !filteredCommands.isEmpty && showCommands {
-                        Section(header: Text("Commands").padding(.top, 8)) {
-                            ForEach(filteredCommands) { command in
-                                Button {
-                                    perform(command.action)
-                                } label: {
-                                    row(
-                                        title: command.name,
-                                        image: command.systemImage,
-                                        showsChevron: command.showsChevron
-                                    )
+                        case .history:
+                            if !filteredHistory.isEmpty && showHistory {
+                                Section(header: sectionHeader(title: "History", section: .history)) {
+                                    ForEach(filteredHistory) {
+                                        row(
+                                            title: $0.title,
+                                            image: "arrow.up.circle",
+                                            showsChevron: false
+                                        )
+                                    }
                                 }
-                                .buttonStyle(.plain)
-                            }
-                        }
-                    }
-                    if !filteredHistory.isEmpty && showHistory {
-                        Section(header: Text("History").padding(.top, 8)) {
-                            ForEach(filteredHistory) {
-                                row(
-                                    title: $0.title,
-                                    image: "arrow.up.circle",
-                                    showsChevron: false
-                                )
                             }
                         }
                     }
