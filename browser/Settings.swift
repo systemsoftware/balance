@@ -82,8 +82,15 @@ let catProfiles = CategoryDef(
     description: "Manage and switch between different browsing profiles."
 )
 
+let catLearnMore = CategoryDef(
+    id:"learnmore",
+    name:"Learn More",
+    icon:"info.circle",
+    color: .white,
+    description: "Learn Balance's features and how to get started."
+)
 let categoryDefs: [CategoryDef] = [
-    catBrowsing, catSidebar, catAI, catToolbar, catPalette, catBookmarks, catProfiles, catPrivacy, catAdvanced
+    catBrowsing, catSidebar, catAI, catToolbar, catPalette, catBookmarks, catProfiles, catPrivacy, catAdvanced, catLearnMore
 ]
 
 struct Setting: Identifiable {
@@ -380,17 +387,6 @@ var Settings: [Setting] = [
         defaultValueBool: false
     ),
     Setting(
-        name: "GitHub Repo",
-        icon: "curlybraces",
-        category: catAdvanced,
-        type: "button",
-        appStorageKey: "",
-        buttonText: "Open",
-        action: {
-            createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
-        }
-    ),
-    Setting(
         name: "Open App Data",
         icon: "folder",
         category: catAdvanced,
@@ -449,6 +445,51 @@ var Settings: [Setting] = [
         type: "toggle",
         appStorageKey: "openLinksInBackground",
         defaultValueBool: false
+    ),
+    
+    Setting(
+        name: "Homepage",
+        icon: "house",
+        category: catLearnMore,
+        type: "button",
+        appStorageKey: "",
+        buttonText: "Open",
+        action: {
+            createNewTab(with:URL(string:"https://systemsoftware.github.io/about/balance"))
+        }
+    ),
+    Setting(
+        name: "README",
+        icon: "doc.text",
+        category: catLearnMore,
+        type: "button",
+        appStorageKey: "",
+        buttonText: "Open",
+        action: {
+            createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/README.md"))
+        }
+    ),
+    Setting(
+        name: "FEATURES.md",
+        icon: "doc.text.fill",
+        category: catLearnMore,
+        type: "button",
+        appStorageKey: "",
+        buttonText: "Open",
+        action: {
+            createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/FEATURES.md"))
+        }
+    ),
+    Setting(
+        name: "GitHub Repo",
+        icon: "curlybraces",
+        category: catLearnMore,
+        type: "button",
+        appStorageKey: "",
+        buttonText: "Open",
+        action: {
+            createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
+        }
     )
 ]
 
@@ -842,12 +883,27 @@ struct SettingsSectionContent: View {
     
     @State var showNewBookmark = false
     
+    @State var learnMoreState = "https://systemsoftware.github.io/balance"
+    
+    @State private var lmpage = WebPage()
+    
+    private func loadInitialURL() {
+        if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
+            lmpage.load(URLRequest(url: url))
+        }
+    }
+
+    private func updateURL(_ urlString: String) {
+        guard !urlString.isEmpty, let url = URL(string: urlString) else { return }
+        lmpage.load(URLRequest(url: url))
+    }
+    
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if def.id == "profiles" && !profiles.isEmpty {
                     profilePickerRow
             }
-
+            
             ForEach(settingsForCategory) { setting in
                 SettingsCardRow(
                     setting: setting,
