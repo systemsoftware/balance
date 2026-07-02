@@ -1,53 +1,66 @@
 import SwiftUI
 import Security
+import WebKit
+import SwiftData
 
 struct ServerTrustView: View {
     let trust: SecTrust?
     let url: URL?
-    
+    let dataStore: WKWebsiteDataStore?
     @StateObject private var store = SitePermissionStore.shared
     @State private var isTrusted: Bool = false
     @State private var certificates: [SecCertificate] = []
+    @State private var cookies: [HTTPCookie] = []
     @State private var errorMessage: String? = nil
+    
+    @Query private var historyItems: [HistoryItem]
+    
+    private var host: String {
+        url?.host() ?? ""
+    }
+    
+    private var countVisits: Int {
+        historyItems.filter({URL(string:$0.url)?.host() == host}).count
+    }
         
     var onAttemptHTTPS: (() -> Void)?
     
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
-            HStack {
-                Image(systemName: isTrusted ? "lock.fill" : "exclamationmark.triangle.fill")
-                    .foregroundColor(isTrusted ? .green : .red)
-                    .font(.title)
+        ScrollView {
+            VStack(alignment: .leading, spacing: 16) {
+                HStack {
+                    Image(systemName: isTrusted ? "lock.fill" : "exclamationmark.triangle.fill")
+                        .foregroundColor(isTrusted ? .green : .red)
+                        .font(.title)
+                    
+                    VStack(alignment: .leading) {
+                        Text(isTrusted ? "Connection is secure" : "Connection is not secure")
+                            .font(.headline)
+                        Text("Your information is \(isTrusted ? "private" : "exposed") when it is sent to this site.")
+                            .font(.caption)
+                            .foregroundColor(.secondary)
+                    }
+                }
                 
-                VStack(alignment: .leading) {
-                    Text(isTrusted ? "Connection is secure" : "Connection is not secure")
-                        .font(.headline)
-                    Text("Your information is \(isTrusted ? "private" : "exposed") when it is sent to this site.")
+                if let errorMessage = errorMessage, !isTrusted {
+                    Text(errorMessage)
+                        .foregroundColor(.red)
                         .font(.caption)
-                        .foregroundColor(.secondary)
                 }
-            }
-            
-            if let errorMessage = errorMessage, !isTrusted {
-                Text(errorMessage)
-                    .foregroundColor(.red)
-                    .font(.caption)
-            }
-            
-            if !isTrusted {
-                Button("Attempt HTTPS Upgrade") {
-                    onAttemptHTTPS?()
+                
+                if !isTrusted {
+                    Button("Attempt HTTPS Upgrade") {
+                        onAttemptHTTPS?()
+                    }
                 }
-            }
-            
-            if !certificates.isEmpty {
-                Divider()
                 
-                Text("Certificate Chain")
-                    .font(.subheadline)
-                    .bold()
-                
-                ScrollView {
+                if !certificates.isEmpty {
+                    Divider()
+                    
+                    Text("Certificate Chain")
+                        .font(.subheadline)
+                        .bold()
+                    
                     VStack(alignment: .leading, spacing: 8) {
                         ForEach(0..<certificates.count, id: \.self) { index in
                             let cert = certificates[index]
@@ -55,28 +68,80 @@ struct ServerTrustView: View {
                         }
                     }
                 }
-            }
-            
-            if let host = url?.host {
-                Divider()
                 
-                Text("Permissions for \(host)")
-                    .font(.subheadline)
-                    .bold()
-                
-                VStack(spacing: 12) {
-                    permissionRow(title: "Camera", icon: "camera", host: host, type: "camera", isMedia: true)
-                    permissionRow(title: "Microphone", icon: "mic", host: host, type: "microphone", isMedia: true)
-                    permissionRow(title: "Pop-ups", icon: "macwindow.on.rectangle", host: host, type: "popups", isMedia: false, defaultState: .block)
-                    permissionRow(title: "JavaScript", icon: "curlybraces.square", host: host, type: "javascript", isMedia: false, defaultState: .allow)
+                if let host = url?.host {
+                    Divider()
+                    
+                    Text("Permissions for \(host)")
+                        .font(.subheadline)
+                        .bold()
+                    
+                    VStack(spacing: 12) {
+                        permissionRow(title: "Camera", icon: "camera", host: host, type: "camera", isMedia: true)
+                        permissionRow(title: "Microphone", icon: "mic", host: host, type: "microphone", isMedia: true)
+                        permissionRow(title: "Pop-ups", icon: "macwindow.on.rectangle", host: host, type: "popups", isMedia: false, defaultState: .block)
+                        permissionRow(title: "JavaScript", icon: "curlybraces.square", host: host, type: "javascript", isMedia: false, defaultState: .allow)
+                    }
+                    
+                    if !cookies.isEmpty {
+                        Divider()
+                            .padding(.vertical, 4)
+                        
+                        HStack {
+                            Text("Site Cookies")
+                                .font(.subheadline)
+                                .bold()
+                            Spacer()
+                            Button("Clear All") {
+                                for cookie in cookies {
+                                    deleteCookie(cookie)
+                                }
+                            }
+                            .font(.caption)
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(0..<cookies.count, id: \.self) { index in
+                                let cookie = cookies[index]
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(cookie.name)
+                                            .font(.subheadline)
+                                        Text(cookie.domain)
+                                            .font(.caption)
+                                            .foregroundColor(.secondary)
+                                    }
+                                    Spacer()
+                                    Button(action: {
+                                        deleteCookie(cookie)
+                                    }) {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(PlainButtonStyle())
+                                }
+                                .padding(.vertical, 4)
+                            }
+                        }
+                    }
                 }
             }
-            Spacer()
+            .padding()
+            
+            
+            if countVisits > 0 {
+                
+                Divider()
+                
+                Text("Visited \(host) \(countVisits) time\(countVisits != 1 ? "s" : "")")
+                    .padding()
+            }
         }
-        .padding()
-        .frame(width: 350, height: 400)
+        .frame(width: 350)
+        .frame(minHeight: 300, maxHeight: 600)
         .onAppear {
             evaluateTrust()
+            fetchCookies()
         }
     }
     
@@ -95,6 +160,27 @@ struct ServerTrustView: View {
         
         if let chain = SecTrustCopyCertificateChain(trust) as? [SecCertificate] {
             certificates = chain
+        }
+    }
+    
+    private func fetchCookies() {
+        guard let host = url?.host else { return }
+        let store = dataStore ?? WKWebsiteDataStore.default()
+        store.httpCookieStore.getAllCookies { allCookies in
+            DispatchQueue.main.async {
+                self.cookies = allCookies.filter { cookie in
+                    cookie.domain.contains(host) || host.contains(cookie.domain.trimmingCharacters(in: CharacterSet(charactersIn: ".")))
+                }
+            }
+        }
+    }
+    
+    private func deleteCookie(_ cookie: HTTPCookie) {
+        let store = dataStore ?? WKWebsiteDataStore.default()
+        store.httpCookieStore.delete(cookie) {
+            DispatchQueue.main.async {
+                self.cookies.removeAll { $0.name == cookie.name && $0.domain == cookie.domain }
+            }
         }
     }
     

@@ -215,6 +215,12 @@ var Settings = [
         appStorageKey:""
     ),
     Setting(
+        name:"Clock",
+        type:"toggle",
+        appStorageKey: "showClockInToolbar",
+        defaultValueBool: false
+    ),
+    Setting(
         name:"Share Button",
         type:"toggle",
         appStorageKey: "showShareInToolbar",

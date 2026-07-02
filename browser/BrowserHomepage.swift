@@ -238,31 +238,40 @@ struct BookmarkCard: View {
 
 struct ClockView: View {
     @StateObject private var vm = ClockViewModel()
+    
+    var timeOnly = false
+    var fontSize: CGFloat = 72
 
     var body: some View {
-        VStack(spacing: 4) {
+        if timeOnly {
             Text(vm.timeString)
-                .font(.system(size: 72, weight: .thin, design: .default).monospacedDigit())
+                .font(.system(size: fontSize, weight: .thin, design: .default).monospacedDigit())
                 .contentTransition(.numericText())
-
-            GeometryReader { geo in
-                ZStack(alignment: .leading) {
-                    Capsule()
-                        .fill(Color.primary.opacity(0.08))
-                    Capsule()
-                        .fill(Color.accentColor.opacity(0.6))
-                        .frame(width: geo.size.width * vm.secondsFraction)
+        } else {
+            VStack(spacing: 4) {
+                Text(vm.timeString)
+                    .font(.system(size: fontSize, weight: .thin, design: .default).monospacedDigit())
+                    .contentTransition(.numericText())
+                
+                GeometryReader { geo in
+                    ZStack(alignment: .leading) {
+                        Capsule()
+                            .fill(Color.primary.opacity(0.08))
+                        Capsule()
+                            .fill(Color.accentColor.opacity(0.6))
+                            .frame(width: geo.size.width * vm.secondsFraction)
+                    }
                 }
+                .frame(maxWidth: 160, maxHeight: 3)
+                .animation(.linear(duration: 0.9), value: vm.secondsFraction)
+                
+                Text(vm.dateString)
+                    .font(.system(size: 16, weight: .regular))
+                    .foregroundColor(.secondary)
+                    .padding(.top, 4)
             }
-            .frame(maxWidth: 160, maxHeight: 3)
-            .animation(.linear(duration: 0.9), value: vm.secondsFraction)
-
-            Text(vm.dateString)
-                .font(.system(size: 16, weight: .regular))
-                .foregroundColor(.secondary)
-                .padding(.top, 4)
+            .multilineTextAlignment(.center)
         }
-        .multilineTextAlignment(.center)
     }
 }
 

@@ -70,7 +70,6 @@ class HistoryManager {
 struct HistoryView: View {
     @Environment(\.modelContext) private var modelContext
     
-    // Fetch history sorted by newest first
     @Query private var historyItems: [HistoryItem]
     
     @State private var searchText: String = ""

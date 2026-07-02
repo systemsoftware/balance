@@ -33,7 +33,8 @@ let builtInSidebar = [
     SidebarItem(icon:"puzzlepiece.extension", view:"ExtensionsView"),
     SidebarItem(icon:"hand.raised", view:"ContentBlockerView"),
     SidebarItem(icon:"map", view:"MapView"),
-    SidebarItem(icon:"antenna.radiowaves.left.and.right", view:"RSSView")
+    SidebarItem(icon:"antenna.radiowaves.left.and.right", view:"RSSView"),
+    SidebarItem(icon:"calendar", view:"CalendarView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -216,6 +217,8 @@ struct ContentView: View {
     @AppStorage("showMoreInToolbar", store:Config.sharedDefaults) var showMoreInToolbar = true
     @AppStorage("showAddrBarInToolbar", store:Config.sharedDefaults) var showAddrBarInToolbar = true
     @AppStorage("showReloadInToolbar", store:Config.sharedDefaults) var showReloadInToolbar = true
+    @AppStorage("showClockInToolbar", store:Config.sharedDefaults) var showClockInToolbar = false
+
 
 
     @Namespace private var backforwardNamespace
@@ -317,7 +320,15 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             // MARK: - Address Bar
+
+            
             HStack(spacing: 8) {
+                
+                if showClockInToolbar {
+                    ClockView(timeOnly: true, fontSize: 14)
+                        .padding(0)
+                }
+                
                 if location != nil && showNavInToolbar {
                     GlassEffectContainer {
                         HStack(spacing: 0) {
@@ -384,7 +395,7 @@ struct ContentView: View {
                         if location?.absoluteString.starts(with: "http") == true {
                             TrustIndicator(trust: browserState.webView?.serverTrust, url: location, isPresented: $showTrustInfo)
                                 .popover(isPresented: $showTrustInfo) {
-                                    ServerTrustView(trust: browserState.webView?.serverTrust, url: browserState.url,
+                                    ServerTrustView(trust: browserState.webView?.serverTrust, url: browserState.url, dataStore: browserState.webView?.configuration.websiteDataStore,
                                                     onAttemptHTTPS: {
                                         location = URL(string: "https://" + location!.absoluteString.split(separator: ":")[1])
                                     }
@@ -937,6 +948,10 @@ struct ContentView: View {
                                 
                             case let str where str.contains("RSS"):
                                 RSSView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("Calendar"):
+                                CalendarSidebarView()
                                     .roundedBorderStyle()
                                 
                             default:
