@@ -342,7 +342,7 @@ enum BrowserCommand: String, CaseIterable {
         case .palette, .searchTabs: return true
         case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab: return true
         case .zoomOut, .duplicateWindow: return true
-        case .showDevTools, .supportDirectory: return true
+        case .showDevTools, .supportDirectory, .sourceCode: return true
         case .summarize, .addEvents: return true
         default: return false
         }
