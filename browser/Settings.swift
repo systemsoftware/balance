@@ -356,6 +356,14 @@ var Settings: [Setting] = [
         defaultValueBool: true
     ),
     Setting(
+        name: "Enable Handoff",
+        icon: "hand.point.up.left",
+        category: catPrivacy,
+        type: "toggle",
+        appStorageKey: "enableHandoff",
+        defaultValueBool: true
+    ),
+    Setting(
         name: "User Agent",
         icon: "person.crop.rectangle",
         category: catAdvanced,

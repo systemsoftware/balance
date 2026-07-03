@@ -209,6 +209,7 @@ struct ContentView: View {
     @State private var showTrustInfo = false
     
     @State private var currentUserActivity: NSUserActivity?
+    @AppStorage("enableHandoff", store:Config.sharedDefaults) var enableHandoff: Bool = true
     
     @AppStorage("showExtInToolbar", store:Config.sharedDefaults) var showExtInToolbar = true
     @AppStorage("showAutocompleteInToolbar", store:Config.sharedDefaults) var showAutocompleteInToolbar = true
@@ -1073,6 +1074,30 @@ struct ContentView: View {
                 location = url
             }
         }
+        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
+            guard let window = notification.object as? NSWindow,
+                  window.identifier?.rawValue == tabID else { return }
+            
+            if enableHandoff, let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                if currentUserActivity == nil {
+                    currentUserActivity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
+                }
+                currentUserActivity?.webpageURL = location
+                currentUserActivity?.becomeCurrent()
+            }
+        }
+        .onChange(of: enableHandoff) { _, newValue in
+            if !newValue {
+                currentUserActivity?.invalidate()
+                currentUserActivity = nil
+            } else if let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                if currentUserActivity == nil {
+                    currentUserActivity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
+                }
+                currentUserActivity?.webpageURL = location
+                currentUserActivity?.becomeCurrent()
+            }
+        }
         .onAppear {
             updateTabState()
         }
@@ -1459,7 +1484,7 @@ struct ContentView: View {
         urlInput = newURL.absoluteString
         updateTabState()
         
-        if let scheme = newURL.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+        if enableHandoff, let scheme = newURL.scheme?.lowercased(), scheme == "http" || scheme == "https" {
             if currentUserActivity == nil {
                 currentUserActivity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
             }
