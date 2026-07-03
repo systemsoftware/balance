@@ -4,6 +4,7 @@ import Foundation
 import AppKit
 import SwiftData
 import FoundationModels
+internal import UniformTypeIdentifiers
 
 // MARK: - Layout Constants
 enum Layout {
@@ -493,6 +494,7 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .glassEffect(.regular.interactive(), in: .circle)
+                        .keyboardShortcut("e", modifiers: [.command, .shift])
                         .popover(isPresented: $showExtensionsPopover, arrowEdge: .bottom) {
                             ExtensionsPopoverView()
                                 .frame(width: 350, height: 450)
@@ -1137,6 +1139,67 @@ struct ContentView: View {
             case .summarize: Task { summarizing = true; await createSummaryWindow(state: browserState); summarizing = false }
             case .addEvents: Task { await scanEvents() }
             case .cite: Task { await cite() }
+            case .downloads:
+                let targetURL = URL(string: "DownloadsView.view")!
+                if sidebarURL == targetURL {
+                    sidebarURL = nil
+                } else {
+                    sidebarURL = targetURL
+                }
+            case .history:
+                let targetURL = URL(string: "HistoryView.view")!
+                if sidebarURL == targetURL {
+                    sidebarURL = nil
+                } else {
+                    sidebarURL = targetURL
+                }
+            case .savePage:
+                let panel = NSSavePanel()
+                let accessoryView = NSView(frame: NSRect(x: 0, y: 0, width: 250, height: 44))
+                let label = NSTextField(labelWithString: "Format:")
+                label.isEditable = false
+                label.isBordered = false
+                label.drawsBackground = false
+                label.frame = NSRect(x: 0, y: 14, width: 60, height: 20)
+                let popup = NSPopUpButton(frame: NSRect(x: 60, y: 10, width: 150, height: 24), pullsDown: false)
+                popup.addItems(withTitles: ["Web Archive", "HTML Source"])
+                accessoryView.addSubview(label)
+                accessoryView.addSubview(popup)
+                panel.accessoryView = accessoryView
+                
+                let delegate = SavePanelAccessoryDelegate(panel: panel)
+                popup.target = delegate
+                popup.action = #selector(SavePanelAccessoryDelegate.formatChanged(_:))
+                
+                if #available(macOS 11.0, *) {
+                    panel.allowedContentTypes = [.webArchive]
+                } else {
+                    panel.allowedFileTypes = ["webarchive"]
+                }
+                let fallbackTitle = browserState.title.isEmpty ? "page" : browserState.title
+                panel.nameFieldStringValue = fallbackTitle
+                
+                if panel.runModal() == .OK, let url = panel.url {
+                    let ext = url.pathExtension.lowercased()
+                    if ext == "html" || ext == "htm" {
+                        browserState.webView?.evaluateJavaScript("document.documentElement.outerHTML.toString()") { result, error in
+                            if let html = result as? String {
+                                try? html.write(to: url, atomically: true, encoding: .utf8)
+                            } else {
+                                print("Error getting HTML: \(String(describing: error))")
+                            }
+                        }
+                    } else {
+                        browserState.webView?.createWebArchiveData { result in
+                            switch result {
+                            case .success(let data):
+                                try? data.write(to: url)
+                            case .failure(let error):
+                                print("Error creating web archive: \(error)")
+                            }
+                        }
+                    }
+                }
             case .reopenLastTab:
                 if let urlStr = SessionManager.shared.lastClosedURL, let url = URL(string: urlStr) {
                     createNewTab(with:url)
@@ -1434,4 +1497,21 @@ struct WindowAccessor: NSViewRepresentable {
         return view
     }
     func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+class SavePanelAccessoryDelegate: NSObject {
+    let panel: NSSavePanel
+    
+    init(panel: NSSavePanel) {
+        self.panel = panel
+    }
+    
+    @objc func formatChanged(_ sender: NSPopUpButton) {
+        let isHTML = sender.indexOfSelectedItem == 1
+        if #available(macOS 11.0, *) {
+            panel.allowedContentTypes = isHTML ? [.html] : [.webArchive]
+        } else {
+            panel.allowedFileTypes = isHTML ? ["html"] : ["webarchive"]
+        }
+    }
 }

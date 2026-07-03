@@ -304,11 +304,11 @@ enum MenuBarSection: String, CaseIterable {
 
 enum BrowserCommand: String, CaseIterable {
     // Browser
-    case palette, searchTabs, reopenLastTab
+    case palette, searchTabs, reopenLastTab, downloads, history
     // Page
     case toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
-    case copyURL, printPage, toggleReader, renameTab
+    case copyURL, printPage, toggleReader, renameTab, savePage
     case showDevTools
     case summarize, addEvents, cite
     
@@ -317,6 +317,8 @@ enum BrowserCommand: String, CaseIterable {
         case .palette: return "Palette"
         case .searchTabs: return "Search Tabs"
         case .reopenLastTab: return "Reopen Closed Tab"
+        case .downloads: return "Downloads"
+        case .history: return "History"
         case .toggleFind: return "Find In Page"
         case .zoomIn: return "In"
         case .zoomOut: return "Out"
@@ -328,7 +330,8 @@ enum BrowserCommand: String, CaseIterable {
         case .copyURL: return "Copy URL"
         case .printPage: return "Print"
         case .toggleReader: return "Reader"
-        case .renameTab: return "Rename"
+        case .renameTab: return "Rename Tab"
+        case .savePage: return "Save Page As..."
         case .showDevTools: return "Dev Tools"
 
         case .summarize: return "Summarize"
@@ -339,7 +342,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var section: MenuBarSection {
         switch self {
-        case .palette, .searchTabs, .reopenLastTab:
+        case .palette, .searchTabs, .reopenLastTab, .downloads, .history:
             return .browser
         default:
             return .page
@@ -372,16 +375,21 @@ enum BrowserCommand: String, CaseIterable {
         case .toggleMute: return KeyboardShortcut("m", modifiers: [.command, .shift])
         case .copyURL: return KeyboardShortcut("c", modifiers: [.command, .control])
         case .printPage: return KeyboardShortcut("p", modifiers: [.command])
+        case .savePage: return KeyboardShortcut("s", modifiers: [.command, .option])
         case .toggleReader: return KeyboardShortcut("r", modifiers: [.command, .option])
+        case .downloads: return KeyboardShortcut("d", modifiers: [.command, .shift])
+        case .history: return KeyboardShortcut("y", modifiers: [.command])
         case .showDevTools: return KeyboardShortcut("i", modifiers: [.command, .option])
+        case .summarize: return KeyboardShortcut("=", modifiers: [.command])
+        case .addEvents: return KeyboardShortcut("=", modifiers: [.command, .shift])
         default: return nil
         }
     }
     
     var requiresDividerAfter: Bool {
         switch self {
-        case .palette, .searchTabs, .reopenLastTab: return true
-        case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab: return true
+        case .palette, .searchTabs, .reopenLastTab, .downloads, .history: return true
+        case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .savePage: return true
         case .zoomOut, .duplicateWindow: return true
         case .showDevTools: return true
         case .summarize, .addEvents: return true
