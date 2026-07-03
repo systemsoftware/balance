@@ -12,8 +12,8 @@ enum Layout {
     static let controlPadding: CGFloat = 10
     static let cornerRadius: CGFloat = 20
     static let sidebarIconSize: CGFloat = 20
-    static let sidebarIconPadding: CGFloat = 8
-    static let sidebarItemSpacing: CGFloat = 4
+    static let sidebarIconPadding: CGFloat = 12
+    static let sidebarItemSpacing: CGFloat = 6
 }
 
 struct SidebarItem: Identifiable, Codable {
@@ -27,6 +27,7 @@ struct SidebarItem: Identifiable, Codable {
 let builtInSidebar = [
     SidebarItem(icon: "message", view: "ChatView"),
     SidebarItem(icon: "bookmark", view: "BookmarksView"),
+    SidebarItem(icon: "key", view: "PasswordsView"),
     SidebarItem(icon: "gearshape.fill", view: "SettingsView"),
     SidebarItem(icon:"note.text", view: "NotesView"),
     SidebarItem(icon:"clock.arrow.trianglehead.counterclockwise.rotate.90", view:"HistoryView"),
@@ -152,7 +153,7 @@ struct ContentView: View {
     @ObservedObject private var extensionManager = WebExtensionManager.shared
     @State private var urlInput: String = ""
 
-    @StateObject private var sidebarStore = SidebarStore()
+    @StateObject private var sidebarStore: SidebarStore
     
     @Environment(\.modelContext) private var modelContext
 
@@ -183,12 +184,13 @@ struct ContentView: View {
     @State private var location: URL?
 
     @State private var showingSidebarAddAlert = false
+    @State private var draggedSidebarItem: SidebarItem?
     @State private var userInput = ""
     
     @State private var scanningForEvents = false
     @State private var summarizing = false
     
-    @StateObject private var bookmarkStore = BookmarkStore()
+    @StateObject private var bookmarkStore: BookmarkStore
     
     @State private var sidebarPage = WebPage()
     
@@ -207,6 +209,7 @@ struct ContentView: View {
     
     @State private var showFindNavigator = false
     @State private var showTrustInfo = false
+    @State private var showBoost = false
     
     @State private var currentUserActivity: NSUserActivity?
     @AppStorage("enableHandoff", store:Config.sharedDefaults) var enableHandoff: Bool = true
@@ -226,6 +229,7 @@ struct ContentView: View {
     @Namespace private var backforwardNamespace
     @Namespace private var sidebarNamespace
     @Namespace private var bookmarkBarNamespace
+    
     
     var shouldShowBookmarks: Bool {
         guard !bookmarkStore.items.isEmpty else { return false }
@@ -282,18 +286,34 @@ struct ContentView: View {
         self._splitURL = State(initialValue: restoredState?.splitURL ?? "")
         self._sidebarURL = State(initialValue: restoredState?.sidebarURL != nil ? URL(string: restoredState!.sidebarURL!) : nil)
         
-        priv = restoredState?.isPrivate ?? pvt
-        bProfile = restoredState?.profile ?? profile
-        bProfileIcon = profileIcon
+        let resolvedProfile = restoredState?.profile ?? profile
+        let defProfile = Config.sharedDefaults?.string(forKey: "defaultProfile") ?? ""
+        let pProfile = resolvedProfile.isEmpty ? defProfile : resolvedProfile
         
-        if bProfile.isEmpty && !defaultProfile.isEmpty {
-            bProfile = defaultProfile
-            bProfileIcon = profiles.first(where: { $0.id.uuidString == bProfile })?.icon
+        var localBProfile = pProfile
+        var localBProfileIcon = profileIcon
+        
+        let allProfilesJSON = Config.sharedDefaults?.string(forKey: "profiles") ?? "[]"
+        let allProfiles = (try? JSONDecoder().decode([Profile].self, from: Data(allProfilesJSON.utf8))) ?? []
+        
+        if localBProfile.isEmpty && !defProfile.isEmpty {
+            localBProfile = defProfile
+            localBProfileIcon = allProfiles.first(where: { $0.id.uuidString == localBProfile })?.icon ?? profileIcon
         }
         
-        if !bProfile.isEmpty {
-            bProfileName = profiles.first(where: { $0.id.uuidString == bProfile })?.name
+        var localBProfileName: String? = nil
+        if !localBProfile.isEmpty {
+            localBProfileName = allProfiles.first(where: { $0.id.uuidString == localBProfile })?.name
         }
+        
+        self.priv = restoredState?.isPrivate ?? pvt
+        self.bProfile = localBProfile
+        self.bProfileIcon = localBProfileIcon
+        self.bProfileName = localBProfileName
+        
+        self._sidebarStore = StateObject(wrappedValue: SidebarStore(profile: localBProfile))
+        self._bookmarkStore = StateObject(wrappedValue: BookmarkStore(profile: localBProfile))
+        
         
         let initialBrowserState = BrowserState()
         if let state = restoredState {
@@ -574,6 +594,13 @@ struct ContentView: View {
                                 
                                 Divider()
                                 
+                                Button() {
+                                    showBoost = true
+                                } label: {
+                                    Label("Restyle Page", systemImage:"paintpalette")
+                                }
+                                
+                                Divider()
                                 
                                 Menu {
                                     
@@ -869,11 +896,17 @@ struct ContentView: View {
                                     .onChange(of: browserState.url) { oldValue, newValue in
                                         handleURLChange(from: oldValue, to: newValue)
                                     }
+                                    .onChange(of: browserState.title) { _, newTitle in
+                                        handleTitleChange(to: newTitle)
+                                    }
+                                    
 
                                 if let url = browserState.url ?? location, url.pathExtension.lowercased() == "pdf" && usePDFKit {
                                     PDFKitRepresentedView(url: url)
                                       
                                 }
+                            }.sheet(isPresented: $showBoost) {
+                                BoostView(browserState: browserState, profile: bProfile)
                             }
                             
                             if !splitURL.isEmpty {
@@ -926,16 +959,20 @@ struct ContentView: View {
                                 SettingsView(activeProfile: bProfile)
                                     .roundedBorderStyle()
                                 
+                            case let str where str.contains("Password"):
+                                PasswordsView()
+                                    .roundedBorderStyle()
+                                
                             case let str where str.contains("Note"):
                                 NoteView(tabID: tabID, browserState:browserState)
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("History"):
-                                HistoryView()
+                                HistoryView(profile: bProfile)
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("Download"):
-                                DownloadsView()
+                                DownloadsView(profile: bProfile)
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("Extension"):
@@ -990,7 +1027,7 @@ struct ContentView: View {
                                                 .padding(Layout.sidebarIconPadding)
                                         } else {
                                             Image(systemName: item.icon)
-                                                .resizable()
+                                                .font(.system(size: Layout.sidebarIconSize, weight: .regular))
                                                 .frame(width: Layout.sidebarIconSize, height: Layout.sidebarIconSize)
                                                 .padding(Layout.sidebarIconPadding)
                                         }
@@ -999,6 +1036,11 @@ struct ContentView: View {
                                     .padding(1)
                                     .glassEffectUnion(id: "sidebar", namespace: sidebarNamespace)
                                     .buttonStyle(.plain)
+                                    .onDrag {
+                                        draggedSidebarItem = item
+                                        return NSItemProvider(object: item.id.uuidString as NSString)
+                                    }
+                                    .onDrop(of: [.plainText], delegate: SidebarDropDelegate(item: item, store: sidebarStore, draggedItem: $draggedSidebarItem))
                                     .contextMenu {
                                         if sidebarStore.count() > 1 {
                                             Button("Remove", role: .destructive) {
@@ -1504,6 +1546,23 @@ struct ContentView: View {
             HistoryManager.addToHistory(
                 title: historyTitle,
                 url: historyURL,
+                profile: bProfile,
+                context: modelContext
+            )
+        }
+    }
+    
+    private func handleTitleChange(to newTitle: String) {
+        if priv == true { return }
+        
+        if recordHistory == true, let newURL = browserState.url, newURL.absoluteString != homepage {
+            let historyTitle = newTitle.isEmpty ? (newURL.host() ?? "No Title") : newTitle
+            let historyURL = newURL.absoluteString
+            
+            HistoryManager.addToHistory(
+                title: historyTitle,
+                url: historyURL,
+                profile: bProfile,
                 context: modelContext
             )
         }

@@ -4,6 +4,8 @@ import AppKit
 internal import Combine
 import ZIPFoundation
 import CoreLocation
+import AuthenticationServices
+
 
 final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var url: URL?
@@ -223,7 +225,7 @@ extension BrowserState {
 
 final class BrowserWKWebView: WKWebView {
     
-    let downloadStore = DownloadStore()
+    var downloadStore: DownloadStore?
     var state: BrowserState?
     
     override func becomeFirstResponder() -> Bool {
@@ -371,7 +373,7 @@ struct BrowserWebView: NSViewRepresentable {
     var userAgent: String = ""
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(state: state)
+        Coordinator(state: state, profile: profile)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -550,6 +552,98 @@ struct BrowserWebView: NSViewRepresentable {
             config.userContentController.addUserScript(dntScript)
         }
         
+        let autofillScript = """
+        document.addEventListener('focusin', function(e) {
+            let el = e.target;
+            if (el.tagName === 'INPUT' && (el.type === 'password' || el.type === 'text' || el.type === 'email')) {
+                // Check if it's likely a login form
+                let form = el.closest('form');
+                let hasPassword = false;
+                if (form) {
+                    let inputs = form.querySelectorAll('input');
+                    for (let input of inputs) {
+                        if (input.type === 'password') {
+                            hasPassword = true;
+                            break;
+                        }
+                    }
+                } else if (el.type === 'password') {
+                    hasPassword = true;
+                }
+                
+                if (hasPassword) {
+                    let rect = el.getBoundingClientRect();
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.autofillRequest) {
+                        window.webkit.messageHandlers.autofillRequest.postMessage({
+                            x: rect.x,
+                            y: rect.y,
+                            width: rect.width,
+                            height: rect.height,
+                            type: el.type
+                        });
+                    }
+                }
+            }
+        });
+        
+        window.__balanceAutofill = function(username, password) {
+            let passwordInputs = document.querySelectorAll('input[type="password"]');
+            for (let passwordInput of passwordInputs) {
+                let scope = passwordInput.closest('form') || document;
+                let textInputs = scope.querySelectorAll('input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"])');
+                let usernameInput = null;
+                if (textInputs.length > 0) {
+                    for (let input of textInputs) {
+                        if (input.compareDocumentPosition(passwordInput) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                            usernameInput = input;
+                        }
+                    }
+                    if (!usernameInput) usernameInput = textInputs[0];
+                }
+                
+                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
+                
+                if (usernameInput && username && username !== "Unknown") {
+                    nativeInputValueSetter.call(usernameInput, username);
+                    usernameInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    usernameInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                if (password) {
+                    nativeInputValueSetter.call(passwordInput, password);
+                    passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
+                    passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
+                }
+                return;
+            }
+        };
+        
+        window.__balanceGetFormValues = function() {
+            let passwordInputs = document.querySelectorAll('input[type="password"]');
+            for (let passwordInput of passwordInputs) {
+                if (passwordInput.value) {
+                    let scope = passwordInput.closest('form') || document;
+                    let textInputs = scope.querySelectorAll('input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"])');
+                    let usernameInput = null;
+                    if (textInputs.length > 0) {
+                        for (let input of textInputs) {
+                            if (input.compareDocumentPosition(passwordInput) & Node.DOCUMENT_POSITION_FOLLOWING) {
+                                usernameInput = input;
+                            }
+                        }
+                        if (!usernameInput) usernameInput = textInputs[0];
+                    }
+                    
+                    let username = (usernameInput && usernameInput.value) ? usernameInput.value : "Unknown";
+                    return { username: username, password: passwordInput.value };
+                }
+            }
+            return null;
+        };
+        """
+        let afScript = WKUserScript(source: autofillScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        config.userContentController.addUserScript(afScript)
+        config.userContentController.add(context.coordinator, name: "autofillRequest")
+        
         WebExtensionManager.shared.loadAllFromDisk()
         WebExtensionManager.shared.activeTab = state
         
@@ -581,6 +675,7 @@ struct BrowserWebView: NSViewRepresentable {
         config.webExtensionController?.delegate = context.coordinator
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
+        webView.downloadStore = DownloadStore(profile: profile)
         if !userAgent.isEmpty {
             webView.customUserAgent = userAgent
         }
@@ -704,15 +799,18 @@ struct BrowserWebView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKWebExtensionControllerDelegate, CLLocationManagerDelegate {
         
-        let downloadStore = DownloadStore()
+        let downloadStore: DownloadStore
         var locationManager: CLLocationManager?
 
         let state: BrowserState
         var downloads: Set<WKDownload> = []
         var lastLoadedRequestURL: URL?
+        let profile: String
 
-        init(state: BrowserState) {
+        init(state: BrowserState, profile: String) {
             self.state = state
+            self.profile = profile
+            self.downloadStore = DownloadStore(profile: profile)
             super.init()
         }
         
@@ -814,6 +912,46 @@ struct BrowserWebView: NSViewRepresentable {
                 if let url = URL(string: downloadURLString) {
                     CRXInstaller.install(fromRemote: url)
                 }
+            } else if message.name == "autofillRequest", let dict = message.body as? [String: Any] {
+                guard let x = dict["x"] as? Double,
+                      let y = dict["y"] as? Double,
+                      let width = dict["width"] as? Double,
+                      let height = dict["height"] as? Double else { return }
+                
+                DispatchQueue.main.async {
+                    if let webView = self.state.webView, let url = webView.url, let host = url.host {
+                        let rect = NSRect(x: x, y: y, width: width, height: height)
+                        let credentials = PasswordManager.shared.credentials(for: host)
+                        
+                        let frameInfo = message.frameInfo
+                        
+                        AutofillPopoverManager.shared.show(relativeTo: rect, in: webView, domain: host, credentials: credentials) { [weak self] cred in
+                            let pass = PasswordManager.shared.fetchPasswordData(for: cred.username, domain: host) ?? ""
+                            
+                            let credentialsArray = [cred.username, pass]
+                            if let data = try? JSONSerialization.data(withJSONObject: credentialsArray),
+                               let jsonStr = String(data: data, encoding: .utf8) {
+                                let js = "window.__balanceAutofill(\(jsonStr)[0], \(jsonStr)[1]);"
+                                self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: .page, completionHandler: { _ in })
+                            }
+                        } onSave: { [weak self] in
+                            self?.state.webView?.evaluateJavaScript("window.__balanceGetFormValues()", in: frameInfo, in: .page) { result in
+                                switch result {
+                                case .success(let res):
+                                    print("evaluateJavaScript result: \(String(describing: res))")
+                                    if let dict = res as? [String: String], let u = dict["username"], let p = dict["password"] {
+                                        print("Found username and password in JS, saving...")
+                                        PasswordManager.shared.savePassword(username: u, passwordString: p, domain: host)
+                                    } else {
+                                        print("Failed to parse username and password from JS result")
+                                    }
+                                case .failure(let error):
+                                    print("evaluateJavaScript error: \(error)")
+                                }
+                            }
+                        }
+                    }
+                }
             } else if message.name == "scrollObserver", let dict = message.body as? [String: Any] {
                 if let x = dict["x"] as? NSNumber, let y = dict["y"] as? NSNumber {
                     DispatchQueue.main.async {
@@ -848,6 +986,8 @@ struct BrowserWebView: NSViewRepresentable {
                 }
             }
         }
+
+
 
         override func observeValue(
             forKeyPath keyPath: String?,
@@ -905,6 +1045,45 @@ struct BrowserWebView: NSViewRepresentable {
                 webView.evaluateJavaScript("window.scrollTo(\(x), \(y));", completionHandler: nil)
                 state.restoredScrollX = nil
                 state.restoredScrollY = nil
+            }
+            
+            let host = webView.url?.host ?? "default"
+            let p = profile.isEmpty ? "default" : profile
+            let settingsKey = "boost_\(p)_\(host)"
+            
+            let hexColor = Config.sharedDefaults?.string(forKey: "\(settingsKey)_color")
+            let fontName = Config.sharedDefaults?.string(forKey: "\(settingsKey)_font")
+            let customCSS = Config.sharedDefaults?.string(forKey: "\(settingsKey)_css")
+            
+            if hexColor != nil || fontName != nil || customCSS != nil {
+                var css = ""
+                if let hexColor = hexColor {
+                    css += "body { background-color: \(hexColor) !important; }\n"
+                }
+                if let fontName = fontName {
+                    css += "* { font-family: \"\(fontName)\", -apple-system, sans-serif !important; }\n"
+                }
+                if let customCSS = customCSS {
+                    css += customCSS + "\n"
+                }
+                
+                guard let jsCSSString = String(data: try! JSONEncoder().encode(css), encoding: .utf8) else { return }
+                
+                let jsCode = """
+                (function() {
+                    var styleId = 'app-boost-style-override';
+                    var styleElement = document.getElementById(styleId);
+                    
+                    if (!styleElement) {
+                        styleElement = document.createElement('style');
+                        styleElement.id = styleId;
+                        document.head.appendChild(styleElement);
+                    }
+                    
+                    styleElement.textContent = \(jsCSSString);
+                })();
+                """
+                webView.evaluateJavaScript(jsCode, completionHandler: nil)
             }
         }
 

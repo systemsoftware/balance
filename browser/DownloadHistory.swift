@@ -72,7 +72,11 @@ struct DownloadRow: View {
 }
 
 struct DownloadsView: View {
-    @StateObject private var downloadStore = DownloadStore()
+    @StateObject private var downloadStore: DownloadStore
+    
+    init(profile: String = "") {
+        self._downloadStore = StateObject(wrappedValue: DownloadStore(profile: profile))
+    }
     
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
     var sidebarWidth: Int = 345

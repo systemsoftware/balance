@@ -71,7 +71,7 @@ Automatically detect event information from supported web pages and export it di
 ![Event Extraction](images/events.png)
 
 
-### Map Workspace
+### Map
 
 Extract locations and real-world entities from your open tabs and display them on an interactive map.
 
@@ -97,7 +97,11 @@ Remove clutter and enjoy a clean reading experience powered by Readability.js.
 
 ![Reader Mode](images/reader.png)
 
+### Page Restyle
 
+Change a page's color or font.
+
+![Restyle Page](images/restyle.png)
 
 ### Native PDF Viewer
 
@@ -108,6 +112,12 @@ Open and browse PDF documents directly inside the browser using PDFKit.
 Add RSS feeds to your Sidebar.
 
 ![RSS Feeds](images/rss.png)
+
+### Password Manager
+
+Save & autofill passwords on websites.
+
+![Password Manager](images/password.png)
 
 ### Advanced Tabs & Windows
 

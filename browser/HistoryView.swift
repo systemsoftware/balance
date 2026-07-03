@@ -7,10 +7,12 @@ final class HistoryItem {
     var title: String
     var url: String
     var timestamp: Date
+    var profile: String = ""
     
-    init(title: String, url: String, timestamp: Date = Date()) {
+    init(title: String, url: String, profile: String = "", timestamp: Date = Date()) {
         self.title = title
         self.url = url
+        self.profile = profile
         self.timestamp = timestamp
     }
 }
@@ -25,17 +27,19 @@ class HistoryManager {
         return try! ModelContainer(for: schema, configurations: [configuration])
     }()
     
-    static func addToHistory(title: String, url: String, context: ModelContext?) {
+    static func addToHistory(title: String, url: String, profile: String = "", context: ModelContext?) {
         // 1. Check for empty data
         guard !url.isEmpty else {
             print("⚠️ History: URL was empty, skipping.")
             return
         }
         
-        print("📜 Attempting to save: \(title) at \(url)")
+        print("📜 Attempting to save: \(title) at \(url) for profile \(profile)")
 
+        let searchURL = url
+        let searchProfile = profile
         let descriptor = FetchDescriptor<HistoryItem>(
-            predicate: #Predicate { $0.url == url }
+            predicate: #Predicate { $0.url == searchURL && $0.profile == searchProfile }
         )
         
         do {
@@ -46,7 +50,7 @@ class HistoryManager {
                 existingItem.title = title
                 print("🔄 Updated existing history item")
             } else {
-                let newItem = HistoryItem(title: title, url: url)
+                let newItem = HistoryItem(title: title, url: url, profile: profile)
                 sharedContainer.mainContext.insert(newItem)
                 print("✅ Inserted new history item")
             }
@@ -59,8 +63,20 @@ class HistoryManager {
         }
     }
     
-    static func clearAllHistory() {
-        sharedContainer.deleteAllData()
+    static func clearAllHistory(profile: String = "") {
+        let searchProfile = profile
+        let descriptor = FetchDescriptor<HistoryItem>(
+            predicate: #Predicate { $0.profile == searchProfile }
+        )
+        do {
+            let items = try sharedContainer.mainContext.fetch(descriptor)
+            for item in items {
+                sharedContainer.mainContext.delete(item)
+            }
+            try sharedContainer.mainContext.save()
+        } catch {
+            print("❌ Failed to clear history: \(error)")
+        }
     }
     
 }
@@ -73,9 +89,15 @@ struct HistoryView: View {
     @Query private var historyItems: [HistoryItem]
     
     @State private var searchText: String = ""
+    let profile: String
     
-    init() {
-        var descriptor = FetchDescriptor<HistoryItem>(sortBy: [SortDescriptor(\.timestamp, order: .reverse)])
+    init(profile: String = "") {
+        self.profile = profile
+        let searchProfile = profile
+        var descriptor = FetchDescriptor<HistoryItem>(
+            predicate: #Predicate { $0.profile == searchProfile },
+            sortBy: [SortDescriptor(\.timestamp, order: .reverse)]
+        )
         descriptor.fetchLimit = 1000
         _historyItems = Query(descriptor)
     }
@@ -98,7 +120,7 @@ struct HistoryView: View {
                     .font(.system(.headline, design: .rounded))
                 Spacer()
                 Button("Clear All") {
-                    try? modelContext.delete(model: HistoryItem.self)
+                    HistoryManager.clearAllHistory(profile: profile)
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
