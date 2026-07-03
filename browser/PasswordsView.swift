@@ -58,36 +58,37 @@ struct PasswordRow: View {
     @State private var isRevealed = false
     @State private var revealedPassword = ""
     
+    @State private var showEditUsername = false
+    @State private var showEditPassword = false
+    @State private var editUsernameText = ""
+    @State private var editPasswordText = ""
+    
     var body: some View {
         HStack(spacing: 12) {
             // Circular Key Icon
             ZStack {
                 Circle()
-                    .fill(Color.secondary.opacity(0.1))
-                    .frame(width: 28, height: 28)
-                Image(systemName: "lock")
-                    .font(.system(size: 10))
-                    .foregroundColor(.secondary)
+                    .fill(Color(NSColor.controlAccentColor).opacity(0.1))
+                    .frame(width: 36, height: 36)
+                AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(cred.domain)"))
+                    .font(.system(size: 16))
+                    .foregroundColor(Color(NSColor.controlAccentColor))
             }
             
             VStack(alignment: .leading, spacing: 2) {
                 Text(cred.domain)
-                    .font(.system(.subheadline, design: .rounded))
-                    .fontWeight(.medium)
+                    .font(.headline)
                     .lineLimit(1)
                 
-                HStack {
+                if isRevealed {
+                    Text(revealedPassword)
+                        .font(.subheadline)
+                        .foregroundColor(.primary)
+                } else {
                     Text(cred.username)
-                        .lineLimit(1)
-                    Text("•")
-                    if isRevealed {
-                        Text(revealedPassword)
-                    } else {
-                        Text("••••••••")
-                    }
+                        .font(.subheadline)
+                        .foregroundColor(.secondary)
                 }
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary)
             }
             Spacer()
             
@@ -147,6 +148,32 @@ struct PasswordRow: View {
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
         .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+        .contextMenu {
+            Button("Edit Username") {
+                editUsernameText = cred.username
+                showEditUsername = true
+            }
+            Button("Edit Password") {
+                authenticate(reason: "authenticate to edit your password") {
+                    editPasswordText = ""
+                    showEditPassword = true
+                }
+            }
+        }
+        .alert("Edit Username", isPresented: $showEditUsername) {
+            TextField("New Username", text: $editUsernameText)
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                PasswordManager.shared.updateUsername(oldUsername: cred.username, newUsername: editUsernameText, domain: cred.domain)
+            }
+        }
+        .alert("Edit Password", isPresented: $showEditPassword) {
+            SecureField("New Password", text: $editPasswordText)
+            Button("Cancel", role: .cancel) { }
+            Button("Save") {
+                PasswordManager.shared.savePassword(username: cred.username, passwordString: editPasswordText, domain: cred.domain)
+            }
+        }
     }
     
     private func authenticate(reason: String, completion: @escaping () -> Void) {

@@ -111,6 +111,24 @@ class PasswordManager: ObservableObject {
         loadAllCredentials()
     }
     
+    func updateUsername(oldUsername: String, newUsername: String, domain: String) {
+        guard let domainData = domain.lowercased().data(using: .utf8) else { return }
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "BalanceBrowser",
+            kSecAttrAccount as String: oldUsername,
+            kSecAttrGeneric as String: domainData
+        ]
+        
+        let attributesToUpdate: [String: Any] = [
+            kSecAttrAccount as String: newUsername
+        ]
+        
+        SecItemUpdate(query as CFDictionary, attributesToUpdate as CFDictionary)
+        loadAllCredentials()
+    }
+    
     func deletePassword(username: String, domain: String) {
         guard let domainData = domain.lowercased().data(using: .utf8) else { return }
         
