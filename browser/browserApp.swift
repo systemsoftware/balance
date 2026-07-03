@@ -2,6 +2,7 @@ import SwiftUI
 import AppKit
 import SwiftData
 import AuthenticationServices
+import WebKit
 
 var openWindows: [NSWindow] = []
 
@@ -14,6 +15,12 @@ struct browserApp: App {
     
     @AppStorage("clearDownloadHistoryOnClose", store:Config.sharedDefaults)
     var clearDownloadHistoryOnClose: Bool = true
+    
+    @AppStorage("clearCacheOnClose", store:Config.sharedDefaults)
+    var clearCacheOnClose: Bool = false
+    
+    @AppStorage("clearCookiesOnClose", store:Config.sharedDefaults)
+    var clearCookiesOnClose: Bool = false
     
     @AppStorage("showTabsInDockMenu", store:Config.sharedDefaults)
     var showTabsInDockMenu: Bool = false
@@ -64,6 +71,12 @@ struct browserApp: App {
                             downloadStore.remove(id: download.id)
                         }
                     }
+                    if(clearCacheOnClose) {
+                        WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache], modifiedSince: Date.distantPast, completionHandler: {})
+                    }
+                    if(clearCookiesOnClose) {
+                        WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: Date.distantPast, completionHandler: {})
+                    }
                 }
             } else {
                 ContentView()
@@ -82,6 +95,12 @@ struct browserApp: App {
                             for download in downloadStore.items {
                                 downloadStore.remove(id: download.id)
                             }
+                        }
+                        if(clearCacheOnClose) {
+                            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache], modifiedSince: Date.distantPast, completionHandler: {})
+                        }
+                        if(clearCookiesOnClose) {
+                            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: Date.distantPast, completionHandler: {})
                         }
                     }
             }

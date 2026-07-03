@@ -244,6 +244,44 @@ var Settings: [Setting] = [
         defaultValueBool: true
     ),
     Setting(
+        name: "Clear Cache On Close",
+        icon: "trash.circle",
+        category: catPrivacy,
+        type: "toggle",
+        appStorageKey: "clearCacheOnClose",
+        defaultValueBool: false
+    ),
+    Setting(
+        name: "Clear Web Cache",
+        icon: "trash",
+        category: catAdvanced,
+        type: "button",
+        appStorageKey: "",
+        buttonText: "Clear Now",
+        action: {
+            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache], modifiedSince: Date.distantPast, completionHandler: {})
+        }
+    ),
+    Setting(
+        name: "Clear Cookies On Close",
+        icon: "xmark.bin",
+        category: catPrivacy,
+        type: "toggle",
+        appStorageKey: "clearCookiesOnClose",
+        defaultValueBool: false
+    ),
+    Setting(
+        name: "Clear All Cookies",
+        icon: "xmark.bin.circle",
+        category: catAdvanced,
+        type: "button",
+        appStorageKey: "",
+        buttonText: "Clear Now",
+        action: {
+            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: Date.distantPast, completionHandler: {})
+        }
+    ),
+    Setting(
         name: "Tabs",
         icon: "square.on.square",
         category: catPalette,
