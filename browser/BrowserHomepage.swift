@@ -436,6 +436,14 @@ struct BrowserHomepage: View {
     
     
     @AppStorage("profiles", store: Config.sharedDefaults) private var profilesJSON = "[]"
+
+    @AppStorage("homepageShowCock", store:Config.sharedDefaults) var showClock: Bool = true
+    @AppStorage("homepageShowWeather", store:Config.sharedDefaults) var showWeather: Bool = true
+    @AppStorage("homepageShowBookmarks", store:Config.sharedDefaults) var showBookmarks: Bool = true
+    @AppStorage("homepageShowEmail", store:Config.sharedDefaults) var showEmail: Bool = true
+    @AppStorage("homepageShowStories", store:Config.sharedDefaults) var showStories: Bool = true
+    @AppStorage("homepageShowCalendar", store:Config.sharedDefaults) var showCalendar: Bool = true
+    
     
     private var isEmailConfigured: Bool {
         let profiles = (try? JSONDecoder().decode([Profile].self, from: Data(profilesJSON.utf8))) ?? []
@@ -453,23 +461,27 @@ struct BrowserHomepage: View {
             ScrollView {
                 VStack(spacing: 50) {
                     
-                    HStack(alignment: .top, spacing: 40) {
-                        ClockView()
+                    if showClock {
+                        HStack(alignment: .top, spacing: 40) {
+                            ClockView()
+                        }
+                        .padding(.top, 60)
                     }
-                    .padding(.top, 60)
                     
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label("Weather", systemImage: "cloud.sun.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.secondary)
-                        
-                        WeatherView()
+                    if showWeather {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Weather", systemImage: "cloud.sun.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            
+                            WeatherView()
+                        }
+                        .padding(.top, 8)
+                        .padding(.horizontal, 40)
                     }
-                    .padding(.top, 8)
-                    .padding(.horizontal, 40)
            
                     
-                    if !store.items.isEmpty {
+                    if !store.items.isEmpty && showBookmarks {
                         VStack(alignment: .leading, spacing: 16) {
                             Label("Bookmarks", systemImage: "bookmark.fill")
                                 .font(.system(size: 13, weight: .semibold))
@@ -483,12 +495,12 @@ struct BrowserHomepage: View {
                             }
                             .padding(.horizontal, 40)
                         }
-                    } else {
-                        emptyBookmarksState
+                    } else  if store.items.isEmpty {
+                            emptyBookmarksState
                     }
                     
                     
-                    if isEmailConfigured {
+                    if isEmailConfigured && showEmail {
                         VStack(alignment: .leading, spacing: 12) {
                             Label("Emails", systemImage: "envelope.fill")
                                 .font(.system(size: 13, weight: .semibold))
@@ -502,22 +514,27 @@ struct BrowserHomepage: View {
                         .padding(.horizontal, 40)
                     }
                     
-                    VStack(alignment: .leading, spacing: 12) {
-                        Label("Top Stories", systemImage: "newspaper.fill")
-                            .font(.system(size: 13, weight: .semibold))
-                            .foregroundColor(.secondary)
+                    if showStories {
                         
-                        NewsView()
-                        
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Top Stories", systemImage: "newspaper.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            
+                            NewsView()
+                            
+                        }
+                        .padding(.horizontal, 40)
                     }
-                    .padding(.horizontal, 40)
                     
-                    FullCalendarView(selectedDate: $date)
+                    if showCalendar {
+                        FullCalendarView(selectedDate: $date)
+                    }
                     
                 }
             }
         }
-        .frame(minWidth: 680, minHeight: 600)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
         .contextMenu {
             Menu("Background") {
                 Button {
@@ -540,8 +557,24 @@ struct BrowserHomepage: View {
                 } label: {
                     Label("Remove", systemImage: "trash")
                 }
-
             }
+            
+            Menu {
+                Toggle("Clock", isOn: $showClock)
+                Toggle("Weather", isOn: $showWeather)
+                Toggle("Boomarks", isOn: $showBookmarks)
+                
+                if isEmailConfigured {
+                    Toggle("Email", isOn: $showEmail)
+                }
+                
+                Toggle("News", isOn: $showStories)
+                Toggle("Calendar", isOn: $showCalendar)
+            } label: {
+                Text("Views")
+            }
+
+            
          }
         .sheet(isPresented: $showingURLPrompt) {
             NavigationStack {

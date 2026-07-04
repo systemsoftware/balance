@@ -309,6 +309,14 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 _ = SessionManager.shared.restoreSession(from: session)
             }
         }
+        
+        // Show setup window on first launch
+        let defaults = Config.sharedDefaults ?? UserDefaults.standard
+        if !defaults.bool(forKey: "sawSetup") {
+            DispatchQueue.main.async {
+                SetupWindowManager.shared.showSetupWindow()
+            }
+        }
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
@@ -393,7 +401,7 @@ enum MenuBarSection: String, CaseIterable {
 
 enum BrowserCommand: String, CaseIterable {
     // Browser
-    case palette, searchTabs, reopenLastTab, downloads, history, autocomplete
+    case palette, searchTabs, reopenLastTab, downloads, history, autocomplete, showSetup
     // Page
     case toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
@@ -404,6 +412,7 @@ enum BrowserCommand: String, CaseIterable {
     var title: String {
         switch self {
         case .palette: return "Palette"
+        case .showSetup: return "Setup & Import"
         case .searchTabs: return "Search All Tabs"
         case .reopenLastTab: return "Reopen Closed Tab"
         case .downloads: return "Downloads"
@@ -432,7 +441,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var section: MenuBarSection {
         switch self {
-        case .palette, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete:
+        case .palette, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete, .showSetup:
             return .browser
         default:
             return .page
@@ -479,7 +488,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var requiresDividerAfter: Bool {
         switch self {
-        case .palette, .searchTabs, .reopenLastTab, .downloads, .history: return true
+        case .palette, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete: return true
         case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .savePage: return true
         case .zoomOut, .duplicateWindow: return true
         case .showDevTools: return true

@@ -949,7 +949,7 @@ struct SettingsSectionContent: View {
     @State var st = ""
     
     var isStandalone = false
-    
+        
     @State var emptyStringBinding = ""
     @State var falseBinding = false
     @State var newProfile = false
@@ -1203,6 +1203,8 @@ struct SettingsView: View {
 
     @AppStorage("defaultProfile", store: Config.sharedDefaults)
     var defaultProfile = ""
+    
+    var isSetup = false
 
     @AppStorage("profiles", store: Config.sharedDefaults)
     private var profilesJSON = "[]"
@@ -1222,7 +1224,7 @@ struct SettingsView: View {
     }
 
     private var displayCategories: [CategoryDef] {
-        if isStandalone {
+        if isStandalone || isSetup {
             return categoryDefs
         } else {
             return categoryDefs.filter { $0.id != "sidebar" }
@@ -1237,7 +1239,7 @@ struct SettingsView: View {
     }
 
     var body: some View {
-        if isStandalone {
+       if isStandalone {
             standaloneLayout
         } else {
             sidebarLayout
@@ -1312,12 +1314,17 @@ struct SettingsView: View {
     private var sidebarLayout: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                Text("Quick Settings")
-                    .font(.system(size: 13, weight: .semibold, design: .rounded))
-                Spacer()
+            
+            if !isSetup {
+                
+                HStack {
+                    Text("Quick Settings")
+                        .font(.system(size: 13, weight: .semibold, design: .rounded))
+                    Spacer()
+                }
+                .padding()
+                
             }
-            .padding()
 
             // Search
             HStack {
@@ -1400,7 +1407,7 @@ struct SettingsView: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: selectedCategoryID)
             }
         }
-        .frame(maxWidth: CGFloat(sidebarWidth))
+        .frame(maxWidth: isSetup ? .infinity : CGFloat(sidebarWidth))
     }
 
     // MARK: - Search results

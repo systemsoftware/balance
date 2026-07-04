@@ -1336,6 +1336,8 @@ struct ContentView: View {
                 }
             case .autocomplete:
                 showSuggestions.toggle()
+            case .showSetup:
+                setupWindow()
             }
         }
     }
@@ -1359,6 +1361,32 @@ struct ContentView: View {
             splitScrollY: splitState.scrollY
         )
         TabRegistry.shared.states[tabID] = state
+    }
+    
+    private func setupWindow() {
+        let window = NSWindow(
+            contentRect: NSRect(x: 0, y: 0, width: 640, height: 540),
+            styleMask: [.titled, .closable, .fullSizeContentView],
+            backing: .buffered,
+            defer: false
+        )
+        
+        window.title = "Welcome to Balance"
+        window.titlebarAppearsTransparent = true
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.center()
+        window.isReleasedWhenClosed = false
+        
+        let setupView = SetupView {
+            DispatchQueue.main.async {
+                window.close()
+            }
+        }
+        .modelContainer(HistoryManager.sharedContainer)
+        
+        window.contentView = NSHostingView(rootView: setupView)
+        window.makeKeyAndOrderFront(nil)
     }
     
     private func submitURL() {
