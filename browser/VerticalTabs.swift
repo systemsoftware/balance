@@ -28,11 +28,17 @@ struct VerticalTabs: View {
         
         // Fallback: use native tabbedWindows (when sidebar is off or single tab before any ⌘T)
         guard let currentNSWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == currentID }) else {
-            return []
+            // Window not found in NSApp.windows — still show the current tab
+            return [browserState]
         }
         let tabGroupWindows = currentNSWindow.tabbedWindows ?? [currentNSWindow]
         let validTabIDs = Set(tabGroupWindows.compactMap { $0.identifier?.rawValue })
-        return windowManager.windows.filter { validTabIDs.contains($0.tabID) }
+        let matched = windowManager.windows.filter { validTabIDs.contains($0.tabID) }
+        // Ensure the current tab is always visible (e.g. single tab in sidebar mode)
+        if matched.isEmpty {
+            return [browserState]
+        }
+        return matched
     }
 
     private var filteredTabs: [BrowserState] {
