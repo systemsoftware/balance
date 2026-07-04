@@ -281,7 +281,7 @@ struct ContentView: View {
     var tabID: String
     var restoredState: TabSessionState?
 
-    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "", tabID: String = UUID().uuidString, restoredState: TabSessionState? = nil) {
+    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "", tabID: String = UUID().uuidString, restoredState: TabSessionState? = nil, providedState: BrowserState? = nil) {
         self.tabID = tabID
         self.restoredState = restoredState
         
@@ -325,7 +325,7 @@ struct ContentView: View {
         self._bookmarkStore = StateObject(wrappedValue: BookmarkStore(profile: localBProfile))
         
         
-        let initialBrowserState = BrowserState()
+        let initialBrowserState = providedState ?? BrowserState()
         initialBrowserState.tabID = tabID
         initialBrowserState.spaceIndex = WindowManager.shared.currentSpaceIndex
         if let state = restoredState {
@@ -533,7 +533,6 @@ struct ContentView: View {
                         .keyboardShortcut("e", modifiers: [.command, .shift])
                         .popover(isPresented: $showExtensionsPopover, arrowEdge: .bottom) {
                             ExtensionsPopoverView()
-                                .frame(width: 350, height: 450)
                         }
                     }
                     
@@ -1165,11 +1164,6 @@ struct ContentView: View {
         }
         .onAppear {
             sidebarPage.customUserAgent = userAgent
-        }
-        .onReceive(NotificationCenter.default.publisher(for: .openURLInNewTab)) { notification in
-            if let url = notification.userInfo?["url"] as? URL {
-                location = url
-            }
         }
         .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
             guard let window = notification.object as? NSWindow,

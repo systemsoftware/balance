@@ -173,7 +173,7 @@ func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = 
     updateDockMenuTabsVisibility()
 }
 
-func createNewTab(with url: URL? = nil, inBackground: Bool = false) {
+func createNewTab(with url: URL? = nil, inBackground: Bool = false, browserState: BrowserState? = nil) {
     let browserWindows = NSApp.windows.filter { openWindows.contains($0) }
     let targetWindow: NSWindow?
     if let main = NSApp.mainWindow, openWindows.contains(main) {
@@ -195,7 +195,7 @@ func createNewTab(with url: URL? = nil, inBackground: Bool = false) {
         profile = state.profile
     }
     
-    let contentView = ContentView(initialURL: url, profile: profile, tabID: tabID)
+    let contentView = ContentView(initialURL: url, profile: profile, tabID: tabID, providedState: browserState)
     
     let newWindow = NSWindow(
         contentRect: currentWindow.frame,

@@ -13,40 +13,54 @@ struct ExtensionsPopoverView: View {
                         Button(action: {
                             selectedAction = nil
                         }) {
-                            Image(systemName: "chevron.backward")
-                            Text("Back")
+                            HStack(spacing: 4) {
+                                Image(systemName: "chevron.backward")
+                                    .font(.body.weight(.medium))
+                                Text("Back")
+                            }
                         }
                         .buttonStyle(.plain)
-                        .padding(.leading, 8)
+                        .foregroundStyle(.primary)
                         
                         Spacer()
                         
                         Text(action.webExtensionContext?.webExtension.displayName ?? "")
                             .font(.headline)
-                            .padding(.trailing, 8)
+                            .lineLimit(1)
+                            
                         Spacer()
                     }
-                    .padding(.vertical, 8)
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .padding(.horizontal, 12)
+                    .frame(height: 44)
+                    .background(Color.clear)
+                    .layoutPriority(1)
                     
                     Divider()
+                        .layoutPriority(1)
                     
                     ExtensionActionPopupView(action: action)
+                       
                 }
             } else {
                 VStack(spacing: 0) {
-                    Text("Extensions")
-                        .font(.headline)
-                        .padding(.vertical, 10)
-                    
-                    Text("Manage extensions in the sidebar")
-                        .font(.caption)
-                        .padding(.bottom, 5)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text("Extensions")
+                            .font(.headline)
+                        
+                        Text("Manage extensions in the sidebar")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 16)
+                    .padding(.top, 16)
+                    .padding(.bottom, 12)
                     
                     Divider()
+                        .padding(.bottom, 8)
                     
                     ScrollView {
-                        VStack(spacing: 0) {
+                        VStack(spacing: 4) {
                             if manager.contexts.isEmpty {
                                 Text("No extensions found.")
                                     .foregroundStyle(.secondary)
@@ -64,10 +78,11 @@ struct ExtensionsPopoverView: View {
                                             }
                                         }
                                     }
-                                    Divider()
                                 }
                             }
                         }
+                        .padding(.horizontal, 8)
+                        .padding(.bottom, 8)
                     }
                 }
             }
@@ -82,6 +97,7 @@ struct ExtensionActionRow: View {
     
     @State private var icon: NSImage?
     @State private var title: String = ""
+    @State private var isHovered = false
     
     var body: some View {
         Button(action: {
@@ -89,27 +105,36 @@ struct ExtensionActionRow: View {
                 onAction(action)
             }
         }) {
-            HStack {
+            HStack(spacing: 12) {
                 if let icon = icon {
                     Image(nsImage: icon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
-                        .frame(width: 24, height: 24)
+                        .frame(width: 20, height: 20)
                 } else {
                     Image(systemName: "puzzlepiece.extension")
-                        .frame(width: 24, height: 24)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 20, height: 20)
+                        .foregroundStyle(.secondary)
                 }
                 
                 Text((title.isEmpty ? context.webExtension.displayName : title) ?? "")
                     .font(.body)
+                    .lineLimit(1)
                 
                 Spacer()
             }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 8)
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
             .contentShape(Rectangle())
+            .background(isHovered ? Color.primary.opacity(0.07) : Color.clear)
+            .cornerRadius(6)
         }
         .buttonStyle(.plain)
+        .onHover { hover in
+            isHovered = hover
+        }
         .onAppear {
             updateInfo()
         }

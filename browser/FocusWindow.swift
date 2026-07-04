@@ -21,17 +21,32 @@ struct FocusWebView: View {
     let url: URL
     let userAgent: String
     weak var window: NSWindow?
-    @State var page = WebPage()
+    @StateObject var page = BrowserState()
+    
+    @State var request = URLRequest(url: URL(string: "about:blank")!)
     
     var body: some View {
-        WebView(page)
+        BrowserWebView(request: request, state: page)
             .onAppear {
-                page.customUserAgent = userAgent
-                page.load(URLRequest(url: url))
+                request = URLRequest(url: url)
+                
+                if let web = page.webView {
+                    web.customUserAgent = userAgent
+                } else {
+                    print("cant set ua for focus")
+                }
+                
             }
             .onChange(of: page.title) { _, newTitle in
+                
+                if let web = page.webView {
+                    web.customUserAgent = userAgent
+                } else {
+                    print("cant set ua for focus")
+                }
+                
                 if !newTitle.isEmpty {
-                    window?.title = "\(newTitle) - Focus"
+                    window?.title = "\(newTitle) (Focus)"
                 } else {
                     window?.title = "Focus"
                 }

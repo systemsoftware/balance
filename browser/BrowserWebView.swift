@@ -394,7 +394,14 @@ struct BrowserWebView: NSViewRepresentable {
         // Chrome Web Store integration
         config.userContentController.add(context.coordinator, name: "installExtension")
         
-        let installedIDs = WebExtensionManager.shared.contexts.compactMap { $0.baseURL.lastPathComponent }
+        let installedIDs = WebExtensionManager.shared.contexts.compactMap { context -> String? in
+            for component in context.baseURL.pathComponents.reversed() {
+                if component.count == 32 && component.allSatisfy({ $0.isLowercase && $0.isLetter }) {
+                    return component
+                }
+            }
+            return context.baseURL.lastPathComponent
+        }
         let idsStr = installedIDs.map { "\"\($0)\"" }.joined(separator: ",")
         
         let cwsScript = """
@@ -435,6 +442,18 @@ struct BrowserWebView: NSViewRepresentable {
                             newBtn.innerText = btnText;
                         }
                         
+                        // Use inline interval to check if it gets installed dynamically
+                        let checkDynamic = setInterval(() => {
+                            if (window.balanceInstalledExtensions.includes(extId)) {
+                                if (textSpan) textSpan.innerText = "Installed";
+                                else newBtn.innerText = "Installed";
+                                newBtn.style.backgroundColor = "#34C759";
+                                newBtn.style.cursor = "default";
+                                newBtn.disabled = true;
+                                clearInterval(checkDynamic);
+                            }
+                        }, 500);
+                        
                         newBtn.style.backgroundColor = isInstalled ? "#34C759" : "#007AFF"; 
                         newBtn.style.color = "white";
                         newBtn.style.opacity = "1";
@@ -455,11 +474,26 @@ struct BrowserWebView: NSViewRepresentable {
                                     if (textSpan) textSpan.innerText = "Installed";
                                     else newBtn.innerText = "Installed";
                                     newBtn.style.backgroundColor = "#34C759";
+                                    if (!window.balanceInstalledExtensions.includes(extId)) {
+                                        window.balanceInstalledExtensions.push(extId);
+                                    }
                                 }, 2000);
                             });
                         }
-                        
-                        clearInterval(checkInterval);
+                    }
+                }
+                
+                
+                // Hide "Switch to Chrome" banners more aggressively
+                let promos = document.querySelectorAll('*');
+                for (let el of promos) {
+                    if (el.children.length > 4) continue;
+                    let text = (el.innerText || "").toLowerCase().trim();
+                    if (text.includes("switch to chrome") || text.includes("download chrome") || text.includes("you need chrome")) {
+                        let banner = el.closest('div[role="banner"]') || el.parentElement.parentElement;
+                        if (banner && banner.style.display !== 'none' && banner.tagName !== 'BODY') {
+                            banner.style.display = 'none';
+                        }
                     }
                 }
             }, 1000);
@@ -885,33 +919,32 @@ struct BrowserWebView: NSViewRepresentable {
         func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
             if let optionsURL = extensionContext.optionsPageURL {
                 DispatchQueue.main.async {
-                    NotificationCenter.default.post(
-                        name: .openURLInNewTab,
-                        object: nil,
-                        userInfo: ["url": optionsURL]
-                    )
+                    createNewTab(with: optionsURL)
                 }
             }
             completionHandler(nil)
         }
         
         func webExtensionController(_ controller: WKWebExtensionController, openNewTabUsing configuration: WKWebExtension.TabConfiguration, for extensionContext: WKWebExtensionContext, completionHandler: @escaping ((any WKWebExtensionTab)?, Error?) -> Void) {
+            let newState = BrowserState()
             if let url = configuration.url {
                 DispatchQueue.main.async {
-                    NotificationCenter.default.post(
-                        name: .openURLInNewTab,
-                        object: nil,
-                        userInfo: ["url": url]
-                    )
+                    createNewTab(with: url, browserState: newState)
                 }
             }
-            completionHandler(WebExtensionManager.shared.activeTab, nil)
+            completionHandler(newState, nil)
         }
         
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "installExtension", let extId = message.body as? String {
-                let downloadURLString = "https://clients2.google.com/service/update2/crx?response=redirect&prodversion=114.0.0.0&acceptformat=crx2,crx3&x=id%3D" + extId + "%26installsource%3Dondemand%26uc"
-                if let url = URL(string: downloadURLString) {
+                #if arch(arm64)
+                let arch = "arm64"
+                #else
+                let arch = "x86-64"
+                #endif
+                let urlStr = "https://clients2.google.com/service/update2/crx?response=redirect&os=mac&arch=\(arch)&os_arch=\(arch)&nacl_arch=arm&prod=chromecrx&prodchannel=&prodversion=133.0.0.0&lang=en-US&acceptformat=crx2,crx3&x=id=\(extId)%26installsource=ondemand%26uc"
+                
+                if let url = URL(string: urlStr) {
                     CRXInstaller.install(fromRemote: url)
                 }
             } else if message.name == "autofillRequest", let dict = message.body as? [String: Any] {
@@ -1106,10 +1139,13 @@ struct BrowserWebView: NSViewRepresentable {
             if let url = navigationAction.request.url {
                 let httpsOnly = Config.sharedDefaults?.bool(forKey: "httpsOnly") ?? false
                 if httpsOnly && url.scheme == "http" {
-                    if let httpsUrl = URL(string: url.absoluteString.replacingOccurrences(of: "http://", with: "https://")) {
-                        decisionHandler(.cancel, preferences)
-                        webView.load(URLRequest(url: httpsUrl))
-                        return
+                    let host = url.host ?? ""
+                    if host != "localhost" && host != "127.0.0.1" {
+                        if let httpsUrl = URL(string: url.absoluteString.replacingOccurrences(of: "http://", with: "https://")) {
+                            decisionHandler(.cancel, preferences)
+                            webView.load(URLRequest(url: httpsUrl))
+                            return
+                        }
                     }
                 }
             }
@@ -1119,7 +1155,8 @@ struct BrowserWebView: NSViewRepresentable {
                 preferences.allowsContentJavaScript = (jsSetting == .allow)
             }
 
-            if navigationAction.shouldPerformDownload {
+            let isExtensionScheme = navigationAction.request.url?.scheme?.hasSuffix("extension") == true
+            if !isExtensionScheme && navigationAction.shouldPerformDownload {
                 decisionHandler(.download, preferences)
                 return
             }
@@ -1129,6 +1166,11 @@ struct BrowserWebView: NSViewRepresentable {
         func webView(_ webView: WKWebView,
                      decidePolicyFor navigationResponse: WKNavigationResponse,
                      decisionHandler: @escaping (WKNavigationResponsePolicy) -> Void) {
+                     
+            if let scheme = navigationResponse.response.url?.scheme, scheme.hasSuffix("extension") {
+                decisionHandler(.allow)
+                return
+            }
 
             if !navigationResponse.canShowMIMEType {
                 decisionHandler(.download)
@@ -1422,6 +1464,14 @@ final class WebExtensionManager: ObservableObject {
             do {
                 let ext = try await WKWebExtension(resourceBaseURL: url)
                 let context = WKWebExtensionContext(for: ext)
+                
+                let uuidKey = "ext_uuid_\(url.lastPathComponent)"
+                if let saved = Config.sharedDefaults?.string(forKey: uuidKey) {
+                    context.uniqueIdentifier = saved
+                } else {
+                    Config.sharedDefaults?.set(context.uniqueIdentifier, forKey: uuidKey)
+                }
+                
                 contextURLs[context] = url
                 
                 // Grant all requested permissions from manifest
@@ -1497,7 +1547,7 @@ enum ExtensionStorage {
             create: true
         )
         
-        let dir = base.appendingPathComponent("Balance/extensions", isDirectory: true)
+        let dir = base.appendingPathComponent("Extensions", isDirectory: true) // ext dir
         
         print("ext dir, \(dir)")
         
@@ -1531,8 +1581,24 @@ enum CRXInstaller {
     
     // Download CRX
     static func download(from url: URL) async throws -> URL {
-        let (tempURL, _) = try await URLSession.shared.download(from: url)
-        return tempURL
+        let config = URLSessionConfiguration.ephemeral
+        config.httpAdditionalHeaders = ["User-Agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/133.0.0.0 Safari/537.36"]
+        let session = URLSession(configuration: config)
+        
+        let (data, response) = try await session.data(from: url)
+        if let httpResponse = response as? HTTPURLResponse, httpResponse.statusCode != 200 {
+            let body = String(data: data.prefix(200), encoding: .utf8) ?? ""
+            throw NSError(domain: "CRXDownload", code: httpResponse.statusCode, userInfo: [
+                NSLocalizedDescriptionKey: "Failed to download CRX. URL: \(url.absoluteString). HTTP Status: \(httpResponse.statusCode). Response: \(body)"
+            ])
+        }
+        
+        let safeURL = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString + ".crx")
+        if FileManager.default.fileExists(atPath: safeURL.path) {
+            try? FileManager.default.removeItem(at: safeURL)
+        }
+        try data.write(to: safeURL)
+        return safeURL
     }
     
     // Install CRX (download already done)
@@ -1559,21 +1625,25 @@ enum CRXInstaller {
         
         try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
         
-        try extractCRX(at: crxURL, to: dest)
-        
-        let manifestURL = findManifest(in: dest)
-        
-        guard let manifestURL else {
-            // Clean up the empty/invalid directory
+        do {
+            try extractCRX(at: crxURL, to: dest)
+            
+            let manifestURL = findManifest(in: dest)
+            
+            guard let manifestURL else {
+                throw NSError(domain: "Extension", code: 1, userInfo: [
+                    NSLocalizedDescriptionKey: "manifest.json not found — the download may not be a valid CRX file"
+                ])
+            }
+            
+            let root = manifestURL.deletingLastPathComponent()
+            
+             WebExtensionManager.shared.loadExtension(from: root)
+        } catch {
+            // Clean up the empty/invalid directory so it doesn't appear as an empty extension
             try? FileManager.default.removeItem(at: dest)
-            throw NSError(domain: "Extension", code: 1, userInfo: [
-                NSLocalizedDescriptionKey: "manifest.json not found — the download may not be a valid CRX file"
-            ])
+            throw error
         }
-        
-        let root = manifestURL.deletingLastPathComponent()
-        
-         WebExtensionManager.shared.loadExtension(from: root)
     }
     
     // Combined helper
@@ -1581,7 +1651,13 @@ enum CRXInstaller {
         Task {
             do {
                 let crx = try await download(from: url)
+                defer { try? FileManager.default.removeItem(at: crx) }
                 try await install(from: crx, originalURL: url)
+                
+                // Update UI state on main thread
+                DispatchQueue.main.async {
+                    NotificationCenter.default.post(name: Notification.Name("ExtensionsUpdated"), object: nil)
+                }
                 print("Extension installed")
             } catch {
                 print("Install failed:", error)
@@ -1595,30 +1671,40 @@ enum CRXInstaller {
 func extractCRX(at url: URL, to destination: URL) throws {
     let data = try Data(contentsOf: url)
     
-    guard String(data: data.prefix(4), encoding: .ascii) == "Cr24" else {
+    let isZip = String(data: data.prefix(2), encoding: .ascii) == "PK"
+    
+    guard isZip || String(data: data.prefix(4), encoding: .ascii) == "Cr24" else {
+        let prefixStr = String(data: data.prefix(200), encoding: .utf8) ?? "binary data"
+        print("CRX extraction failed. Data size: \(data.count) bytes. First 200 bytes: \(prefixStr)")
         throw NSError(domain: "CRX", code: 1, userInfo: [
             NSLocalizedDescriptionKey: "Invalid CRX file"
         ])
     }
     
-    let version = data.withUnsafeBytes { $0.load(fromByteOffset: 4, as: UInt32.self) }
+    let zipData: Data
     
-    let zipStart: Int
-    
-    if version == 2 {
-        let pubKeyLen = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self) }
-        let sigLen = data.withUnsafeBytes { $0.load(fromByteOffset: 12, as: UInt32.self) }
-        zipStart = 16 + Int(pubKeyLen) + Int(sigLen)
-    } else if version == 3 {
-        let headerLen = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self) }
-        zipStart = 12 + Int(headerLen)
+    if isZip {
+        zipData = data
     } else {
-        throw NSError(domain: "CRX", code: 2, userInfo: [
-            NSLocalizedDescriptionKey: "Unsupported CRX version"
-        ])
+        let version = data.withUnsafeBytes { $0.load(fromByteOffset: 4, as: UInt32.self) }
+        let zipStart: Int
+        
+        if version == 2 {
+            let pubKeyLen = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self) }
+            let sigLen = data.withUnsafeBytes { $0.load(fromByteOffset: 12, as: UInt32.self) }
+            zipStart = 16 + Int(pubKeyLen) + Int(sigLen)
+        } else if version == 3 {
+            let headerLen = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self) }
+            zipStart = 12 + Int(headerLen)
+        } else {
+            throw NSError(domain: "CRX", code: 2, userInfo: [
+                NSLocalizedDescriptionKey: "Unsupported CRX version"
+            ])
+        }
+        zipData = data.subdata(in: zipStart..<data.count)
     }
     
-    let zipData = data.subdata(in: zipStart..<data.count)
+
     
     let zipURL = destination.appendingPathComponent("temp.zip")
     try zipData.write(to: zipURL)
@@ -1633,10 +1719,19 @@ func extractCRX(at url: URL, to destination: URL) throws {
 func findManifest(in directory: URL) -> URL? {
     let fm = FileManager.default
     
-    if let enumerator = fm.enumerator(at: directory, includingPropertiesForKeys: nil) {
-        for case let fileURL as URL in enumerator {
-            if fileURL.lastPathComponent == "manifest.json" {
-                return fileURL
+    let rootManifest = directory.appendingPathComponent("manifest.json")
+    if fm.fileExists(atPath: rootManifest.path) {
+        return rootManifest
+    }
+    
+    if let contents = try? fm.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil, options: .skipsHiddenFiles) {
+        for item in contents {
+            var isDir: ObjCBool = false
+            if fm.fileExists(atPath: item.path, isDirectory: &isDir), isDir.boolValue {
+                let nestedManifest = item.appendingPathComponent("manifest.json")
+                if fm.fileExists(atPath: nestedManifest.path) {
+                    return nestedManifest
+                }
             }
         }
     }

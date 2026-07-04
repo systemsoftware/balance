@@ -302,11 +302,7 @@ private struct PinnedSiteButton: View {
     var body: some View {
         Button {
             if let url = URL(string: bookmark.url) {
-                NotificationCenter.default.post(
-                    name: .openURLInNewTab,
-                    object: nil,
-                    userInfo: ["url": url]
-                )
+                createNewTab(with: url)
             }
         } label: {
             VStack(spacing: 4) {
@@ -441,6 +437,31 @@ private struct TabRow: View {
                 if let url = state.url?.absoluteString {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(url, forType: .string)
+                }
+            }
+            
+            Divider()
+            
+            Button("Close") {
+                let spaceTabs = windowManager.windows.filter { $0.spaceIndex == state.spaceIndex }
+                if let idx = spaceTabs.firstIndex(where: { $0.tabID == state.tabID }) {
+                    let nextTab: BrowserState?
+                    if idx + 1 < spaceTabs.count {
+                        nextTab = spaceTabs[idx + 1]
+                    } else if idx - 1 >= 0 {
+                        nextTab = spaceTabs[idx - 1]
+                    } else {
+                        nextTab = nil
+                    }
+                    if let next = nextTab {
+                        switchToTab(tabID: next.tabID)
+                    }
+                }
+                if let window = NSApp.windows.first(where: { $0.identifier?.rawValue == state.tabID }) {
+                    window.close()
+                } else {
+                    // Fallback in case window isn't found
+                    windowManager.windows.removeAll(where: { $0.tabID == state.tabID })
                 }
             }
             

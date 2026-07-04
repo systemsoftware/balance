@@ -164,11 +164,7 @@ struct ExtensionsView: View {
     
     private func openOptionsPage(for context: WKWebExtensionContext) {
         if let optionsURL = context.optionsPageURL {
-            NotificationCenter.default.post(
-                name: .openURLInNewTab,
-                object: nil,
-                userInfo: ["url": optionsURL]
-            )
+            createNewTab(with: optionsURL)
         }
     }
     
@@ -297,5 +293,5 @@ struct ExtensionRow: View {
 // MARK: - Notification for opening URLs
 
 extension Notification.Name {
-    static let openURLInNewTab = Notification.Name("openURLInNewTab")
+    static let optionsTapped = Notification.Name("optionsTapped")
 }
