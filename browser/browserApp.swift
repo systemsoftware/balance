@@ -190,12 +190,14 @@ func createNewTab(with url: URL? = nil, inBackground: Bool = false, browserState
     let tabID = UUID().uuidString
     
     var profile: String = ""
+    var isPrivate: Bool = false
     if let currentID = currentWindow.identifier?.rawValue,
        let state = TabRegistry.shared.states[currentID] {
         profile = state.profile
+        isPrivate = state.isPrivate
     }
     
-    let contentView = ContentView(initialURL: url, profile: profile, tabID: tabID, providedState: browserState)
+    let contentView = ContentView(initialURL: url, pvt: isPrivate, profile: profile, tabID: tabID, providedState: browserState)
     
     let newWindow = NSWindow(
         contentRect: currentWindow.frame,
