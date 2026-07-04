@@ -26,6 +26,7 @@ struct SidebarItem: Identifiable, Codable {
 
 let builtInSidebar = [
     SidebarItem(icon: "message", view: "ChatView"),
+    SidebarItem(icon: "envelope", view: "EmailView"),
     SidebarItem(icon: "bookmark", view: "BookmarksView"),
     SidebarItem(icon: "key", view: "PasswordsView"),
     SidebarItem(icon: "gearshape.fill", view: "SettingsView"),
@@ -201,6 +202,11 @@ struct ContentView: View {
     
    @State private var splitURL: String = ""
     
+    
+    @State var falseBinding = false
+    
+    @AppStorage("leftSidebarWidth", store:Config.sharedDefaults) var leftSidebarWidth = 200
+    
     @AppStorage("paletteShowTabs", store:Config.sharedDefaults) var paletteShowTabs: Bool = true
     
     @AppStorage("usePDFKit", store:Config.sharedDefaults) var usePDFKit: Bool = true
@@ -298,12 +304,16 @@ struct ContentView: View {
         
         if localBProfile.isEmpty && !defProfile.isEmpty {
             localBProfile = defProfile
-            localBProfileIcon = allProfiles.first(where: { $0.id.uuidString == localBProfile })?.icon ?? profileIcon
         }
         
         var localBProfileName: String? = nil
         if !localBProfile.isEmpty {
-            localBProfileName = allProfiles.first(where: { $0.id.uuidString == localBProfile })?.name
+            if let matchedProfile = allProfiles.first(where: { $0.id.uuidString == localBProfile }) {
+                if localBProfileIcon.isEmpty {
+                    localBProfileIcon = matchedProfile.icon
+                }
+                localBProfileName = matchedProfile.name
+            }
         }
         
         self.priv = restoredState?.isPrivate ?? pvt
@@ -316,6 +326,8 @@ struct ContentView: View {
         
         
         let initialBrowserState = BrowserState()
+        initialBrowserState.tabID = tabID
+        initialBrowserState.spaceIndex = WindowManager.shared.currentSpaceIndex
         if let state = restoredState {
             initialBrowserState.restoredScrollX = state.scrollX
             initialBrowserState.restoredScrollY = state.scrollY
@@ -337,9 +349,13 @@ struct ContentView: View {
     @State private var showReader = false
     @State private var showExtensionsPopover = false
     
+    @AppStorage("leftSidebarMode", store:Config.sharedDefaults) var leftSidebarMode: Int = 0
+    
     @State var commandSearchText = ""
     
     @State private var latestItem: HistoryItem?
+    
+    @State private var isSlideOverVisible = false
     
     var body: some View {
         VStack(spacing: 0) {
@@ -465,7 +481,7 @@ struct ContentView: View {
                     }
                     
                     .sheet(isPresented: $showTabSearch) {
-                        TabSearchView()
+                        TabSearchView(isPopover:true)
                         Button("Close") {
                             showTabSearch = false
                         }
@@ -502,7 +518,6 @@ struct ContentView: View {
                         }
                         .buttonStyle(.plain)
                         .glassEffect(.regular.interactive(), in: .circle)
-                        .keyboardShortcut("s", modifiers: [.command])
                     }
                     
                     if browserState.url != nil && browserState.url?.isFileURL == false && showExtInToolbar {
@@ -877,6 +892,13 @@ struct ContentView: View {
             // MARK: - Web Content + Sidebar
             HStack(spacing: 0) {
                 // MARK: - Web Content Area
+                
+                if leftSidebarMode == 2 {
+                    VerticalTabs(browserState: browserState, profile: bProfile)
+                        .frame(width: CGFloat(leftSidebarWidth))
+                        .frame(maxHeight: .infinity)
+                }
+                
                 ZStack {
                     if (location != nil) {
                         
@@ -887,6 +909,8 @@ struct ContentView: View {
                         }
                         
                         HStack(spacing: 8) {
+                            
+                            
                           
                             ZStack {
                                 BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
@@ -917,13 +941,40 @@ struct ContentView: View {
                             }
                         }
                     } else {
-                        BrowserHomepage()
+                        BrowserHomepage(profile: bProfile)
                             .transition(.opacity)
                             .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                             .task {
                                 browserState.title = "Balance"
                             }
                         
+                    }
+                    
+                    if leftSidebarMode == 1 {
+                        HStack(spacing: 0) {
+                            ZStack(alignment: .leading) {
+                                Color.clear
+                                    .frame(width: isSlideOverVisible ? CGFloat(leftSidebarWidth) + 10 : 15)
+                                    .frame(maxHeight: .infinity)
+                                
+                                if isSlideOverVisible {
+                                    VerticalTabs(browserState: browserState, profile: bProfile)
+                                        .frame(width: CGFloat(leftSidebarWidth))
+                                        .frame(maxHeight: .infinity)
+                                        .glassEffect(.regular, in: .rect(cornerRadius: 15))
+                                        .transition(.move(edge: .leading))
+                                }
+                            }
+                            .contentShape(Rectangle())
+                            .onHover { hovering in
+                                withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                                    isSlideOverVisible = hovering
+                                }
+                            }
+                            
+                            Spacer()
+                        }
+                        .zIndex(200)
                     }
                 }
                 .padding(Layout.outerPadding)
@@ -939,8 +990,7 @@ struct ContentView: View {
                 
                 
                 // MARK: - Sidebar
-                
-                @State var falseBinding = false
+
                 
                 HStack(spacing: 8) {
                     if let sidebarURL {
@@ -993,6 +1043,10 @@ struct ContentView: View {
                                 
                             case let str where str.contains("Calendar"):
                                 CalendarSidebarView()
+                                    .roundedBorderStyle()
+                                
+                            case let str where str.contains("Email"):
+                                EmailView(profile: bProfile)
                                     .roundedBorderStyle()
                                 
                             default:
@@ -1108,7 +1162,8 @@ struct ContentView: View {
             if let web = browserState.webView {
                 web.customUserAgent = userAgent
             }
-        } .onAppear {
+        }
+        .onAppear {
             sidebarPage.customUserAgent = userAgent
         }
         .onReceive(NotificationCenter.default.publisher(for: .openURLInNewTab)) { notification in
@@ -1142,6 +1197,12 @@ struct ContentView: View {
         }
         .onAppear {
             updateTabState()
+            if !WindowManager.shared.windows.contains(where: { $0 === browserState }) {
+                WindowManager.shared.windows.append(browserState)
+            }
+        }
+        .onDisappear {
+            WindowManager.shared.windows.removeAll(where: { $0 === browserState })
         }
         .background(WindowAccessor { window in
             if let window = window, window.identifier?.rawValue != tabID {
@@ -1273,6 +1334,8 @@ struct ContentView: View {
                 } else {
                     print("no last tab")
                 }
+            case .autocomplete:
+                showSuggestions.toggle()
             }
         }
     }

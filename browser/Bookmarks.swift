@@ -1,6 +1,6 @@
 import SwiftUI
 
-struct Bookmark: Codable, Identifiable {
+struct Bookmark: Codable, Identifiable, Equatable {
     var id = UUID()
     var title: String
     var url: String

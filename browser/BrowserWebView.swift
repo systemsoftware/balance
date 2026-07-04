@@ -8,6 +8,7 @@ import AuthenticationServices
 
 
 final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
+    @Published var tabID: String = ""
     @Published var url: URL?
     @Published var title: String = ""
     @Published var customTitle: String? = nil
@@ -24,6 +25,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     
     @Published var scrollX: Int = 0
     @Published var scrollY: Int = 0
+    @Published var spaceIndex: Int = 0
     var restoredScrollX: Int?
     var restoredScrollY: Int?
 

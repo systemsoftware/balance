@@ -199,6 +199,8 @@ class NewsViewModel: ObservableObject {
 struct BookmarkCard: View {
     let bookmark: Bookmark
     @State private var isHovered = false
+    
+    var text = true
 
     var body: some View {
         VStack(spacing: 12) {
@@ -217,9 +219,12 @@ struct BookmarkCard: View {
                     }
                 }
             }
-            Text(bookmark.title)
-                .font(.system(size: 13, weight: .medium))
-                .lineLimit(1)
+            
+            if text {
+                Text(bookmark.title)
+                    .font(.system(size: 13, weight: .medium))
+                    .lineLimit(1)
+            }
         }
         .frame(width: 120)
         .padding(.vertical, 10)
@@ -287,31 +292,38 @@ struct WeatherView: View {
                     ProgressView().scaleEffect(0.7)
                     Text("Loading weather…").foregroundColor(.secondary)
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
+                .padding(.vertical, 8)
             } else if let w = vm.weather {
-                HStack(spacing: 14) {
-                    Image(systemName: w.icon)
-                        .font(.system(size: 28))
-                        .symbolRenderingMode(.multicolor)
-                    VStack(alignment: .leading, spacing: 2) {
+                HStack {
+                    HStack(spacing: 14) {
+                        Image(systemName: w.icon)
+                            .font(.system(size: 32))
+                            .symbolRenderingMode(.multicolor)
                         Text(w.temperature)
-                            .font(.system(size: 22, weight: .semibold).monospacedDigit())
+                            .font(.system(size: 24, weight: .semibold).monospacedDigit())
+                    }
+                    
+                    Spacer()
+                    
+                    VStack(alignment: .trailing, spacing: 4) {
                         Text(w.condition)
-                            .font(.system(size: 13))
+                            .font(.system(size: 14))
                             .foregroundColor(.secondary)
                         if !w.location.isEmpty {
                             Text(w.location)
-                                .font(.system(size: 11))
+                                .font(.system(size: 12))
                                 .foregroundColor(.secondary.opacity(0.7))
                         }
                     }
                 }
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-          //      .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.05)))
+                .padding(.vertical, 8)
             } else {
                 Text("Weather unavailable")
                     .foregroundColor(.secondary)
                     .font(.system(size: 13))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 8)
             }
         }
         .onAppear { vm.fetch() }
@@ -409,6 +421,7 @@ struct NewsRow: View {
 // MARK: - Main BrowserHomepage
 
 struct BrowserHomepage: View {
+    var profile: String = ""
     @StateObject private var store = BookmarkStore()
     @State private var searchText = ""
 
@@ -421,6 +434,16 @@ struct BrowserHomepage: View {
     @State private var showingURLPrompt = false
     @State private var urlString = ""
     
+    
+    @AppStorage("profiles", store: Config.sharedDefaults) private var profilesJSON = "[]"
+    
+    private var isEmailConfigured: Bool {
+        let profiles = (try? JSONDecoder().decode([Profile].self, from: Data(profilesJSON.utf8))) ?? []
+        let currentProfile = profiles.first { $0.id.uuidString == profile }
+        return currentProfile?.imapHost != nil && !(currentProfile?.imapHost?.isEmpty ?? true)
+    }
+    
+    @State private var date = Date()
     
     var body: some View {
         ZStack {
@@ -435,10 +458,16 @@ struct BrowserHomepage: View {
                     }
                     .padding(.top, 60)
                     
-                    WeatherView()
-                        .padding(.top, 8)
-                    
-                    
+                    VStack(alignment: .leading, spacing: 12) {
+                        Label("Weather", systemImage: "cloud.sun.fill")
+                            .font(.system(size: 13, weight: .semibold))
+                            .foregroundColor(.secondary)
+                        
+                        WeatherView()
+                    }
+                    .padding(.top, 8)
+                    .padding(.horizontal, 40)
+           
                     
                     if !store.items.isEmpty {
                         VStack(alignment: .leading, spacing: 16) {
@@ -458,16 +487,33 @@ struct BrowserHomepage: View {
                         emptyBookmarksState
                     }
                     
+                    
+                    if isEmailConfigured {
+                        VStack(alignment: .leading, spacing: 12) {
+                            Label("Emails", systemImage: "envelope.fill")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundColor(.secondary)
+                            
+                            EmailView(profile: profile, home:true)
+                                .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 500)
+                                .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
+                                .cornerRadius(12)
+                        }
+                        .padding(.horizontal, 40)
+                    }
+                    
                     VStack(alignment: .leading, spacing: 12) {
                         Label("Top Stories", systemImage: "newspaper.fill")
                             .font(.system(size: 13, weight: .semibold))
                             .foregroundColor(.secondary)
                         
                         NewsView()
+                        
                     }
                     .padding(.horizontal, 40)
                     
-                    Spacer(minLength: 50)
+                    FullCalendarView(selectedDate: $date)
+                    
                 }
             }
         }
@@ -534,7 +580,6 @@ struct BrowserHomepage: View {
                 print(error)
             }
         }
-
     }
 
     // MARK: Subviews
@@ -555,14 +600,6 @@ struct BrowserHomepage: View {
     }
     
     
-}
-
-// MARK: - Preview
-
-struct BrowserHomepage_Previews: PreviewProvider {
-    static var previews: some View {
-        BrowserHomepage()
-    }
 }
 
 struct BackgroundImage: View {

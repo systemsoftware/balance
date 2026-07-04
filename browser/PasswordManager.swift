@@ -15,8 +15,10 @@ class PasswordManager: ObservableObject {
     
     @Published var savedCredentials: [SavedCredential] = []
     
-    init() {
-        loadAllCredentials()
+    init() {}
+    
+    func clearCredentials() {
+        savedCredentials = []
     }
     
     func loadAllCredentials() {
@@ -36,11 +38,12 @@ class PasswordManager: ObservableObject {
             if status == errSecSuccess {
                 if let items = item as? [[String: Any]] {
                     for dict in items {
-                        if let account = dict[kSecAttrAccount as String] as? String,
+                        if let accountStr = dict[kSecAttrAccount as String] as? String,
                            let genericData = dict[kSecAttrGeneric as String] as? Data,
                            let domain = String(data: genericData, encoding: .utf8) {
                             
-                            credentials.append(SavedCredential(domain: domain, username: account))
+                            let username = accountStr.components(separatedBy: "::").last ?? accountStr
+                            credentials.append(SavedCredential(domain: domain, username: username))
                         }
                     }
                 }
@@ -56,15 +59,42 @@ class PasswordManager: ObservableObject {
         return savedCredentials.filter { $0.domain.lowercased() == domain.lowercased() }
     }
     
-    func fetchPasswordData(for username: String, domain: String) -> String? {
+    func fetchCredentialDirectly(for domain: String) -> (username: String, passwordString: String)? {
         guard let domainData = domain.lowercased().data(using: .utf8) else { return nil }
         
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "BalanceBrowser",
-            kSecAttrAccount as String: username,
             kSecAttrGeneric as String: domainData,
-            kSecReturnData as String: true
+            kSecReturnAttributes as String: true,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
+        ]
+        
+        var item: CFTypeRef?
+        if SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess,
+           let dict = item as? [String: Any],
+           let accountStr = dict[kSecAttrAccount as String] as? String,
+           let passwordData = dict[kSecValueData as String] as? Data,
+           let password = String(data: passwordData, encoding: .utf8) {
+            let account = accountStr.components(separatedBy: "::").last ?? accountStr
+            return (account, password)
+        }
+        return nil
+    }
+    
+    func fetchPasswordData(for username: String, domain: String) -> String? {
+        guard let domainData = domain.lowercased().data(using: .utf8) else { return nil }
+        
+        let accountStr = "\(domain.lowercased())::\(username)"
+        
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "BalanceBrowser",
+            kSecAttrAccount as String: accountStr,
+            kSecAttrGeneric as String: domainData,
+            kSecReturnData as String: true,
+            kSecMatchLimit as String: kSecMatchLimitOne
         ]
         
         var item: CFTypeRef?
@@ -79,10 +109,12 @@ class PasswordManager: ObservableObject {
         guard let passwordData = passwordString.data(using: .utf8),
               let domainData = domain.lowercased().data(using: .utf8) else { return }
         
+        let accountStr = "\(domain.lowercased())::\(username)"
+        
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "BalanceBrowser",
-            kSecAttrAccount as String: username,
+            kSecAttrAccount as String: accountStr,
             kSecAttrGeneric as String: domainData
         ]
         
@@ -97,7 +129,7 @@ class PasswordManager: ObservableObject {
             let newItem: [String: Any] = [
                 kSecClass as String: kSecClassGenericPassword,
                 kSecAttrService as String: "BalanceBrowser",
-                kSecAttrAccount as String: username,
+                kSecAttrAccount as String: accountStr,
                 kSecAttrGeneric as String: domainData,
                 kSecValueData as String: passwordData,
                 kSecAttrAccessible as String: kSecAttrAccessibleWhenUnlockedThisDeviceOnly
@@ -114,15 +146,18 @@ class PasswordManager: ObservableObject {
     func updateUsername(oldUsername: String, newUsername: String, domain: String) {
         guard let domainData = domain.lowercased().data(using: .utf8) else { return }
         
+        let oldAccountStr = "\(domain.lowercased())::\(oldUsername)"
+        let newAccountStr = "\(domain.lowercased())::\(newUsername)"
+        
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "BalanceBrowser",
-            kSecAttrAccount as String: oldUsername,
+            kSecAttrAccount as String: oldAccountStr,
             kSecAttrGeneric as String: domainData
         ]
         
         let attributesToUpdate: [String: Any] = [
-            kSecAttrAccount as String: newUsername
+            kSecAttrAccount as String: newAccountStr
         ]
         
         SecItemUpdate(query as CFDictionary, attributesToUpdate as CFDictionary)
@@ -132,10 +167,12 @@ class PasswordManager: ObservableObject {
     func deletePassword(username: String, domain: String) {
         guard let domainData = domain.lowercased().data(using: .utf8) else { return }
         
+        let accountStr = "\(domain.lowercased())::\(username)"
+        
         let query: [String: Any] = [
             kSecClass as String: kSecClassGenericPassword,
             kSecAttrService as String: "BalanceBrowser",
-            kSecAttrAccount as String: username,
+            kSecAttrAccount as String: accountStr,
             kSecAttrGeneric as String: domainData
         ]
         

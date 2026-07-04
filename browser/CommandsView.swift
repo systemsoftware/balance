@@ -55,15 +55,21 @@ struct Profile: Identifiable, Codable, Hashable {
     let id: UUID
     var name: String
     var icon: String
+    var imapHost: String?
+    var imapPort: UInt16?
 
     init(
         id: UUID = UUID(),
         name: String,
-        icon: String = "person.crop.circle"
+        icon: String = "person.crop.circle",
+        imapHost: String? = nil,
+        imapPort: UInt16? = nil
     ) {
         self.id = id
         self.name = name
         self.icon = icon
+        self.imapHost = imapHost
+        self.imapPort = imapPort
     }
 }
 
@@ -144,7 +150,6 @@ struct CommandsView: View {
     
     var filteredTabs: [NSWindow] {
         let validWindows = NSApp.windows.filter { window in
-            window.styleMask.contains(.titled) &&
             window.styleMask.contains(.resizable) &&
             window.className != "NSPanel"
         }
@@ -478,6 +483,10 @@ struct ProfileView: View {
     
     @State var nameInput: String = ""
     @State var iconInput: String = ""
+    @State var imapHostInput: String = ""
+    @State var imapPortInput: String = "993"
+    @State var imapEmailInput: String = ""
+    @State var imapPasswordInput: String = ""
     
     @Binding var searchText: String
     
@@ -576,14 +585,39 @@ struct ProfileView: View {
                             TextField("Input any SF Symbol name", text: $iconInput)
                                 .textFieldStyle(.roundedBorder)
                         }
+                        
+                        Divider()
+                        Text("IMAP Email Settings (Optional)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        TextField("IMAP Host (e.g. imap.gmail.com)", text: $imapHostInput)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("IMAP Port (e.g. 993)", text: $imapPortInput)
+                            .textFieldStyle(.roundedBorder)
+                        TextField("Email Address", text: $imapEmailInput)
+                            .textFieldStyle(.roundedBorder)
+                        SecureField("Password", text: $imapPasswordInput)
+                            .textFieldStyle(.roundedBorder)
                     }
                     
                     Button {
                         guard !nameInput.isEmpty else { return }
-                        addProfile(name: nameInput, icon: iconInput.isEmpty ? "person.crop.circle" : iconInput)
+                        let port = UInt16(imapPortInput)
+                        addProfile(
+                            name: nameInput,
+                            icon: iconInput.isEmpty ? "person.crop.circle" : iconInput,
+                            imapHost: imapHostInput.isEmpty ? nil : imapHostInput,
+                            imapPort: port,
+                            imapEmail: imapEmailInput.isEmpty ? nil : imapEmailInput,
+                            imapPassword: imapPasswordInput.isEmpty ? nil : imapPasswordInput
+                        )
                         
                         nameInput = ""
                         iconInput = ""
+                        imapHostInput = ""
+                        imapPortInput = "993"
+                        imapEmailInput = ""
+                        imapPasswordInput = ""
                     } label: {
                         HStack {
                             Image(systemName: "plus.circle.fill")
@@ -600,18 +634,27 @@ struct ProfileView: View {
         }
     }
     
-    private func addProfile(name: String, icon: String) {
+    private func addProfile(name: String, icon: String, imapHost: String? = nil, imapPort: UInt16? = nil, imapEmail: String? = nil, imapPassword: String? = nil) {
         var current = (try? JSONDecoder().decode(
             [Profile].self,
             from: Data(profilesJSON.utf8)
         )) ?? []
         
-        current.append(Profile(name: name, icon: icon))
+        let newProfile = Profile(name: name, icon: icon, imapHost: imapHost, imapPort: imapPort)
+        current.append(newProfile)
         
         profilesJSON = String(
             data: try! JSONEncoder().encode(current),
             encoding: .utf8
         )!
+        
+        if let email = imapEmail, let password = imapPassword {
+            PasswordManager.shared.savePassword(
+                username: email,
+                passwordString: password,
+                domain: "balance.profile.imap.\(newProfile.id.uuidString)"
+            )
+        }
     }
     
     

@@ -5,6 +5,23 @@ import AuthenticationServices
 import WebKit
 
 var openWindows: [NSWindow] = []
+var tabGroups: [String: String] = [:]
+
+func switchToTab(tabID: String) {
+    guard let targetWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == tabID }) else { return }
+    
+    if tabGroups[tabID] != nil {
+        if let currentWindow = NSApp.keyWindow, currentWindow != targetWindow {
+            targetWindow.setFrame(currentWindow.frame, display: false)
+            targetWindow.makeKeyAndOrderFront(nil)
+            currentWindow.orderOut(nil)
+        } else {
+            targetWindow.makeKeyAndOrderFront(nil)
+        }
+    } else {
+        targetWindow.makeKeyAndOrderFront(nil)
+    }
+}
 
 @main
 struct browserApp: App {
@@ -71,12 +88,7 @@ struct browserApp: App {
                             downloadStore.remove(id: download.id)
                         }
                     }
-                    if(clearCacheOnClose) {
-                        WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache], modifiedSince: Date.distantPast, completionHandler: {})
-                    }
-                    if(clearCookiesOnClose) {
-                        WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: Date.distantPast, completionHandler: {})
-                    }
+
                 }
             } else {
                 ContentView()
@@ -96,12 +108,7 @@ struct browserApp: App {
                                 downloadStore.remove(id: download.id)
                             }
                         }
-                        if(clearCacheOnClose) {
-                            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache], modifiedSince: Date.distantPast, completionHandler: {})
-                        }
-                        if(clearCookiesOnClose) {
-                            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: Date.distantPast, completionHandler: {})
-                        }
+
                     }
             }
         }
@@ -109,6 +116,7 @@ struct browserApp: App {
             updateDockMenuTabsVisibility()
         }
         .modelContainer(HistoryManager.sharedContainer)
+        .environmentObject(WindowManager.shared)
         .commands {
             CommandGroup(replacing: .newItem) {
                 Button("New Tab") {
@@ -154,7 +162,7 @@ func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = 
     let contentView = ContentView(initialURL: url, pvt:pvt, profile:profile, profileIcon:profileIcon ?? "person.fill", tabID: tabID)
     
     newWindow.isReleasedWhenClosed = false
-    newWindow.contentView = NSHostingView(rootView: contentView)
+    newWindow.contentView = NSHostingView(rootView: contentView.environmentObject(WindowManager.shared))
     
     newWindow.delegate = WindowDelegate.shared
     newWindow.identifier = NSUserInterfaceItemIdentifier(tabID)
@@ -180,7 +188,14 @@ func createNewTab(with url: URL? = nil, inBackground: Bool = false) {
     }
     
     let tabID = UUID().uuidString
-    let contentView = ContentView(initialURL: url, tabID: tabID)
+    
+    var profile: String = ""
+    if let currentID = currentWindow.identifier?.rawValue,
+       let state = TabRegistry.shared.states[currentID] {
+        profile = state.profile
+    }
+    
+    let contentView = ContentView(initialURL: url, profile: profile, tabID: tabID)
     
     let newWindow = NSWindow(
         contentRect: currentWindow.frame,
@@ -188,23 +203,41 @@ func createNewTab(with url: URL? = nil, inBackground: Bool = false) {
         backing: .buffered,
         defer: false
     )
-    
+        
     newWindow.title = "Balance"
     
     newWindow.isReleasedWhenClosed = false
-    newWindow.contentView = NSHostingView(rootView: contentView)
+    newWindow.contentView = NSHostingView(rootView: contentView.environmentObject(WindowManager.shared))
     newWindow.delegate = WindowDelegate.shared
     newWindow.identifier = NSUserInterfaceItemIdentifier(tabID)
     
     openWindows.append(newWindow)
     
+    let sidebarActive = (Config.sharedDefaults?.integer(forKey: "leftSidebarMode") ?? 0) != 0
     let background = inBackground && (Config.sharedDefaults?.bool(forKey: "openLinksInBackground") ?? false)
-    currentWindow.addTabbedWindow(newWindow, ordered: background ? .below : .above)
-    if !background {
-        newWindow.makeKeyAndOrderFront(nil)
+    
+    if sidebarActive {
+        let currentID = currentWindow.identifier?.rawValue ?? ""
+        let groupID = tabGroups[currentID] ?? currentID
+        tabGroups[tabID] = groupID
+        tabGroups[currentID] = groupID
+        
+        newWindow.setFrame(currentWindow.frame, display: false)
+        
+        if !background {
+            newWindow.makeKeyAndOrderFront(nil)
+            currentWindow.orderOut(nil)
+        }
+    } else {
+        currentWindow.addTabbedWindow(newWindow, ordered: background ? .below : .above)
+        if !background {
+            newWindow.makeKeyAndOrderFront(nil)
+        }
     }
     updateDockMenuTabsVisibility()
 }
+
+
 
 class WindowDelegate: NSObject, NSWindowDelegate {
     static let shared = WindowDelegate()
@@ -219,8 +252,6 @@ class WindowDelegate: NSObject, NSWindowDelegate {
     
     func windowWillClose(_ notification: Notification) {
         if let window = notification.object as? NSWindow {
-            // If this is the last open window, save the session BEFORE removing it
-            // so that if the app terminates, the session isn't empty!
             if openWindows.count == 1 {
                 SessionManager.shared.saveSession()
             }
@@ -231,6 +262,16 @@ class WindowDelegate: NSObject, NSWindowDelegate {
                 }
                 if Config.sharedDefaults?.bool(forKey: "preserveOnClose") != true {
                     Config.sharedDefaults?.removeObject(forKey: "note_\(tabID)")
+                }
+                
+                // If this was a standalone tab (sidebar mode), show next tab in group
+                if let groupID = tabGroups[tabID] {
+                    tabGroups.removeValue(forKey: tabID)
+                    if let nextTabID = tabGroups.first(where: { $0.value == groupID })?.key,
+                       let nextWindow = openWindows.first(where: { $0.identifier?.rawValue == nextTabID }) {
+                        nextWindow.setFrame(window.frame, display: false)
+                        nextWindow.makeKeyAndOrderFront(nil)
+                    }
                 }
             }
         }
@@ -276,6 +317,35 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
         SessionManager.shared.saveSession()
+        
+        let defaults = Config.sharedDefaults ?? UserDefaults.standard
+        let clearCache = defaults.bool(forKey: "clearCacheOnClose")
+        let clearCookies = defaults.bool(forKey: "clearCookiesOnClose")
+        
+        if clearCache || clearCookies {
+            var types = Set<String>()
+            if clearCache {
+                types.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations])
+            }
+            if clearCookies {
+                types.insert(WKWebsiteDataTypeCookies)
+            }
+            
+            WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: Date.distantPast) {
+                if clearCache {
+                    if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                        let webKitCache = cacheURL.appendingPathComponent("WebKit")
+                        let bundleID = Bundle.main.bundleIdentifier ?? "bryce.browser"
+                        let appCache = cacheURL.appendingPathComponent(bundleID)
+                        try? FileManager.default.removeItem(at: webKitCache)
+                        try? FileManager.default.removeItem(at: appCache)
+                    }
+                }
+                sender.reply(toApplicationShouldTerminate: true)
+            }
+            return .terminateLater
+        }
+        
         return .terminateNow
     }
     
@@ -323,7 +393,7 @@ enum MenuBarSection: String, CaseIterable {
 
 enum BrowserCommand: String, CaseIterable {
     // Browser
-    case palette, searchTabs, reopenLastTab, downloads, history
+    case palette, searchTabs, reopenLastTab, downloads, history, autocomplete
     // Page
     case toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
@@ -334,10 +404,11 @@ enum BrowserCommand: String, CaseIterable {
     var title: String {
         switch self {
         case .palette: return "Palette"
-        case .searchTabs: return "Search Tabs"
+        case .searchTabs: return "Search All Tabs"
         case .reopenLastTab: return "Reopen Closed Tab"
         case .downloads: return "Downloads"
         case .history: return "History"
+        case .autocomplete: return "Autocomplete"
         case .toggleFind: return "Find In Page"
         case .zoomIn: return "In"
         case .zoomOut: return "Out"
@@ -361,7 +432,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var section: MenuBarSection {
         switch self {
-        case .palette, .searchTabs, .reopenLastTab, .downloads, .history:
+        case .palette, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete:
             return .browser
         default:
             return .page
@@ -386,8 +457,9 @@ enum BrowserCommand: String, CaseIterable {
     var shortcut: KeyboardShortcut? {
         switch self {
         case .palette: return KeyboardShortcut("k", modifiers: [.command])
-        case .searchTabs: return KeyboardShortcut("s", modifiers: [.command, .option])
+        case .searchTabs: return KeyboardShortcut("s", modifiers: [.command, .control])
         case .reopenLastTab: return KeyboardShortcut("t", modifiers: [.command, .shift])
+        case .autocomplete: return KeyboardShortcut("s", modifiers: [.command])
         case .toggleFind: return KeyboardShortcut("f", modifiers: [.command])
         case .zoomIn: return KeyboardShortcut("+", modifiers: [.command])
         case .zoomOut: return KeyboardShortcut("-", modifiers: [.command])

@@ -50,6 +50,12 @@ struct PasswordsView: View {
             }
         }
         .background(Color.black.opacity(0.02))
+        .onAppear {
+            passwordManager.loadAllCredentials()
+        }
+        .onDisappear {
+            passwordManager.clearCredentials()
+        }
     }
 }
 

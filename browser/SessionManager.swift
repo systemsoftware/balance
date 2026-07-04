@@ -54,6 +54,8 @@ class SessionManager {
         var sessionWindows: [WindowSessionState] = []
         var processedWindows = Set<NSWindow>()
         
+        let sidebarActive = (Config.sharedDefaults?.integer(forKey: "leftSidebarMode") ?? 0) != 0
+        
         print("saveSession: openWindows count = \(openWindows.count)")
         for window in openWindows {
             if processedWindows.contains(window) { continue }
@@ -69,11 +71,21 @@ class SessionManager {
                 continue
             }
             
-            let tabs = window.tabbedWindows ?? [window]
+            var tabWindows: [NSWindow]
+            if sidebarActive {
+                let groupID = tabGroups[tabIDRaw] ?? tabIDRaw
+                tabWindows = openWindows.filter { w in
+                    guard let wID = w.identifier?.rawValue else { return false }
+                    return (tabGroups[wID] ?? wID) == groupID
+                }
+            } else {
+                tabWindows = window.tabbedWindows ?? [window]
+            }
+            
             var tabStates: [TabSessionState] = []
             var activeIndex = 0
             
-            for (_, tabWindow) in tabs.enumerated() {
+            for (_, tabWindow) in tabWindows.enumerated() {
                 processedWindows.insert(tabWindow)
                 
                 if let tabID = tabWindow.identifier?.rawValue,
@@ -83,9 +95,17 @@ class SessionManager {
             }
             
             if !tabStates.isEmpty {
-                let selectedWindow = window.tabGroup?.selectedWindow ?? window
-                if let selectedIdx = tabs.firstIndex(of: selectedWindow) {
-                    activeIndex = selectedIdx
+                if sidebarActive {
+                    // Active tab is the key window
+                    if let keyID = NSApp.keyWindow?.identifier?.rawValue,
+                       let idx = tabWindows.firstIndex(where: { $0.identifier?.rawValue == keyID }) {
+                        activeIndex = idx
+                    }
+                } else {
+                    let selectedWindow = window.tabGroup?.selectedWindow ?? window
+                    if let selectedIdx = tabWindows.firstIndex(of: selectedWindow) {
+                        activeIndex = selectedIdx
+                    }
                 }
                 
                 sessionWindows.append(WindowSessionState(
@@ -127,15 +147,22 @@ class SessionManager {
         isRestoring = true
         restoredIDs = []
         
+        let sidebarActive = (Config.sharedDefaults?.integer(forKey: "leftSidebarMode") ?? 0) != 0
+        
         var isFirstWindow = true
         for winState in session.windows {
             var firstWindow: NSWindow?
+            let groupID = UUID().uuidString
             for (index, tabState) in winState.tabs.enumerated() {
                 let tabID = tabState.tabID ?? UUID().uuidString
                 restoredIDs.append(tabID)
                 TabRegistry.shared.states[tabID] = tabState
                 
                 if isFirstWindow && index == 0 {
+                    // Register the initial WindowGroup window in the group
+                    if sidebarActive {
+                        tabGroups[tabID] = groupID
+                    }
                     continue
                 }
                 
@@ -157,7 +184,7 @@ class SessionManager {
                 
                 newWindow.title = "Balance"
                 newWindow.isReleasedWhenClosed = false
-                newWindow.contentView = NSHostingView(rootView: contentView)
+                newWindow.contentView = NSHostingView(rootView: contentView.environmentObject(WindowManager.shared))
                 newWindow.delegate = WindowDelegate.shared
                 newWindow.identifier = NSUserInterfaceItemIdentifier(tabID)
                 
@@ -165,12 +192,29 @@ class SessionManager {
                 
                 if index == 0 {
                     firstWindow = newWindow
+                    if sidebarActive {
+                        tabGroups[tabID] = groupID
+                    }
                     newWindow.makeKeyAndOrderFront(nil)
                 } else {
-                    firstWindow?.addTabbedWindow(newWindow, ordered: .above)
+                    if sidebarActive {
+                        tabGroups[tabID] = groupID
+                        // Don't show non-active tabs
+                    } else {
+                        firstWindow?.addTabbedWindow(newWindow, ordered: .above)
+                    }
                 }
                 
                 if index == winState.activeTabIndex {
+                    if sidebarActive {
+                        // Hide other windows in this group, show this one
+                        for otherWindow in openWindows {
+                            if let otherID = otherWindow.identifier?.rawValue,
+                               tabGroups[otherID] == groupID && otherID != tabID {
+                                otherWindow.orderOut(nil)
+                            }
+                        }
+                    }
                     newWindow.makeKeyAndOrderFront(nil)
                 }
             }

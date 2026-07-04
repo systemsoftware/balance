@@ -164,7 +164,26 @@ var Settings: [Setting] = [
         defaultValueString: "default-home"
     ),
     Setting(
-        name: "Enable",
+        name: "Left Sidebar",
+        icon: "sidebar.left",
+        category: catSidebar,
+        type: "dropdown",
+        appStorageKey: "leftSidebarMode",
+        defaultValueInt: 0,
+        dropdownOptions: .staticOptions([0: "Disabled", 1: "Slide Over", 2: "Enabled"])
+    ),
+    Setting(
+        name: "Left Sidebar Width",
+        icon: "arrow.left.and.right",
+        category: catSidebar,
+        type: "slider",
+        appStorageKey: "leftSidebarWidth",
+        sliderMax: 600,
+        sliderMin: 100,
+        defaultValueInt: 200
+    ),
+    Setting(
+        name: "Right Sidebar",
         icon: "sidebar.right",
         category: catSidebar,
         type: "toggle",
@@ -172,7 +191,7 @@ var Settings: [Setting] = [
         defaultValueBool: true
     ),
     Setting(
-        name: "Width",
+        name: "Right Sidebar Width",
         icon: "arrow.left.and.right",
         category: catSidebar,
         type: "slider",
@@ -259,7 +278,15 @@ var Settings: [Setting] = [
         appStorageKey: "",
         buttonText: "Clear Now",
         action: {
-            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache], modifiedSince: Date.distantPast, completionHandler: {})
+            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations], modifiedSince: Date.distantPast, completionHandler: {
+                if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                    let webKitCache = cacheURL.appendingPathComponent("WebKit")
+                    let bundleID = Bundle.main.bundleIdentifier ?? "bryce.browser"
+                    let appCache = cacheURL.appendingPathComponent(bundleID)
+                    try? FileManager.default.removeItem(at: webKitCache)
+                    try? FileManager.default.removeItem(at: appCache)
+                }
+            })
         }
     ),
     Setting(
@@ -1127,6 +1154,13 @@ struct SettingsSectionContent: View {
                 ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
                 modifiedSince: Date(timeIntervalSince1970: 0),
                 completionHandler: {
+                    if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                        let webKitCache = cacheURL.appendingPathComponent("WebKit")
+                        let bundleID = Bundle.main.bundleIdentifier ?? "bryce.browser"
+                        let appCache = cacheURL.appendingPathComponent(bundleID)
+                        try? FileManager.default.removeItem(at: webKitCache)
+                        try? FileManager.default.removeItem(at: appCache)
+                    }
                     windowAlert(message: "Default cache cleared.")
                 }
             )
@@ -1175,6 +1209,9 @@ struct SettingsView: View {
 
     @State private var selectedCategoryID: String = categoryDefs[0].id
     @State private var searchText: String = ""
+    
+    @AppStorage("leftSidebarMode", store: Config.sharedDefaults)
+    var leftSidebarMode: Int = 0
 
     private var profiles: [Profile] {
         (try? JSONDecoder().decode([Profile].self, from: Data(profilesJSON.utf8))) ?? []

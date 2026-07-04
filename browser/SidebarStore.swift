@@ -23,7 +23,7 @@ final class SidebarStore: ObservableObject {
             let data = defaults?.data(forKey: storageKey),
             let decoded = try? JSONDecoder().decode([SidebarItem].self, from: data)
         else {
-            items = builtInSidebar
+            items = Array(builtInSidebar.prefix(5))
             return
         }
 

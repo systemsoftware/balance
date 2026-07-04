@@ -6,19 +6,19 @@ struct TabSearchView: View {
     var showSearch = true
     
     @Environment(\.dismiss) private var dismiss
-
-    var filteredWindows: [NSWindow] {
-        let validWindows = NSApp.windows.filter { window in
-            window.styleMask.contains(.titled) && 
-            window.styleMask.contains(.resizable) && 
-            window.className != "NSPanel"
-        }
-        
+    
+    var isPopover = false
+    
+    @EnvironmentObject var windowManager: WindowManager
+    
+    var store = PinStore()
+    
+    var filteredStates: [BrowserState] {
         if searchText.isEmpty {
-            return validWindows
+            return windowManager.windows
         } else {
-            return validWindows.filter { window in
-                window.title.localizedCaseInsensitiveContains(searchText)
+            return windowManager.windows.filter { state in
+                state.title.localizedCaseInsensitiveContains(searchText) || (state.url?.absoluteString.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
     }
@@ -34,16 +34,69 @@ struct TabSearchView: View {
                 
             }
 
-            List(filteredWindows, id: \.windowNumber) { window in
+            ForEach(filteredStates, id: \.self) { state in
                 Button(action: {
-                    window.makeKeyAndOrderFront(nil)
-                    dismiss()
+                    switchToTab(tabID: state.tabID)
+                    
+                    if isPopover {
+                        dismiss()
+                    }
+                    
                 }) {
-                    Text(window.title.isEmpty ? "Untitled Tab" : window.title)
+                    WindowRow(browserState: state)
                 }
                 .buttonStyle(.plain)
+                .contextMenu {
+                    Menu {
+
+                        if store.items.first(where: { $0.url == state.url?.absoluteString }) == nil {
+                            Button("Pin") {
+                                store.add(Bookmark(
+                                    title: state.title,
+                                    url: state.url?.absoluteString ?? ""
+                                ))
+                            }
+                        } else {
+                            Button("Unpin") {
+                                store.remove(url: state.url?.absoluteString ?? "")
+                            }
+                        }
+
+                        
+                    } label: {
+                        Text("Options")
+                    }
+                }
+
             }
         }
-        .frame(minWidth: 300, minHeight: 400)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+struct WindowRow: View {
+    @ObservedObject var browserState: BrowserState
+
+    var body: some View {
+        HStack(spacing: 8) {
+            AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(browserState.url?.host ?? "")")) { phase in
+                if let image = phase.image {
+                    image
+                        .resizable()
+                        .scaledToFit()
+                } else {
+                    Image("icon")
+                        .resizable()
+                        .scaledToFit()
+                }
+            }
+            .frame(width: 16, height: 16)
+
+            Text(browserState.title.isEmpty ? "Untitled Tab" : browserState.title)
+                .lineLimit(1)
+                .frame(maxWidth: .infinity, alignment: .leading)
+        }
+        .padding()
+        .glassEffect(.regular)
     }
 }
