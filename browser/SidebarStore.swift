@@ -7,7 +7,7 @@ final class SidebarStore: ObservableObject {
     
     @Published var items: [SidebarItem] = []
 
-    private let defaults = UserDefaults(suiteName: "group.com.bryce.browser")
+    private let defaults = UserDefaults(suiteName:Config.appGroupIdentifier)
     private let profile: String
     private var storageKey: String {
         return profile.isEmpty ? "sidebar" : "sidebar_\(profile)"

@@ -4,7 +4,7 @@ internal import Combine
 final class DownloadStore: ObservableObject {
     @Published var items: [Download] = []
 
-    private let defaults = UserDefaults(suiteName: "group.com.bryce.browser")
+    private let defaults = UserDefaults(suiteName: Config.appGroupIdentifier)
     private let profile: String
     private var storageKey: String {
         return profile.isEmpty ? "Downloads" : "Downloads_\(profile)"

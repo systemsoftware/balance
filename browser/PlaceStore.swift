@@ -14,7 +14,7 @@ struct PlaceItem: Identifiable, Codable, Hashable {
 final class PlaceStore: ObservableObject {
     @Published var items: [PlaceItem] = []
     
-    private let defaults = UserDefaults(suiteName: "group.com.bryce.browser")
+    private let defaults = UserDefaults(suiteName: Config.appGroupIdentifier)
     
     init() {
         load()

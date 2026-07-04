@@ -4,7 +4,7 @@ internal import Combine
 final class BookmarkStore: ObservableObject {
     @Published var items: [Bookmark] = []
 
-    private let defaults = UserDefaults(suiteName: "group.com.bryce.browser")
+    private let defaults = UserDefaults(suiteName: Config.appGroupIdentifier)
     private let profile: String
     private var storageKey: String {
         return profile.isEmpty ? "bookmarks" : "bookmarks_\(profile)"
