@@ -136,6 +136,10 @@ Keep browsing data separate using independent browser profiles.
 
 ![Profiles](images/profile.png)
 
+And add IMAP to a profile to see your unread emails.
+
+![Email](images/email.png)
+
 ### Extensions Support
 
 Install compatible extensions directly from the Chrome Web Store to extend browser functionality.
@@ -175,3 +179,9 @@ Built-in protections include:
 A native macOS interface inspired by the latest system design language, featuring depth and translucency throughout the browser.
 
 ![Design](images/design.png)
+
+
+### Vertical Tabs
+Use horizontal or vertical tabs, or hide them entirely. Balance gives you the flexibility to manage your tabs in a way that works for you.
+
+![Vertical Tabs](images/vert.png)
