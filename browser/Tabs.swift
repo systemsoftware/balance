@@ -264,7 +264,6 @@ struct Tabs: View {
                             }
                         } label: {
                             Image(systemName: "rectangle.on.rectangle.angled")
-                            Spacer()
                         }
                         .menuStyle(.borderlessButton)
                         .contextMenu {
@@ -308,7 +307,7 @@ struct Tabs: View {
                             
                         }
                     }
-                    
+                    Spacer()
                     ForEach(filteredTabs, id: \.self) { tab in
                         TabRow(
                             state: tab,
@@ -323,9 +322,8 @@ struct Tabs: View {
                             }
                         }
                         .offset(x: isHorizAnimatingIn ? 0 : 400)
-                        .animation(.easeOut(duration: 0.6), value: isHorizAnimatingIn)
                         .onAppear {
-                            withAnimation(.easeInOut(duration: 1.0)) {
+                            withAnimation(.easeInOut(duration: 0.3)) {
                                 isHorizAnimatingIn = true
                             }
                         }
