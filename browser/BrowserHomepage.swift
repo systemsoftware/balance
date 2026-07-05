@@ -495,7 +495,7 @@ struct BrowserHomepage: View {
                             }
                             .padding(.horizontal, 40)
                         }
-                    } else  if store.items.isEmpty {
+                    } else if showBookmarks && store.items.isEmpty {
                             emptyBookmarksState
                     }
                     

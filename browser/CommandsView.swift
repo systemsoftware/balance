@@ -495,6 +495,8 @@ struct ProfileView: View {
     
     @State var showAdvancedIcon = false
     
+    @State var showIMAP = false
+    
     
     var showHeader = true
     
@@ -544,93 +546,110 @@ struct ProfileView: View {
                 Text("Profile")
             }
         }
-        
-        if showNewProfile {
-            Section {
-                VStack(alignment: .leading, spacing: 10) {
-                    
-                    Text("New Profile")
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        TextField("Name", text: $nameInput)
-                            .textFieldStyle(.roundedBorder)
+        .sheet(isPresented: $showNewProfile) {
+                            Section {
+                    VStack(alignment: .leading, spacing: 10) {
                         
-                        HStack {
-                            Text("Icon")
-                            
-                            Spacer()
-                            
-                            Picker("", selection: $iconInput) {
-                                Text("Default").tag("")
-                                Text("Person").tag("person.crop.circle")
-                                Text("Briefcase").tag("briefcase.fill")
-                                Text("Graduation Cap").tag("graduationcap.fill")
-                                Text("Book").tag("book.fill")
-                                Text("Globe").tag("globe")
-                                Text("Star").tag("star.fill")
-                                Text("Heart").tag("heart.fill")
-                                Text("Gamepad").tag("gamecontroller.fill")
-                                Text("Terminal").tag("terminal.fill")
-                            }
-                        }
+                        Text("New Profile")
                         
-                        Button("Advanced Icon") {
-                            showAdvancedIcon.toggle()
-                        }
-                        .buttonStyle(.plain)
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        
-                        if showAdvancedIcon {
-                            TextField("Input any SF Symbol name", text: $iconInput)
+                        VStack(alignment: .leading, spacing: 8) {
+                            TextField("Name", text: $nameInput)
                                 .textFieldStyle(.roundedBorder)
-                        }
-                        
-                        Divider()
-                        Text("IMAP Email Settings (Optional)")
+                            
+                            HStack {
+                                Text("Icon")
+                                
+                                Spacer()
+                                
+                                Picker("", selection: $iconInput) {
+                                    Text("Default").tag("")
+                                    Text("Person").tag("person.crop.circle")
+                                    Text("Briefcase").tag("briefcase.fill")
+                                    Text("Graduation Cap").tag("graduationcap.fill")
+                                    Text("Book").tag("book.fill")
+                                    Text("Globe").tag("globe")
+                                    Text("Star").tag("star.fill")
+                                    Text("Heart").tag("heart.fill")
+                                    Text("Gamepad").tag("gamecontroller.fill")
+                                    Text("Terminal").tag("terminal.fill")
+                                }
+                            }
+                            
+                            Button("Advanced Icon") {
+                                showAdvancedIcon.toggle()
+                            }
+                            .buttonStyle(.plain)
                             .font(.caption)
                             .foregroundStyle(.secondary)
-                        TextField("IMAP Host (e.g. imap.gmail.com)", text: $imapHostInput)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("IMAP Port (e.g. 993)", text: $imapPortInput)
-                            .textFieldStyle(.roundedBorder)
-                        TextField("Email Address", text: $imapEmailInput)
-                            .textFieldStyle(.roundedBorder)
-                        SecureField("Password", text: $imapPasswordInput)
-                            .textFieldStyle(.roundedBorder)
-                    }
-                    
-                    Button {
-                        guard !nameInput.isEmpty else { return }
-                        let port = UInt16(imapPortInput)
-                        addProfile(
-                            name: nameInput,
-                            icon: iconInput.isEmpty ? "person.crop.circle" : iconInput,
-                            imapHost: imapHostInput.isEmpty ? nil : imapHostInput,
-                            imapPort: port,
-                            imapEmail: imapEmailInput.isEmpty ? nil : imapEmailInput,
-                            imapPassword: imapPasswordInput.isEmpty ? nil : imapPasswordInput
-                        )
-                        
-                        nameInput = ""
-                        iconInput = ""
-                        imapHostInput = ""
-                        imapPortInput = "993"
-                        imapEmailInput = ""
-                        imapPasswordInput = ""
-                    } label: {
-                        HStack {
-                            Image(systemName: "plus.circle.fill")
-                            Text("Create Profile")
-                            Spacer()
+                            
+                            if showAdvancedIcon {
+                                TextField("SF Symbol", text: $iconInput)
+                                    .textFieldStyle(.roundedBorder)
+                            }
+                            
+                            if showIMAP { Divider() }
+                            Button("Email Settings (Optional)"){
+                                showIMAP.toggle()
+                            }
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                            .buttonStyle(.plain)
+                            
+                            if showIMAP {
+                                TextField("IMAP Host (e.g. imap.gmail.com)", text: $imapHostInput)
+                                .textFieldStyle(.roundedBorder)
+                                TextField("IMAP Port (e.g. 993)", text: $imapPortInput)
+                                .textFieldStyle(.roundedBorder)
+                                TextField("Email Address", text: $imapEmailInput)
+                                .textFieldStyle(.roundedBorder)
+                                SecureField("Password", text: $imapPasswordInput)
+                                .textFieldStyle(.roundedBorder)
                         }
+                        }
+                        
+                        Button {
+                            guard !nameInput.isEmpty else { return }
+                            let port = UInt16(imapPortInput)
+                            addProfile(
+                                name: nameInput,
+                                icon: iconInput.isEmpty ? "person.crop.circle" : iconInput,
+                                imapHost: imapHostInput.isEmpty ? nil : imapHostInput,
+                                imapPort: port,
+                                imapEmail: imapEmailInput.isEmpty ? nil : imapEmailInput,
+                                imapPassword: imapPasswordInput.isEmpty ? nil : imapPasswordInput
+                            )
+                            
+                            nameInput = ""
+                            iconInput = ""
+                            imapHostInput = ""
+                            imapPortInput = "993"
+                            imapEmailInput = ""
+                            imapPasswordInput = ""
+                        } label: {
+                            HStack {
+                                Image(systemName: "plus.circle.fill")
+                                Text("Create Profile")
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .controlSize(.regular)
+                        .disabled(nameInput.isEmpty)
+                        
+                        Button() {
+                            showNewProfile = false
+                        } label: {
+                            HStack {
+                                Image(systemName: "xmark")
+                                Text("Cancel")
+                                Spacer()
+                            }
+                        }
+                        .buttonStyle(.bordered)
                     }
-                    .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
-                    .disabled(nameInput.isEmpty)
-                }
-                .padding(.vertical, 6)
+                    .padding()
             }
+
         }
     }
     
