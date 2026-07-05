@@ -347,28 +347,44 @@ struct BrowserWindowHost: View {
 
 private struct BrowserWindowContent: View {
     @ObservedObject var window: BrowserWindowModel
-    @EnvironmentObject private var windowManager: WindowManager
 
     var body: some View {
         ZStack {
             ForEach(window.tabs) { tab in
-                if !tab.browserState.isSleeping {
-                    ContentView(
-                        initialURL: tab.initialURL,
-                        pvt: tab.isPrivate,
-                        profile: tab.profile,
-                        profileIcon: tab.profileIcon,
-                        tabID: tab.id,
-                        restoredState: tab.restoredState,
-                        providedState: tab.browserState
-                    )
-                    .environmentObject(windowManager)
-                    .opacity(window.activeTabID == tab.id ? 1 : 0)
-                    .allowsHitTesting(window.activeTabID == tab.id)
-                    .accessibilityHidden(window.activeTabID != tab.id)
-                }
+                BrowserWindowTabContainer(tab: tab, activeTabID: window.activeTabID)
             }
         }
         .frame(minWidth: 640, minHeight: 480)
+    }
+}
+
+private struct BrowserWindowTabContainer: View {
+    @ObservedObject var state: BrowserState
+    let tab: BrowserTabModel
+    let activeTabID: String
+    @EnvironmentObject private var windowManager: WindowManager
+    
+    init(tab: BrowserTabModel, activeTabID: String) {
+        self.tab = tab
+        self.state = tab.browserState
+        self.activeTabID = activeTabID
+    }
+    
+    var body: some View {
+        if !state.isSleeping {
+            ContentView(
+                initialURL: tab.initialURL,
+                pvt: tab.isPrivate,
+                profile: tab.profile,
+                profileIcon: tab.profileIcon,
+                tabID: tab.id,
+                restoredState: tab.restoredState,
+                providedState: tab.browserState
+            )
+            .environmentObject(windowManager)
+            .opacity(activeTabID == tab.id ? 1 : 0)
+            .allowsHitTesting(activeTabID == tab.id)
+            .accessibilityHidden(activeTabID != tab.id)
+        }
     }
 }

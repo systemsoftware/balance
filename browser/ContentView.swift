@@ -281,14 +281,15 @@ struct ContentView: View {
 
     init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "", tabID: String = UUID().uuidString, restoredState: TabSessionState? = nil, providedState: BrowserState? = nil) {
         self.tabID = tabID
-        self.restoredState = restoredState
+        let latestState = TabRegistry.shared.states[tabID] ?? restoredState
+        self.restoredState = latestState
         
-        let initURLString = restoredState?.url ?? initialURL?.absoluteString
-        if(initURLString != nil) { initialURLString = initURLString } else { print("nil initial url") }
+        let initURLString = providedState?.url?.absoluteString ?? latestState?.url ?? initialURL?.absoluteString
+        if(initURLString != nil) { self.initialURLString = initURLString } else { print("nil initial url") }
         
         self._location = State(initialValue: initURLString != nil ? URL(string: initURLString!) : nil)
-        self._splitURL = State(initialValue: restoredState?.splitURL ?? "")
-        self._sidebarURL = State(initialValue: restoredState?.sidebarURL != nil ? URL(string: restoredState!.sidebarURL!) : nil)
+        self._splitURL = State(initialValue: latestState?.splitURL ?? "")
+        self._sidebarURL = State(initialValue: latestState?.sidebarURL != nil ? URL(string: latestState!.sidebarURL!) : nil)
         
         let resolvedProfile = restoredState?.profile ?? profile
         let defProfile = Config.sharedDefaults?.string(forKey: "defaultProfile") ?? ""
