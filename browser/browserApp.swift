@@ -302,8 +302,8 @@ enum BrowserCommand: String, CaseIterable {
         case .downloads: return KeyboardShortcut("d", modifiers: [.command, .shift])
         case .history: return KeyboardShortcut("y", modifiers: [.command])
         case .showDevTools: return KeyboardShortcut("i", modifiers: [.command, .option])
-        case .summarize: return KeyboardShortcut("=", modifiers: [.command])
-        case .addEvents: return KeyboardShortcut("=", modifiers: [.command, .shift])
+        case .summarize: return KeyboardShortcut("/", modifiers: [.command])
+        case .addEvents: return KeyboardShortcut("/", modifiers: [.command, .option])
         case .forceReload: return KeyboardShortcut("r", modifiers: [.command, .shift])
         case .closeTab: return KeyboardShortcut("w", modifiers: [.command])
         default: return nil

@@ -170,7 +170,7 @@ var Settings: [Setting] = [
         type: "dropdown",
         appStorageKey: "tabMode",
         defaultValueInt: 0,
-        dropdownOptions: .staticOptions([0: "Horizontal", 1: "Vertical Slide Over", 2: "Vertical"])
+        dropdownOptions: .staticOptions([0: "Horizontal", 1: "Slide Over", 2: "Vertical", 3:"Hidden"])
     ),
     Setting(
         name: "Spaces",
