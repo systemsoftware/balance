@@ -401,7 +401,7 @@ private struct PinnedSiteButton: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(.secondary.opacity(isHovered ? 0.18 : 0.1))
                         .frame(width: 40, height: 40)
-                    AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(URL(string: bookmark.url)?.host ?? "")&sz=64")) { phase in
+                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(URL(string: bookmark.url)?.host ?? "")&sz=64")) { phase in
                         if let img = phase.image {
                             img.resizable().scaledToFit()
                         } else {
@@ -452,7 +452,7 @@ private struct TabRow: View {
                             .scaleEffect(0.5)
                             .frame(width: 16, height: 16)
                     } else {
-                        AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(state.url?.host ?? "")")) { phase in
+                        CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(state.url?.host ?? "")")) { phase in
                             if let img = phase.image {
                                 img.resizable().scaledToFit()
                             } else {

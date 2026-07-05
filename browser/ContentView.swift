@@ -1091,7 +1091,7 @@ struct ContentView: View {
                                         }
                                     }) {
                                         if item.icon.starts(with: "https") {
-                                            AsyncImage(url: URL(string: item.icon))
+                                            CachedAsyncImage(url: URL(string: item.icon))
                                                 .frame(width: Layout.sidebarIconSize, height: Layout.sidebarIconSize)
                                                 .padding(Layout.sidebarIconPadding)
                                         } else {

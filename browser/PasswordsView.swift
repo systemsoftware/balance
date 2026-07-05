@@ -75,7 +75,7 @@ struct PasswordRow: View {
                 Circle()
                     .fill(Color(NSColor.controlAccentColor).opacity(0.1))
                     .frame(width: 36, height: 36)
-                AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(cred.domain)"))
+                CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(cred.domain)"))
                     .font(.system(size: 16))
                     .foregroundColor(Color(NSColor.controlAccentColor))
             }

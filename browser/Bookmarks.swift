@@ -19,7 +19,7 @@ struct BookmarkRow: View {
                     Circle()
                         .fill(Color.blue.opacity(0.1))
                         .frame(width: 32, height: 32)
-                    AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(bookmark.url)"))
+                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(bookmark.url)"))
                         .font(.system(size: 14, weight: .bold))
                         .foregroundColor(.blue)
                 }

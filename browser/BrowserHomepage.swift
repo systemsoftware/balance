@@ -209,7 +209,7 @@ struct BookmarkCard: View {
                     .fill(Color.primary.opacity(isHovered ? 0.15 : 0.05))
                     .frame(width: 80, height: 80)
 
-                AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(bookmark.url)&sz=64")) { phase in
+                CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(bookmark.url)&sz=64")) { phase in
                     if let img = phase.image {
                         img.resizable().scaledToFit().frame(width: 40, height: 40)
                     } else {

@@ -79,7 +79,7 @@ struct WindowRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            AsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(browserState.url?.host ?? "")")) { phase in
+            CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(browserState.url?.host ?? "")")) { phase in
                 if let image = phase.image {
                     image
                         .resizable()
