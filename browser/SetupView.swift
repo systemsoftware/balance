@@ -781,7 +781,7 @@ struct SetupView: View {
     private var settingsStep: some View {
         VStack(spacing: 0) {
             VStack(spacing: 4) {
-                Text("Quick Settings")
+                Text("Browser Settings")
                     .font(.system(size: 22, weight: .bold, design: .rounded))
                 
                 Text("Customize Balance to your liking. You can always change these later.")

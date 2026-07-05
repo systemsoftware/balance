@@ -405,10 +405,10 @@ enum BrowserCommand: String, CaseIterable {
     // Browser
     case palette, searchTabs, reopenLastTab, downloads, history, autocomplete, showSetup
     // Page
-    case toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
+    case reload, toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
     case copyURL, printPage, toggleReader, renameTab, savePage
-    case showDevTools
+    case showDevTools, forceReload
     case summarize, addEvents, cite
     
     var title: String {
@@ -420,6 +420,7 @@ enum BrowserCommand: String, CaseIterable {
         case .downloads: return "Downloads"
         case .history: return "History"
         case .autocomplete: return "Autocomplete"
+        case .reload: return "Reload Page"
         case .toggleFind: return "Find In Page"
         case .zoomIn: return "In"
         case .zoomOut: return "Out"
@@ -434,7 +435,7 @@ enum BrowserCommand: String, CaseIterable {
         case .renameTab: return "Rename Tab"
         case .savePage: return "Save Page As..."
         case .showDevTools: return "Dev Tools"
-
+        case .forceReload: return "Reload Ignoring Cache"
         case .summarize: return "Summarize"
         case .addEvents: return "Add Events to Calendar"
         case .cite: return "Cite"
@@ -456,7 +457,7 @@ enum BrowserCommand: String, CaseIterable {
             return "Zoom"
         case .duplicateTab, .duplicateWindow, .openInFocus:
             return "Duplicate"
-        case .showDevTools:
+        case .showDevTools, .forceReload:
             return "Developer"
         case .summarize, .addEvents, .cite:
             return "AI"
@@ -468,6 +469,7 @@ enum BrowserCommand: String, CaseIterable {
     var shortcut: KeyboardShortcut? {
         switch self {
         case .palette: return KeyboardShortcut("k", modifiers: [.command])
+        case .reload: return KeyboardShortcut("r", modifiers: [.command])
         case .searchTabs: return KeyboardShortcut("s", modifiers: [.command, .control])
         case .reopenLastTab: return KeyboardShortcut("t", modifiers: [.command, .shift])
         case .autocomplete: return KeyboardShortcut("s", modifiers: [.command])
@@ -484,17 +486,18 @@ enum BrowserCommand: String, CaseIterable {
         case .showDevTools: return KeyboardShortcut("i", modifiers: [.command, .option])
         case .summarize: return KeyboardShortcut("=", modifiers: [.command])
         case .addEvents: return KeyboardShortcut("=", modifiers: [.command, .shift])
+        case .forceReload: return KeyboardShortcut("r", modifiers: [.command, .shift])
         default: return nil
         }
     }
     
     var requiresDividerAfter: Bool {
         switch self {
-        case .palette, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete: return true
+        case .palette, .reload, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete: return true
         case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .savePage: return true
         case .zoomOut, .duplicateWindow: return true
         case .showDevTools: return true
-        case .summarize, .addEvents: return true
+        case .summarize, .addEvents, .forceReload: return true
         default: return false
         }
     }

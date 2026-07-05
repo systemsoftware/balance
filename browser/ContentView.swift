@@ -84,7 +84,6 @@ private struct ReloadButton: View {
         }
         .buttonStyle(.plain)
         .glassEffect(.regular.interactive(), in: .circle)
-        .keyboardShortcut("r", modifiers: [.command])
     }
 }
 
@@ -1332,6 +1331,26 @@ struct ContentView: View {
                 showSuggestions.toggle()
             case .showSetup:
                 setupWindow()
+            case .reload:
+                browserState.webView?.reload()
+            case .forceReload:
+                if let webView = browserState.webView,
+
+                   let url = webView.url {
+
+                    let request = URLRequest(
+
+                        url: url,
+
+                        cachePolicy: .reloadIgnoringLocalCacheData,
+
+                        timeoutInterval: 10
+
+                    )
+
+                    webView.load(request)
+
+                }
             }
         }
     }
