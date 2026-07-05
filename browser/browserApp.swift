@@ -380,9 +380,14 @@ struct CommandButton: View {
     
     var body: some View {
         Button(command.title) {
-            dispatch?(command)
+            if let dispatch = dispatch {
+                dispatch(command)
+            } else if command == .closeTab {
+                NSApp.keyWindow?.performClose(nil)
+            }
         }
         .keyboardShortcut(command.shortcut)
+        .disabled(dispatch == nil && command != .closeTab)
     }
 }
 
