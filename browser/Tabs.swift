@@ -34,6 +34,8 @@ struct Tabs: View {
             ($0.url?.absoluteString.localizedCaseInsensitiveContains(searchText) ?? false)
         }
     }
+    
+    @State private var isHorizAnimatingIn = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -212,6 +214,9 @@ struct Tabs: View {
                                                 }
                                             }
                                         }
+                                        
+                                        Toggle("Show Spaces", isOn: $showSpaces)
+
                                     }
                                     .help(windowManager.spaceNames[index])
                                 
@@ -264,6 +269,43 @@ struct Tabs: View {
                         .menuStyle(.borderlessButton)
                         .contextMenu {
                             Toggle("Show Spaces", isOn: $showSpaces)
+                            
+                            Button("Rename Space") {
+                                let index = windowManager.currentSpaceIndex
+                                let alert = NSAlert()
+                                alert.informativeText = "Enter new space name:"
+                                alert.addButton(withTitle: "Rename")
+                                alert.addButton(withTitle: "Cancel")
+                                
+                                let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
+                                input.stringValue = windowManager.spaceNames[index]
+                                alert.accessoryView = input
+                                alert.window.initialFirstResponder = input
+                                
+                                if alert.runModal() == .alertFirstButtonReturn {
+                                    windowManager.spaceNames[index] = input.stringValue.isEmpty ? "Space \(index + 1)" : input.stringValue
+                                }
+                            }
+                            
+                            if windowManager.spaceNames.count > 1 {
+                                Button("Remove Space", role: .destructive) {
+                                    let index = windowManager.currentSpaceIndex
+                                    let closingIDs = windowManager.windows.filter { $0.spaceIndex == index }.map(\.tabID)
+                                    for tabID in closingIDs {
+                                        windowManager.closeTab(tabID)
+                                    }
+                                    for tab in windowManager.windows {
+                                        if tab.spaceIndex > index {
+                                            tab.spaceIndex -= 1
+                                        }
+                                    }
+                                    windowManager.spaceNames.remove(at: index)
+                                    if windowManager.currentSpaceIndex >= windowManager.spaceNames.count {
+                                        windowManager.currentSpaceIndex = windowManager.spaceNames.count - 1
+                                    }
+                                }
+                            }
+                            
                         }
                     }
                     
@@ -275,14 +317,21 @@ struct Tabs: View {
                             pinStore: store,
                             showURL:false
                         )
-                        .padding(.horizontal, 8)
                         .onHover { over in
                             withAnimation(.easeInOut(duration: 0.12)) {
                                 hoveredID = over ? ObjectIdentifier(tab) : nil
                             }
                         }
+                        .offset(x: isHorizAnimatingIn ? 0 : 400)
+                        .animation(.easeOut(duration: 0.6), value: isHorizAnimatingIn)
+                        .onAppear {
+                            withAnimation(.easeInOut(duration: 1.0)) {
+                                isHorizAnimatingIn = true
+                            }
+                        }
                     }
                 }
+                .padding(.top)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
