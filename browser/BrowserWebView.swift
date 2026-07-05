@@ -414,6 +414,7 @@ final class BrowserWKWebView: WKWebView {
                 let download = await self.startDownload(using: request)
                 if let coordinator = self.navigationDelegate as? BrowserWebView.Coordinator {
                     coordinator.downloads.insert(download)
+                    DockProgressManager.shared.add(download: download)
                     if !name.isEmpty {
                         coordinator.downloadTitles[download] = name
                     }
@@ -1241,6 +1242,7 @@ struct BrowserWebView: NSViewRepresentable {
                      didBecome download: WKDownload) {
 
             downloads.insert(download)
+            DockProgressManager.shared.add(download: download)
             download.delegate = self
         }
 
@@ -1249,6 +1251,7 @@ struct BrowserWebView: NSViewRepresentable {
                      didBecome download: WKDownload) {
 
             downloads.insert(download)
+            DockProgressManager.shared.add(download: download)
             download.delegate = self
         }
         
@@ -1305,11 +1308,13 @@ struct BrowserWebView: NSViewRepresentable {
                         time:Date()
                     ))
                     downloads.remove(download)
+                    DockProgressManager.shared.remove(download: download)
                 }
 
                 func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
                     print("Download failed with error: \(error.localizedDescription)")
                     downloads.remove(download)
+                    DockProgressManager.shared.remove(download: download)
                 }
 
         func webView(_ webView: WKWebView,

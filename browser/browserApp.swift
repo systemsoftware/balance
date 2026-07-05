@@ -64,6 +64,7 @@ struct browserApp: App {
                             downloadStore.remove(id: download.id)
                         }
                     }
+                    cleanTemporaryDirectory()
                 }
         }
         .onChange(of: showTabsInDockMenu) { _, _ in
@@ -440,4 +441,17 @@ func getItemsAndGroups(from commands: [BrowserCommand]) -> [any MenuElement] {
     }
     
     return result
+}
+
+
+func cleanTemporaryDirectory() {
+    let tmpDir = FileManager.default.temporaryDirectory
+    do {
+        let tmpFiles = try FileManager.default.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil)
+        for file in tmpFiles {
+            try FileManager.default.removeItem(at: file)
+        }
+    } catch {
+        print("Failed to clear tmp: \(error)")
+    }
 }
