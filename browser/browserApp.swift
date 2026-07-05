@@ -1,26 +1,11 @@
 import SwiftUI
-import AppKit
 import SwiftData
 import AuthenticationServices
 import WebKit
-
-var openWindows: [NSWindow] = []
-var tabGroups: [String: String] = [:]
+internal import Combine
 
 func switchToTab(tabID: String) {
-    guard let targetWindow = NSApp.windows.first(where: { $0.identifier?.rawValue == tabID }) else { return }
-    
-    if tabGroups[tabID] != nil {
-        if let currentWindow = NSApp.keyWindow, currentWindow != targetWindow {
-            targetWindow.setFrame(currentWindow.frame, display: false)
-            targetWindow.makeKeyAndOrderFront(nil)
-            currentWindow.orderOut(nil)
-        } else {
-            targetWindow.makeKeyAndOrderFront(nil)
-        }
-    } else {
-        targetWindow.makeKeyAndOrderFront(nil)
-    }
+    WindowManager.shared.selectTab(tabID)
 }
 
 @main
@@ -61,17 +46,8 @@ struct browserApp: App {
     }
     
     var body: some Scene {
-        let firstTab = SessionManager.shared.popInitialTabState()
-        
-        WindowGroup {
-            if let firstTab = firstTab {
-                ContentView(
-                    initialURL: firstTab.url != nil ? URL(string: firstTab.url!) : nil,
-                    pvt: firstTab.isPrivate,
-                    profile: firstTab.profile,
-                    tabID: firstTab.tabID ?? UUID().uuidString,
-                    restoredState: firstTab
-                )
+        WindowGroup(for: String.self) { $windowID in
+            BrowserWindowHost(windowID: windowID ?? WindowManager.shared.initialWindowID)
                 .onAppear {
                     applyTheme(themePreference)
                 }
@@ -88,29 +64,7 @@ struct browserApp: App {
                             downloadStore.remove(id: download.id)
                         }
                     }
-
                 }
-            } else {
-                ContentView()
-                    .onAppear {
-                    applyTheme(themePreference)
-                }
-                .onChange(of: themePreference) { _, newValue in
-                    applyTheme(newValue)
-                }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                        print("App is about to close.")
-                        if(clearHistoryOnClose) {
-                            HistoryManager.clearAllHistory()
-                        }
-                        if(clearDownloadHistoryOnClose) {
-                            for download in downloadStore.items {
-                                downloadStore.remove(id: download.id)
-                            }
-                        }
-
-                    }
-            }
         }
         .onChange(of: showTabsInDockMenu) { _, _ in
             updateDockMenuTabsVisibility()
@@ -129,6 +83,7 @@ struct browserApp: App {
                 }
                 .keyboardShortcut("n", modifiers: .command)
             }
+            CommandGroup(replacing: .saveItem) {}
             BrowserCommands()
         }
         
@@ -140,159 +95,18 @@ struct browserApp: App {
 }
 
 func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String? = "") {
-    let newWindow = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 800, height: 800),
-        styleMask: [.titled, .closable, .miniaturizable, .resizable],
-        backing: .buffered,
-        defer: false
-    )
-    
     if !profile.isEmpty {
         print("Using custom profile: \(profile)")
     }
-    
-    if let screen = NSScreen.main {
-        let visibleFrame = screen.visibleFrame
-        newWindow.setFrame(visibleFrame, display: true, animate: true)
-    }
-    
-    newWindow.title = "Balance"
-    
-    let tabID = UUID().uuidString
-    let contentView = ContentView(initialURL: url, pvt:pvt, profile:profile, profileIcon:profileIcon ?? "person.fill", tabID: tabID)
-    
-    newWindow.isReleasedWhenClosed = false
-    newWindow.contentView = NSHostingView(rootView: contentView.environmentObject(WindowManager.shared))
-    
-    newWindow.delegate = WindowDelegate.shared
-    newWindow.identifier = NSUserInterfaceItemIdentifier(tabID)
-    
-    openWindows.append(newWindow)
-    
-    newWindow.makeKeyAndOrderFront(nil)
-    updateDockMenuTabsVisibility()
+    WindowManager.shared.createWindow(initialURL: url, isPrivate: pvt, profile: profile, profileIcon: profileIcon ?? "person.fill")
 }
 
 func createNewTab(with url: URL? = nil, inBackground: Bool = false, browserState: BrowserState? = nil) {
-    let browserWindows = NSApp.windows.filter { openWindows.contains($0) }
-    let targetWindow: NSWindow?
-    if let main = NSApp.mainWindow, openWindows.contains(main) {
-        targetWindow = main
-    } else {
-        targetWindow = browserWindows.first
-    }
-    
-    guard let currentWindow = targetWindow else {
-        createNewWindow(with: url)
-        return
-    }
-    
-    let tabID = UUID().uuidString
-    
-    var profile: String = ""
-    var isPrivate: Bool = false
-    if let currentID = currentWindow.identifier?.rawValue,
-       let state = TabRegistry.shared.states[currentID] {
-        profile = state.profile
-        isPrivate = state.isPrivate
-    }
-    
-    let contentView = ContentView(initialURL: url, pvt: isPrivate, profile: profile, tabID: tabID, providedState: browserState)
-    
-    let newWindow = NSWindow(
-        contentRect: currentWindow.frame,
-        styleMask: [.titled, .closable, .miniaturizable, .resizable],
-        backing: .buffered,
-        defer: false
-    )
-        
-    newWindow.title = "Balance"
-    
-    newWindow.isReleasedWhenClosed = false
-    newWindow.contentView = NSHostingView(rootView: contentView.environmentObject(WindowManager.shared))
-    newWindow.delegate = WindowDelegate.shared
-    newWindow.identifier = NSUserInterfaceItemIdentifier(tabID)
-    
-    openWindows.append(newWindow)
-    
-    let sidebarActive = (Config.sharedDefaults?.integer(forKey: "leftSidebarMode") ?? 0) != 0
-    let background = inBackground && (Config.sharedDefaults?.bool(forKey: "openLinksInBackground") ?? false)
-    
-    if sidebarActive {
-        let currentID = currentWindow.identifier?.rawValue ?? ""
-        let groupID = tabGroups[currentID] ?? currentID
-        tabGroups[tabID] = groupID
-        tabGroups[currentID] = groupID
-        
-        newWindow.setFrame(currentWindow.frame, display: false)
-        
-        if !background {
-            newWindow.makeKeyAndOrderFront(nil)
-            currentWindow.orderOut(nil)
-        }
-    } else {
-        currentWindow.addTabbedWindow(newWindow, ordered: background ? .below : .above)
-        if !background {
-            newWindow.makeKeyAndOrderFront(nil)
-        }
-    }
-    updateDockMenuTabsVisibility()
-}
-
-
-
-class WindowDelegate: NSObject, NSWindowDelegate {
-    static let shared = WindowDelegate()
-    
-    func windowDidBecomeMain(_ notification: Notification) {
-        updateDockMenuTabsVisibility()
-    }
-    
-    func windowDidBecomeKey(_ notification: Notification) {
-        updateDockMenuTabsVisibility()
-    }
-    
-    func windowWillClose(_ notification: Notification) {
-        if let window = notification.object as? NSWindow {
-            if openWindows.count == 1 {
-                SessionManager.shared.saveSession()
-            }
-            openWindows.removeAll { $0 == window }
-            if let tabID = window.identifier?.rawValue {
-                if let state = TabRegistry.shared.states[tabID] {
-                    SessionManager.shared.lastClosedURL = state.url
-                }
-                if Config.sharedDefaults?.bool(forKey: "preserveOnClose") != true {
-                    Config.sharedDefaults?.removeObject(forKey: "note_\(tabID)")
-                }
-                
-                // If this was a standalone tab (sidebar mode), show next tab in group
-                if let groupID = tabGroups[tabID] {
-                    tabGroups.removeValue(forKey: tabID)
-                    if let nextTabID = tabGroups.first(where: { $0.value == groupID })?.key,
-                       let nextWindow = openWindows.first(where: { $0.identifier?.rawValue == nextTabID }) {
-                        nextWindow.setFrame(window.frame, display: false)
-                        nextWindow.makeKeyAndOrderFront(nil)
-                    }
-                }
-            }
-        }
-    }
+    WindowManager.shared.createTab(initialURL: url, inBackground: inBackground, providedState: browserState)
 }
 
 func updateDockMenuTabsVisibility() {
-    let showTabs = Config.sharedDefaults?.object(forKey: "showTabsInDockMenu") as? Bool ?? false
-    for window in openWindows {
-        if showTabs {
-            window.isExcludedFromWindowsMenu = false
-        } else {
-            if let tabGroup = window.tabGroup {
-                window.isExcludedFromWindowsMenu = (tabGroup.selectedWindow != window)
-            } else {
-                window.isExcludedFromWindowsMenu = false
-            }
-        }
-    }
+    WindowManager.shared.objectWillChange.send()
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
@@ -306,11 +120,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
         
-        DispatchQueue.main.async {
-            if let session = SessionManager.shared.getSessionState() {
-                _ = SessionManager.shared.restoreSession(from: session)
-            }
-        }
+        WindowManager.shared.restoreSavedSessionIfNeeded()
         
         // Show setup window on first launch
         let defaults = Config.sharedDefaults ?? UserDefaults.standard
@@ -353,6 +163,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 }
                 sender.reply(toApplicationShouldTerminate: true)
             }
+            
+            // Fallback timeout in case removeData hangs due to lingering web views
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
+                sender.reply(toApplicationShouldTerminate: true)
+            }
+            
             return .terminateLater
         }
         
@@ -410,6 +226,7 @@ enum BrowserCommand: String, CaseIterable {
     case copyURL, printPage, toggleReader, renameTab, savePage
     case showDevTools, forceReload
     case summarize, addEvents, cite
+    case closeTab
     
     var title: String {
         switch self {
@@ -439,6 +256,7 @@ enum BrowserCommand: String, CaseIterable {
         case .summarize: return "Summarize"
         case .addEvents: return "Add Events to Calendar"
         case .cite: return "Cite"
+        case .closeTab: return "Close Tab"
         }
     }
     
@@ -487,6 +305,7 @@ enum BrowserCommand: String, CaseIterable {
         case .summarize: return KeyboardShortcut("=", modifiers: [.command])
         case .addEvents: return KeyboardShortcut("=", modifiers: [.command, .shift])
         case .forceReload: return KeyboardShortcut("r", modifiers: [.command, .shift])
+        case .closeTab: return KeyboardShortcut("w", modifiers: [.command])
         default: return nil
         }
     }
@@ -497,7 +316,7 @@ enum BrowserCommand: String, CaseIterable {
         case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .savePage: return true
         case .zoomOut, .duplicateWindow: return true
         case .showDevTools: return true
-        case .summarize, .addEvents, .forceReload: return true
+        case .summarize, .addEvents, .forceReload, .cite: return true
         default: return false
         }
     }

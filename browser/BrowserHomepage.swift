@@ -338,21 +338,23 @@ struct NewsView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 16) {
             // Source picker
-            HStack(spacing: 0) {
-                ForEach(vm.sources.indices, id: \.self) { i in
-                    Button(vm.sources[i].name) {
-                        vm.selectedSource = i
-                        vm.fetch()
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 0) {
+                    ForEach(vm.sources.indices, id: \.self) { i in
+                        Button(vm.sources[i].name) {
+                            vm.selectedSource = i
+                            vm.fetch()
+                        }
+                        .buttonStyle(.plain)
+                        .font(.system(size: 13, weight: vm.selectedSource == i ? .semibold : .regular))
+                        .foregroundColor(vm.selectedSource == i ? .primary : .secondary)
+                        .padding(.horizontal, 12)
+                        .padding(.vertical, 6)
+                        .background(
+                            RoundedRectangle(cornerRadius: 8)
+                                .fill(vm.selectedSource == i ? Color.primary.opacity(0.08) : .clear)
+                        )
                     }
-                    .buttonStyle(.plain)
-                    .font(.system(size: 13, weight: vm.selectedSource == i ? .semibold : .regular))
-                    .foregroundColor(vm.selectedSource == i ? .primary : .secondary)
-                    .padding(.horizontal, 12)
-                    .padding(.vertical, 6)
-                    .background(
-                        RoundedRectangle(cornerRadius: 8)
-                            .fill(vm.selectedSource == i ? Color.primary.opacity(0.08) : .clear)
-                    )
                 }
             }
 

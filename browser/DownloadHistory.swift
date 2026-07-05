@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 
 struct Download: Codable, Identifiable {
     var id = UUID()

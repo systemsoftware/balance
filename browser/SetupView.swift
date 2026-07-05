@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import SQLite3
 import Security
 import CommonCrypto

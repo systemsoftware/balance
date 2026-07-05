@@ -1,7 +1,6 @@
 import SwiftUI
 import WebKit
 import Foundation
-import AppKit
 import SwiftData
 import FoundationModels
 internal import UniformTypeIdentifiers
@@ -57,7 +56,6 @@ enum BookmarkBarMode: Int, CaseIterable {
     }
 }
 
-import AppKit
 
 enum BackgroundType: Int {
     case system = 0
@@ -151,6 +149,7 @@ struct ExtensionPopupView: NSViewRepresentable {
 
 struct ContentView: View {
     @ObservedObject private var extensionManager = WebExtensionManager.shared
+    @EnvironmentObject private var windowManager: WindowManager
     @State private var urlInput: String = ""
 
     @StateObject private var sidebarStore: SidebarStore
@@ -324,21 +323,31 @@ struct ContentView: View {
         self._bookmarkStore = StateObject(wrappedValue: BookmarkStore(profile: localBProfile))
         
         
-        let initialBrowserState = providedState ?? BrowserState()
-        initialBrowserState.tabID = tabID
-        initialBrowserState.spaceIndex = WindowManager.shared.currentSpaceIndex
+        let initialBrowserState: BrowserState
+        if let provided = providedState {
+            initialBrowserState = provided
+        } else {
+            let newState = BrowserState()
+            newState.tabID = tabID
+            newState.spaceIndex = WindowManager.shared.currentSpaceIndex
+            initialBrowserState = newState
+        }
+        
         if let state = restoredState {
             initialBrowserState.restoredScrollX = state.scrollX
             initialBrowserState.restoredScrollY = state.scrollY
         }
         self._browserState = StateObject(wrappedValue: initialBrowserState)
         
-        let initialSplitState = BrowserState()
-        if let state = restoredState {
-            initialSplitState.restoredScrollX = state.splitScrollX
-            initialSplitState.restoredScrollY = state.splitScrollY
-        }
-        self._splitState = StateObject(wrappedValue: initialSplitState)
+        self._splitState = StateObject(wrappedValue: {
+            let split = BrowserState()
+            split.tabID = tabID + "_split"
+            if let state = restoredState {
+                split.restoredScrollX = state.splitScrollX
+                split.restoredScrollY = state.splitScrollY
+            }
+            return split
+        }())
     }
     
     @State var showSuggestions = false
@@ -348,7 +357,7 @@ struct ContentView: View {
     @State private var showReader = false
     @State private var showExtensionsPopover = false
     
-    @AppStorage("leftSidebarMode", store:Config.sharedDefaults) var leftSidebarMode: Int = 0
+    @AppStorage("tabMode", store:Config.sharedDefaults) var leftSidebarMode: Int = 0
     
     @State var commandSearchText = ""
     
@@ -360,6 +369,12 @@ struct ContentView: View {
         VStack(spacing: 0) {
             // MARK: - Address Bar
 
+            if leftSidebarMode == 0 {
+                Tabs(browserState: browserState, profile: bProfile)
+                    .frame(height:50)
+                    .frame(maxWidth: .infinity)
+                    .padding(.horizontal)
+            }
             
             HStack(spacing: 8) {
                 
@@ -456,9 +471,9 @@ struct ContentView: View {
                         }
                         
                         
-                        if let pIcon = bProfileIcon {
+                        if let pIcon = bProfileIcon, let pName = bProfileName, !pName.isEmpty {
                             Image(systemName: pIcon)
-                                .help("Profile: \(bProfileName ?? "")")
+                                .help("Profile: \(pName)")
                                 .padding(.trailing, 10)
                         }
                     }
@@ -887,12 +902,13 @@ struct ContentView: View {
                 .glassEffectUnion(id: "bookmarkBar", namespace: bookmarkBarNamespace)
             }
 
+            
             // MARK: - Web Content + Sidebar
             HStack(spacing: 0) {
                 // MARK: - Web Content Area
                 
                 if leftSidebarMode == 2 {
-                    VerticalTabs(browserState: browserState, profile: bProfile)
+                    Tabs(browserState: browserState, profile: bProfile)
                         .frame(width: CGFloat(leftSidebarWidth))
                         .frame(maxHeight: .infinity)
                 }
@@ -956,7 +972,7 @@ struct ContentView: View {
                                     .frame(maxHeight: .infinity)
                                 
                                 if isSlideOverVisible {
-                                    VerticalTabs(browserState: browserState, profile: bProfile)
+                                    Tabs(browserState: browserState, profile: bProfile)
                                         .frame(width: CGFloat(leftSidebarWidth))
                                         .frame(maxHeight: .infinity)
                                         .glassEffect(.regular, in: .rect(cornerRadius: 15))
@@ -1164,10 +1180,8 @@ struct ContentView: View {
         .onAppear {
             sidebarPage.customUserAgent = userAgent
         }
-        .onReceive(NotificationCenter.default.publisher(for: NSWindow.didBecomeKeyNotification)) { notification in
-            guard let window = notification.object as? NSWindow,
-                  window.identifier?.rawValue == tabID else { return }
-            
+        .onChange(of: windowManager.activeWindowID) { _, _ in
+            guard windowManager.isActiveTab(tabID) else { return }
             if enableHandoff, let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
                 if currentUserActivity == nil {
                     currentUserActivity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
@@ -1190,22 +1204,17 @@ struct ContentView: View {
         }
         .onAppear {
             updateTabState()
-            if !WindowManager.shared.windows.contains(where: { $0 === browserState }) {
-                WindowManager.shared.windows.append(browserState)
+            if !windowManager.windows.contains(where: { $0 === browserState }) {
+                windowManager.windows.append(browserState)
             }
-        }
-        .onDisappear {
-            WindowManager.shared.windows.removeAll(where: { $0 === browserState })
-        }
-        .background(WindowAccessor { window in
-            if let window = window, window.identifier?.rawValue != tabID {
-                window.identifier = NSUserInterfaceItemIdentifier(tabID)
-                window.delegate = WindowDelegate.shared
-                if !openWindows.contains(window) {
-                    openWindows.append(window)
+            if windowManager.isActiveTab(tabID), enableHandoff, let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+                if currentUserActivity == nil {
+                    currentUserActivity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
                 }
+                currentUserActivity?.webpageURL = location
+                currentUserActivity?.becomeCurrent()
             }
-        })
+        }
         .onChange(of: location) { _, _ in updateTabState() }
         .onChange(of: splitURL) { _, _ in updateTabState() }
         .onChange(of: sidebarURL) { _, _ in updateTabState() }
@@ -1214,8 +1223,9 @@ struct ContentView: View {
         .onChange(of: browserState.scrollY) { _, _ in updateTabState() }
         .onChange(of: splitState.scrollX) { _, _ in updateTabState() }
         .onChange(of: splitState.scrollY) { _, _ in updateTabState() }
-        .focusedSceneValue(\.dispatchBrowserCommand) { command in
+        .focusedSceneValue(\.dispatchBrowserCommand, windowManager.isActiveTab(tabID) ? { command in
             switch command {
+            case .closeTab: WindowManager.shared.closeTab(tabID)
             case .palette: showCommands = true
             case .searchTabs: showTabSearch = true
             case .toggleFind: showFindNavigator.toggle()
@@ -1352,7 +1362,7 @@ struct ContentView: View {
 
                 }
             }
-        }
+        } : nil)
     }
     
     @AppStorage("searchURL", store:Config.sharedDefaults) var searchURL = "https://www.google.com/search?q="
@@ -1371,7 +1381,8 @@ struct ContentView: View {
             scrollX: browserState.scrollX,
             scrollY: browserState.scrollY,
             splitScrollX: splitState.scrollX,
-            splitScrollY: splitState.scrollY
+            splitScrollY: splitState.scrollY,
+            spaceIndex: browserState.spaceIndex
         )
         TabRegistry.shared.states[tabID] = state
     }
@@ -1673,18 +1684,6 @@ struct ContentView: View {
     }
 
     
-}
-
-import SwiftUI
-
-struct WindowAccessor: NSViewRepresentable {
-    let callback: (NSWindow?) -> Void
-    func makeNSView(context: Context) -> NSView {
-        let view = NSView()
-        DispatchQueue.main.async { self.callback(view.window) }
-        return view
-    }
-    func updateNSView(_ nsView: NSView, context: Context) {}
 }
 
 class SavePanelAccessoryDelegate: NSObject {

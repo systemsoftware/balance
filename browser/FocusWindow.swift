@@ -1,6 +1,5 @@
 import SwiftUI
 import WebKit
-import AppKit
 
 func createFocusWindow(with url: URL, userAgent: String) {
     let window = NSWindow(

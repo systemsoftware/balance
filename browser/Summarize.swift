@@ -1,6 +1,5 @@
 import SwiftUI
 import WebKit
-import AppKit
 import FoundationModels
 
 func createSummaryWindow(state:BrowserState) async {

@@ -148,17 +148,14 @@ struct CommandsView: View {
         }
     }
     
-    var filteredTabs: [NSWindow] {
-        let validWindows = NSApp.windows.filter { window in
-            window.styleMask.contains(.resizable) &&
-            window.className != "NSPanel"
-        }
-        
+    var filteredTabs: [BrowserState] {
+        let states = WindowManager.shared.windows
         if searchText.isEmpty {
-            return validWindows
+            return states
         } else {
-            return validWindows.filter { window in
-                window.title.localizedCaseInsensitiveContains(searchText)
+            return states.filter { state in
+                state.title.localizedCaseInsensitiveContains(searchText) ||
+                (state.url?.absoluteString.localizedCaseInsensitiveContains(searchText) ?? false)
             }
         }
     }
@@ -218,13 +215,13 @@ struct CommandsView: View {
         if (!showData || (searchText.isEmpty ? filteredTabs.count > 1 : !filteredTabs.isEmpty)) && showTabs {
             Section(header: sectionHeader(title: "Tabs", section: .tabs)) {
                 if showData {
-                    ForEach(filteredTabs, id: \.windowNumber) { window in
+                    ForEach(filteredTabs, id: \.tabID) { state in
                         Button(action: {
-                            window.makeKeyAndOrderFront(nil)
+                            switchToTab(tabID: state.tabID)
                             dismiss()
                         }) {
                             row(
-                                title: window.title.isEmpty ? "Untitled Tab" : window.title,
+                                title: state.title.isEmpty ? "Untitled Tab" : state.title,
                                 image: "macwindow",
                                 showsChevron: false
                             )
@@ -625,6 +622,7 @@ struct ProfileView: View {
                             imapPortInput = "993"
                             imapEmailInput = ""
                             imapPasswordInput = ""
+                            showNewProfile = false
                         } label: {
                             HStack {
                                 Image(systemName: "plus.circle.fill")

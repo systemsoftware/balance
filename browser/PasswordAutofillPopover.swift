@@ -1,6 +1,6 @@
 import SwiftUI
-import AppKit
 import LocalAuthentication
+import AppKit
 
 struct PasswordAutofillView: View {
     let domain: String

@@ -1,6 +1,5 @@
 import SwiftUI
 import WebKit
-import AppKit
 internal import Combine
 import ZIPFoundation
 import CoreLocation
@@ -22,6 +21,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var findQuery: String = ""
     @Published var findMatchCount: Int = 0
     @Published var isAudioMuted: Bool = false
+    @Published var isSleeping: Bool = false
     
     @Published var scrollX: Int = 0
     @Published var scrollY: Int = 0
@@ -96,6 +96,69 @@ func applyZoom() {
         zoomLevel = 1.0
         applyZoom()
     }
+    
+    var hasCleanedUp: Bool = false
+    
+    deinit { print("🗑️ BrowserState deinit: \(tabID)") }
+    
+    func cleanup() {
+        guard !hasCleanedUp else { return }
+        hasCleanedUp = true
+        
+        let manager = WebExtensionManager.shared
+        manager.allTabs.remove(self)
+        
+        // self.webView is weak — it may already be nil if SwiftUI tore down the view
+        // before this runs.
+        let webView: WKWebView? = self.webView
+        
+        if let webView {
+            if let coordinator = webView.navigationDelegate as? BrowserWebView.Coordinator {
+                webView.removeObserver(coordinator, forKeyPath: "estimatedProgress")
+                webView.removeObserver(coordinator, forKeyPath: "title")
+                webView.removeObserver(coordinator, forKeyPath: "URL")
+                webView.removeObserver(coordinator, forKeyPath: "canGoBack")
+                webView.removeObserver(coordinator, forKeyPath: "canGoForward")
+                
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: "installExtension")
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: "scrollObserver")
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: "balanceLocation")
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: "autofillRequest")
+                webView.configuration.userContentController.removeAllScriptMessageHandlers()
+                webView.configuration.userContentController.removeAllUserScripts()
+                
+                // The WKWebExtensionController lives in a global singleton and holds
+                // its delegate strongly. Nil it here so the Coordinator can be
+                // deallocated and doesn't keep the WKWebView context alive.
+                coordinator.locationManager?.stopUpdatingLocation()
+                coordinator.locationManager?.delegate = nil
+                coordinator.locationManager = nil
+            }
+            
+            if let controller = webView.configuration.webExtensionController {
+                controller.didCloseTab(self)
+                // We should NOT set controller.delegate = nil because the controller is shared
+                // across all tabs in this profile context. Setting it to nil breaks extensions for others!
+            }
+            
+            // Instantly clear the document memory before destroying the view.
+            webView.evaluateJavaScript("document.write(''); document.close();") { _, _ in }
+            
+            // Stop loading and break all delegate references.
+            webView.stopLoading()
+            webView.navigationDelegate = nil
+            webView.uiDelegate = nil
+            webView.removeFromSuperview()
+            
+            // Break BrowserWKWebView's strong reference to BrowserState.
+            if let customWebView = webView as? BrowserWKWebView {
+                customWebView.state = nil
+                customWebView.downloadStore = nil
+            }
+        }
+        
+        self.webView = nil
+    }
 }
 
 // MARK: - Browser Window
@@ -134,6 +197,7 @@ final class BrowserWindow: NSObject, WKWebExtensionWindow {
 extension BrowserState {
     func attach(_ webView: WKWebView) {
         self.webView = webView
+        self.hasCleanedUp = false
     }
     
     func find(_ query: String, forward: Bool = true) {
@@ -241,6 +305,8 @@ final class BrowserWKWebView: WKWebView {
         }
         return result
     }
+    
+    deinit { print("🗑️ BrowserWKWebView deinit") }
 
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
             print("custom menu is finally firing!")
@@ -821,16 +887,7 @@ struct BrowserWebView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
-        nsView.removeObserver(coordinator, forKeyPath: "estimatedProgress")
-        nsView.removeObserver(coordinator, forKeyPath: "title")
-        nsView.removeObserver(coordinator, forKeyPath: "URL")
-        nsView.removeObserver(coordinator, forKeyPath: "canGoBack")
-        nsView.removeObserver(coordinator, forKeyPath: "canGoForward")
-        let manager = WebExtensionManager.shared
-        manager.allTabs.remove(coordinator.state)
-        if let controller = nsView.configuration.webExtensionController {
-            controller.didCloseTab(coordinator.state)
-        }
+        coordinator.state.cleanup()
     }
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKWebExtensionControllerDelegate, CLLocationManagerDelegate {

@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 import LocalAuthentication
 
 struct PasswordsView: View {

@@ -164,16 +164,24 @@ var Settings: [Setting] = [
         defaultValueString: "default-home"
     ),
     Setting(
-        name: "Left Sidebar",
-        icon: "sidebar.left",
-        category: catSidebar,
+        name: "Tabs",
+        icon: "rectangle.on.rectangle",
+        category: catBrowsing,
         type: "dropdown",
-        appStorageKey: "leftSidebarMode",
+        appStorageKey: "tabMode",
         defaultValueInt: 0,
-        dropdownOptions: .staticOptions([0: "Disabled", 1: "Slide Over", 2: "Enabled"])
+        dropdownOptions: .staticOptions([0: "Horizontal", 1: "Vertical Slide Over", 2: "Vertical"])
     ),
     Setting(
-        name: "Left Sidebar Width",
+        name: "Spaces",
+        icon: "rectangle.on.rectangle.angled",
+        category: catBrowsing,
+        type: "toggle",
+        appStorageKey: "showSpaces",
+        defaultValueBool: true,
+    ),
+    Setting(
+        name: "Vertical Tabs Width",
         icon: "arrow.left.and.right",
         category: catSidebar,
         type: "slider",

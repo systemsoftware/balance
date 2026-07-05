@@ -1,5 +1,4 @@
 import SwiftUI
-import AppKit
 internal import Combine
 import WebKit
 
