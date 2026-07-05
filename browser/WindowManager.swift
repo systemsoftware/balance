@@ -353,8 +353,20 @@ private struct BrowserWindowContent: View {
             ForEach(window.tabs) { tab in
                 BrowserWindowTabContainer(tab: tab, activeTabID: window.activeTabID)
             }
+            if let activeTab = window.activeTab {
+                ActiveTabTitleObserver(state: activeTab.browserState)
+            }
         }
         .frame(minWidth: 640, minHeight: 480)
+    }
+}
+
+private struct ActiveTabTitleObserver: View {
+    @ObservedObject var state: BrowserState
+    
+    var body: some View {
+        Color.clear
+            .navigationTitle(state.title)
     }
 }
 

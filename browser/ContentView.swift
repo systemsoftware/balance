@@ -1168,7 +1168,6 @@ struct ContentView: View {
                 }
             }
         }
-        .navigationTitle(browserState.title)
         .onChange(of: sidebarURL) {
             sidebarPage.customUserAgent = userAgent
             if(sidebarURL != nil) { sidebarPage.load(sidebarURL!) }
