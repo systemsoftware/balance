@@ -7,5 +7,9 @@
 		<key>NSAllowsArbitraryLoads</key>
 		<true/>
 	</dict>
+	<key>NSCameraUsageDescription</key>
+	<string>Balance needs access to your camera to let websites use it for video calls and other features.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>Balance needs access to your microphone to let websites use it for audio calls and other features.</string>
 </dict>
 </plist>

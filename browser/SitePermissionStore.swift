@@ -12,6 +12,11 @@ enum SettingState: String, Codable, CaseIterable {
     case block = "Block"
 }
 
+enum ToggleState: String, Codable, CaseIterable {
+    case enabled = "Enabled"
+    case disabled = "Disabled"
+}
+
 class SitePermissionStore: ObservableObject {
     static let shared = SitePermissionStore()
     
@@ -63,6 +68,36 @@ class SitePermissionStore: ObservableObject {
             permissions[host] = [:]
         }
         permissions[host]?[type] = state.rawValue
+        save()
+    }
+    
+    func toggleState(for host: String, type: String, defaultState: ToggleState) -> ToggleState {
+        if let val = permissions[host]?[type], let state = ToggleState(rawValue: val) {
+            return state
+        }
+        return defaultState
+    }
+    
+    func setToggleState(for host: String, type: String, state: ToggleState) {
+        if permissions[host] == nil {
+            permissions[host] = [:]
+        }
+        permissions[host]?[type] = state.rawValue
+        save()
+    }
+    
+    func zoomLevel(for host: String) -> Int {
+        if let val = permissions[host]?["zoom"], let zoom = Int(val) {
+            return zoom
+        }
+        return (Config.sharedDefaults?.object(forKey: "defaultPageZoom") as? Int) ?? 100
+    }
+    
+    func setZoomLevel(for host: String, value: Int) {
+        if permissions[host] == nil {
+            permissions[host] = [:]
+        }
+        permissions[host]?["zoom"] = String(value)
         save()
     }
 }

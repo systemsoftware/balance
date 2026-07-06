@@ -4,6 +4,7 @@ internal import Combine
 import ZIPFoundation
 import CoreLocation
 import AuthenticationServices
+import UserNotifications
 
 
 final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
@@ -436,6 +437,7 @@ final class BrowserWKWebView: WKWebView {
 struct BrowserWebView: NSViewRepresentable {
     let request: URLRequest
     @ObservedObject var state: BrowserState
+    @ObservedObject var permissions = SitePermissionStore.shared
     
     var priv: Bool = false
     var profile = ""
@@ -455,7 +457,64 @@ struct BrowserWebView: NSViewRepresentable {
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         
         // Media configurations useful for DRM / FairPlay streams
-        config.mediaTypesRequiringUserActionForPlayback = []
+        let host = request.url?.host ?? "default"
+        
+        let autoplaySetting = SitePermissionStore.shared.setting(for: host, type: "autoplay", defaultState: .allow)
+        if autoplaySetting == .allow {
+            config.mediaTypesRequiringUserActionForPlayback = []
+        } else {
+            config.mediaTypesRequiringUserActionForPlayback = .all
+        }
+        
+        let notificationsSetting = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
+        let notifSettingStr = notificationsSetting == .allow ? "granted" : (notificationsSetting == .deny ? "denied" : "default")
+        
+        let notificationsJS = """
+        (function() {
+            let currentPermission = '\(notifSettingStr)';
+            
+            function MockNotification(title, options) {
+                if (currentPermission !== 'granted') return;
+                let msg = { title: title };
+                if (options) {
+                    msg.body = options.body;
+                    msg.icon = options.icon;
+                }
+                window.webkit.messageHandlers.notificationShow.postMessage(msg);
+            }
+            
+            Object.defineProperty(MockNotification, 'permission', {
+                get: function() { return currentPermission; }
+            });
+            
+            MockNotification.requestPermission = function(callback) {
+                return new Promise((resolve) => {
+                    if (currentPermission !== 'default') {
+                        if (callback) callback(currentPermission);
+                        resolve(currentPermission);
+                        return;
+                    }
+                    
+                    const callbackId = 'notif_' + Math.random().toString(36).substr(2, 9);
+                    window['__balanceNotificationCallback_' + callbackId] = function(result) {
+                        currentPermission = result;
+                        if (callback) callback(result);
+                        resolve(result);
+                        delete window['__balanceNotificationCallback_' + callbackId];
+                    };
+                    
+                    window.webkit.messageHandlers.notificationRequestPermission.postMessage({ id: callbackId });
+                });
+            };
+            
+            window.Notification = MockNotification;
+        })();
+        """
+        let notifScript = WKUserScript(source: notificationsJS, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        config.userContentController.addUserScript(notifScript)
+        config.userContentController.add(context.coordinator, name: "notificationRequestPermission")
+        config.userContentController.add(context.coordinator, name: "notificationShow")
+        
         config.allowsAirPlayForMediaPlayback = true
         
         // Chrome Web Store integration
@@ -783,7 +842,7 @@ struct BrowserWebView: NSViewRepresentable {
             webView.customUserAgent = userAgent
         }
         
-        let defaultZoom = (Config.sharedDefaults?.object(forKey: "defaultPageZoom") as? Int) ?? 100
+        let defaultZoom = SitePermissionStore.shared.zoomLevel(for: host)
         webView.pageZoom = CGFloat(defaultZoom) / 100.0
         webView.state = state
         webView.navigationDelegate = context.coordinator
@@ -820,46 +879,49 @@ struct BrowserWebView: NSViewRepresentable {
             )
 
             let fileManager = FileManager.default
-            let dir = base!.appendingPathComponent("Balance/contentblockers", isDirectory: true)
+            let dir = base!.appendingPathComponent("ContentBlockers", isDirectory: true)
         
             let userContentController = webView.configuration.userContentController
 
             userContentController.removeAllContentRuleLists()
 
-            do {
-                let items = try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-
-                for item in items {
-                    // Load JSON rules from file
-                    let jsonStr = try String(contentsOf: item, encoding: .utf8)
-
-                    let identifier = "dynamicRules-\(UUID().uuidString)"
-
-                    guard let data = jsonStr.data(using: .utf8),
-                          (try? JSONSerialization.jsonObject(with: data)) != nil else {
-                        print("addToContentBlocker — invalid JSON rules at: \(item.lastPathComponent)")
-                        continue
-                    }
-
-                    WKContentRuleListStore.default().compileContentRuleList(
-                        forIdentifier: identifier,
-                        encodedContentRuleList: jsonStr
-                    ) { ruleList, error in
-                        if let error {
-                            print("Failed to compile content blocker rules: \(error.localizedDescription)")
-                            return
+            let blockersEnabled = SitePermissionStore.shared.toggleState(for: host, type: "contentblockers", defaultState: .enabled) == .enabled
+            if blockersEnabled {
+                do {
+                    let items = try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
+    
+                    for item in items {
+                        // Load JSON rules from file
+                        let jsonStr = try String(contentsOf: item, encoding: .utf8)
+    
+                        let identifier = "dynamicRules-\(UUID().uuidString)"
+    
+                        guard let data = jsonStr.data(using: .utf8),
+                              (try? JSONSerialization.jsonObject(with: data)) != nil else {
+                            print("addToContentBlocker — invalid JSON rules at: \(item.lastPathComponent)")
+                            continue
                         }
-
-                        guard let ruleList else {
-                            print("Failed to compile content blocker rules: no rule list returned")
-                            return
+    
+                        WKContentRuleListStore.default().compileContentRuleList(
+                            forIdentifier: identifier,
+                            encodedContentRuleList: jsonStr
+                        ) { ruleList, error in
+                            if let error {
+                                print("Failed to compile content blocker rules: \(error.localizedDescription)")
+                                return
+                            }
+    
+                            guard let ruleList else {
+                                print("Failed to compile content blocker rules: no rule list returned")
+                                return
+                            }
+    
+                            userContentController.add(ruleList)
                         }
-
-                        userContentController.add(ruleList)
                     }
+                } catch {
+                    print("Error reading directory: \(error.localizedDescription)")
                 }
-            } catch {
-                print("Error reading directory: \(error.localizedDescription)")
             }
         
         context.coordinator.lastLoadedRequestURL = request.url
@@ -872,11 +934,26 @@ struct BrowserWebView: NSViewRepresentable {
     }
 
     func updateNSView(_ nsView: WKWebView, context: Context) {
-        let defaultZoom = (Config.sharedDefaults?.object(forKey: "defaultPageZoom") as? Int) ?? 100
-        let targetZoom = CGFloat(defaultZoom) / 100.0
+        let host = nsView.url?.host ?? request.url?.host ?? "default"
+        
+        let siteZoom = SitePermissionStore.shared.zoomLevel(for: host)
+        let targetZoom = CGFloat(siteZoom) / 100.0
         if nsView.pageZoom != targetZoom {
             nsView.pageZoom = targetZoom
         }
+        if context.coordinator.state.zoomLevel != targetZoom {
+            DispatchQueue.main.async {
+                context.coordinator.state.zoomLevel = targetZoom
+                context.coordinator.state.applyZoom()
+            }
+        }
+        
+        let autoplaySetting = SitePermissionStore.shared.setting(for: host, type: "autoplay", defaultState: .allow)
+        nsView.configuration.mediaTypesRequiringUserActionForPlayback = (autoplaySetting == .allow) ? [] : .all
+        if autoplaySetting == .block {
+            nsView.evaluateJavaScript("document.querySelectorAll('video, audio').forEach(function(v) { if (!v.paused) v.pause(); });", completionHandler: nil)
+        }
+
         if context.coordinator.lastLoadedRequestURL != request.url {
             context.coordinator.lastLoadedRequestURL = request.url
             if let url = request.url, url.isFileURL, url.absoluteString.hasPrefix("file://") {
@@ -1077,6 +1154,50 @@ struct BrowserWebView: NSViewRepresentable {
                         self.sendLocationToJS(id: id, location: loc)
                     }
                 }
+            } else if message.name == "notificationRequestPermission", let dict = message.body as? [String: Any], let id = dict["id"] as? String {
+                DispatchQueue.main.async {
+                    if let webView = self.state.webView, let host = webView.url?.host {
+                        let handleResult: (PermissionState) -> Void = { newState in
+                            SitePermissionStore.shared.setMediaPermission(for: host, type: "notifications", state: newState)
+                            let resultStr = newState == .allow ? "granted" : (newState == .deny ? "denied" : "default")
+                            webView.evaluateJavaScript("if (window['__balanceNotificationCallback_\(id)']) { window['__balanceNotificationCallback_\(id)']('\(resultStr)'); }", completionHandler: nil)
+                        }
+                        
+                        let currentState = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
+                        if currentState == .ask {
+                            let alert = NSAlert()
+                            alert.messageText = "Allow \"\(host)\" to show notifications?"
+                            alert.addButton(withTitle: "Allow")
+                            alert.addButton(withTitle: "Deny")
+                            let result = alert.runModal()
+                            handleResult(result == .alertFirstButtonReturn ? .allow : .deny)
+                        } else {
+                            handleResult(currentState)
+                        }
+                    }
+                }
+            } else if message.name == "notificationShow", let dict = message.body as? [String: Any], let title = dict["title"] as? String {
+                DispatchQueue.main.async {
+                    if let webView = self.state.webView, let host = webView.url?.host {
+                        let currentState = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
+                        if currentState == .allow {
+                            UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]) { granted, error in
+                                if granted {
+                                    let content = UNMutableNotificationContent()
+                                    content.title = title
+                                    if let body = dict["body"] as? String {
+                                        content.body = body
+                                    }
+                                    if let urlStr = webView.url?.absoluteString {
+                                        content.userInfo = ["url": urlStr]
+                                    }
+                                    let request = UNNotificationRequest(identifier: UUID().uuidString, content: content, trigger: nil)
+                                    UNUserNotificationCenter.current().add(request)
+                                }
+                            }
+                        }
+                    }
+                }
             }
         }
 
@@ -1142,6 +1263,16 @@ struct BrowserWebView: NSViewRepresentable {
             
             let host = webView.url?.host ?? "default"
             let p = profile.isEmpty ? "default" : profile
+            
+            let siteZoom = SitePermissionStore.shared.zoomLevel(for: host)
+            let targetZoom = CGFloat(siteZoom) / 100.0
+            if webView.pageZoom != targetZoom {
+                webView.pageZoom = targetZoom
+            }
+            if state.zoomLevel != targetZoom {
+                state.zoomLevel = targetZoom
+                state.applyZoom()
+            }
             let settingsKey = "boost_\(p)_\(host)"
             
             let hexColor = Config.sharedDefaults?.string(forKey: "\(settingsKey)_color")
@@ -1368,7 +1499,60 @@ struct BrowserWebView: NSViewRepresentable {
                 return
             }
             
-            decisionHandler(.prompt)
+            let alert = NSAlert()
+            var messageText = "The website \"\(host)\" would like to access your "
+            if type == .camera {
+                messageText += "camera."
+            } else if type == .microphone {
+                messageText += "microphone."
+            } else {
+                messageText += "camera and microphone."
+            }
+            alert.messageText = messageText
+            alert.informativeText = "You can change this later in the site settings (padlock icon)."
+            alert.addButton(withTitle: "Allow")
+            alert.addButton(withTitle: "Deny")
+            
+            if let window = webView.window {
+                alert.beginSheetModal(for: window) { response in
+                    if response == .alertFirstButtonReturn {
+                        if type == .camera || type == .cameraAndMicrophone {
+                            SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: .allow)
+                        }
+                        if type == .microphone || type == .cameraAndMicrophone {
+                            SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: .allow)
+                        }
+                        decisionHandler(.grant)
+                    } else {
+                        if type == .camera || type == .cameraAndMicrophone {
+                            SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: .deny)
+                        }
+                        if type == .microphone || type == .cameraAndMicrophone {
+                            SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: .deny)
+                        }
+                        decisionHandler(.deny)
+                    }
+                }
+            } else {
+                let response = alert.runModal()
+                if response == .alertFirstButtonReturn {
+                    if type == .camera || type == .cameraAndMicrophone {
+                        SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: .allow)
+                    }
+                    if type == .microphone || type == .cameraAndMicrophone {
+                        SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: .allow)
+                    }
+                    decisionHandler(.grant)
+                } else {
+                    if type == .camera || type == .cameraAndMicrophone {
+                        SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: .deny)
+                    }
+                    if type == .microphone || type == .cameraAndMicrophone {
+                        SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: .deny)
+                    }
+                    decisionHandler(.deny)
+                }
+            }
         }
 
         func webView(_ webView: WKWebView,

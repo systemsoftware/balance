@@ -134,7 +134,7 @@ struct ContentBlockerView: View {
             create: true
         ) else { return nil }
         
-        let dir = base.appendingPathComponent("Balance/contentblockers", isDirectory: true)
+        let dir = base.appendingPathComponent("ContentBlockers", isDirectory: true)
         if !FileManager.default.fileExists(atPath: dir.path) {
             try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)
         }

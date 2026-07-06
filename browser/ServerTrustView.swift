@@ -82,6 +82,10 @@ struct ServerTrustView: View {
                         permissionRow(title: "Microphone", icon: "mic", host: host, type: "microphone", isMedia: true)
                         permissionRow(title: "Pop-ups", icon: "macwindow.on.rectangle", host: host, type: "popups", isMedia: false, defaultState: .block)
                         permissionRow(title: "JavaScript", icon: "curlybraces.square", host: host, type: "javascript", isMedia: false, defaultState: .allow)
+                        toggleRow(title: "Content Blockers", icon: "shield", host: host, type: "contentblockers", defaultState: .enabled)
+                        permissionRow(title: "Notifications", icon: "bell", host: host, type: "notifications", isMedia: true)
+                        permissionRow(title: "Autoplay", icon: "play.rectangle", host: host, type: "autoplay", isMedia: false, defaultState: .allow)
+                        zoomRow(title: "Zoom", icon: "magnifyingglass", host: host)
                     }
                     
                     if !cookies.isEmpty {
@@ -200,7 +204,6 @@ struct ServerTrustView: View {
                         Text(state.rawValue).tag(state)
                     }
                 }
-                .frame(width: 100)
                 .labelsHidden()
             } else {
                 Picker("", selection: Binding(
@@ -211,9 +214,44 @@ struct ServerTrustView: View {
                         Text(state.rawValue).tag(state)
                     }
                 }
-                .frame(width: 100)
                 .labelsHidden()
             }
+        }
+    }
+    
+    @ViewBuilder
+    private func toggleRow(title: String, icon: String, host: String, type: String, defaultState: ToggleState = .enabled) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Picker("", selection: Binding(
+                get: { store.toggleState(for: host, type: type, defaultState: defaultState) },
+                set: { store.setToggleState(for: host, type: type, state: $0) }
+            )) {
+                ForEach(ToggleState.allCases, id: \.self) { state in
+                    Text(state.rawValue).tag(state)
+                }
+            }
+            .labelsHidden()
+        }
+    }
+    
+    @ViewBuilder
+    private func zoomRow(title: String, icon: String, host: String) -> some View {
+        HStack {
+            Label(title, systemImage: icon)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            
+            Picker("", selection: Binding(
+                get: { store.zoomLevel(for: host) },
+                set: { store.setZoomLevel(for: host, value: $0) }
+            )) {
+                ForEach([50, 75, 85, 100, 115, 125, 150, 175, 200], id: \.self) { level in
+                    Text("\(level)%").tag(level)
+                }
+            }
+            .labelsHidden()
         }
     }
 }

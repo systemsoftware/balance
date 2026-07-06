@@ -50,7 +50,7 @@ struct AutoFillView: View {
                     Text("Loading suggestions…")
                         .foregroundStyle(.secondary)
                 }
-                .padding(.vertical, 6)
+                .padding()
                 .frame(maxWidth: .infinity, alignment: .center)
             } else if suggestions.isEmpty {
                 if !noContentAvView {
