@@ -11,13 +11,14 @@ struct BookmarkRow: View {
     let bookmark: Bookmark
     let action: () -> Void
     let onDelete: () -> Void
+    let onEdit: () -> Void
 
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(Color.blue.opacity(0.1))
+                        .fill(Color.accentColor.opacity(0.1))
                         .frame(width: 32, height: 32)
                     CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(bookmark.url)"))
                         .font(.system(size: 14, weight: .bold))
@@ -25,34 +26,33 @@ struct BookmarkRow: View {
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(bookmark.title)
-                        .font(.system(.body, design: .rounded))
-                        .fontWeight(.semibold)
-                        .foregroundColor(.primary)
+                    Text(bookmark.title.isEmpty ? bookmark.url : bookmark.title)
+                        .font(.system(.subheadline, design: .rounded))
+                        .fontWeight(.medium)
+                        .lineLimit(1)
                     
                     Text(bookmark.url)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 
                 Spacer()
-                
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 12, weight: .bold))
-                    .foregroundColor(.secondary.opacity(0.5))
             }
-            .padding(.vertical, 10)
-            .padding(.horizontal, 14)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
-            .cornerRadius(12)
-            .overlay(
-                RoundedRectangle(cornerRadius: 12)
-                    .stroke(Color.primary.opacity(0.05), lineWidth: 1)
-            )
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
         }
-        .buttonStyle(PlainButtonStyle()) // Removes the default button "flash"
+        .buttonStyle(.plain)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        )
         .contextMenu {
+            Button(action: onEdit) {
+                Label("Edit", systemImage: "pencil")
+            }
             Button(role: .destructive, action: onDelete) {
                 Label("Remove", systemImage: "trash")
             }
@@ -70,6 +70,7 @@ struct BookmarksView: View {
     @Binding var showAddBookmark: Bool
     @State private var urlInput: String = ""
     @State private var titleInput: String = ""
+    @State private var editingBookmark: Bookmark?
     
     var isSettings = false
 
@@ -93,29 +94,41 @@ struct BookmarksView: View {
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                 }
-                .padding(.horizontal)
-                .padding(.top)
+                .padding()
             }
 
             
-            ScrollView {
-                if store.items.isEmpty {
+            if store.items.isEmpty {
+                ScrollView {
                     EmptyBookmarksView()
                         .padding(.top, 40)
-                } else {
-                    VStack(alignment: .leading, spacing: 10) {
-                        ForEach(store.items) { mark in
-                            BookmarkRow(
-                                bookmark: mark,
-                                action: { createNewTab(with: URL(string:mark.url)) },
-                                onDelete: { store.remove(id: mark.id) }
-                            )
-                        }
-                    }
-                    .padding(isSettings ? 5 : 16)
                 }
+                .frame(minWidth: CGFloat(sidebarWidth))
+            } else {
+                List {
+                    ForEach(store.items) { mark in
+                        BookmarkRow(
+                            bookmark: mark,
+                            action: { createNewTab(with: URL(string:mark.url)) },
+                            onDelete: { store.remove(id: mark.id) },
+                            onEdit: {
+                                urlInput = mark.url
+                                titleInput = mark.title
+                                editingBookmark = mark
+                            }
+                        )
+                        .listRowSeparator(.hidden)
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets(top: 4, leading: isSettings ? 5 : 16, bottom: 4, trailing: isSettings ? 5 : 16))
+                    }
+                    .onMove { source, destination in
+                        store.move(from: source, to: destination)
+                    }
+                }
+                .listStyle(.plain)
+                .scrollContentBackground(.hidden)
+                .frame(minWidth: CGFloat(sidebarWidth))
             }
-            .frame(minWidth: CGFloat(sidebarWidth))
 
         }
         .background(Color.black.opacity(0.03))
@@ -137,6 +150,15 @@ struct BookmarksView: View {
                 showAddBookmark = false
             }
         }
+        .sheet(item: $editingBookmark) { mark in
+            AddBookmarkSheet(url: $urlInput, title: $titleInput, isEditing: true) {
+                store.update(id: mark.id, title: titleInput, url: urlInput)
+                editingBookmark = nil
+                urlInput = ""
+                titleInput = ""
+            }
+        }
+
     }
 }
 
@@ -159,12 +181,13 @@ struct EmptyBookmarksView: View {
 struct AddBookmarkSheet: View {
     @Binding var url: String
     @Binding var title: String
+    var isEditing: Bool = false
     var onSave: () -> Void
     @Environment(\.dismiss) var dismiss
 
     var body: some View {
         VStack(spacing: 20) {
-            Text("New Bookmark")
+            Text(isEditing ? "Edit Bookmark" : "New Bookmark")
                 .font(.headline)
             
             VStack(spacing: 12) {

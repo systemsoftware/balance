@@ -159,6 +159,7 @@ struct HistoryView: View {
                         }
                     }
                     .padding(.horizontal)
+                    .padding(.bottom)
                 }
             }
         }
@@ -174,14 +175,13 @@ struct HistoryRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 12) {
-                // Circular Time Icon
                 ZStack {
                     Circle()
-                        .fill(Color.secondary.opacity(0.1))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "clock")
-                        .font(.system(size: 10))
-                        .foregroundColor(.secondary)
+                        .fill(Color.accentColor.opacity(0.1))
+                        .frame(width: 32, height: 32)
+                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(item.url)"))
+                        .font(.system(size: 14, weight: .bold))
+                        .foregroundColor(.blue)
                 }
                 
                 VStack(alignment: .leading, spacing: 2) {
@@ -196,16 +196,22 @@ struct HistoryRow: View {
                         Text("•")
                         Text(item.timestamp.formatted(date: .omitted, time: .shortened))
                     }
-                    .font(.system(size: 10, design: .monospaced))
-                    .foregroundColor(.secondary)
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
                 }
                 Spacer()
             }
-            .padding(.vertical, 8)
-            .padding(.horizontal, 12)
+            .padding()
             .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
         }
         .buttonStyle(.plain)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        )
     }
 }
 

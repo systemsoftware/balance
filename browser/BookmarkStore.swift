@@ -1,5 +1,6 @@
 import Foundation
 internal import Combine
+import SwiftUI
 
 final class BookmarkStore: ObservableObject {
     @Published var items: [Bookmark] = []
@@ -36,8 +37,21 @@ final class BookmarkStore: ObservableObject {
         save()
     }
 
+    func update(id: UUID, title: String, url: String) {
+        if let index = items.firstIndex(where: { $0.id == id }) {
+            items[index].title = title
+            items[index].url = url
+            save()
+        }
+    }
+
     func remove(id: UUID) {
         items.removeAll { $0.id == id }
+        save()
+    }
+
+    func move(from source: IndexSet, to destination: Int) {
+        items.move(fromOffsets: source, toOffset: destination)
         save()
     }
 }

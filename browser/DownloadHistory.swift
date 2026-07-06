@@ -36,13 +36,13 @@ struct DownloadRow: View {
                         .foregroundColor(.primary)
                     
                     Text(Download.to)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                     
                     Text(Download.from)
-                        .font(.system(.caption, design: .monospaced))
-                        .foregroundColor(.secondary)
+                        .font(.system(size: 10))
+                        .foregroundStyle(.secondary)
                         .lineLimit(1)
                 }
                 

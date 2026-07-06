@@ -179,6 +179,12 @@ struct PasswordRow: View {
                 PasswordManager.shared.savePassword(username: cred.username, passwordString: editPasswordText, domain: cred.domain)
             }
         }
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        )
     }
     
     private func authenticate(reason: String, completion: @escaping () -> Void) {

@@ -63,29 +63,37 @@ struct ContentBlockerView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)
                     } else {
-                        ForEach(Array(contentBlockers.enumerated()), id: \.offset) { index, url in
-                            HStack {
-                                VStack(alignment: .leading) {
-                                    Text(url.lastPathComponent.replacingOccurrences(of: ".json", with: ""))
-                                        .font(.body)
+                        VStack {
+                            ForEach(Array(contentBlockers.enumerated()), id: \.offset) { index, url in
+                                HStack {
+                                    VStack(alignment: .leading) {
+                                        Text(url.lastPathComponent.replacingOccurrences(of: ".json", with: ""))
+                                            .font(.body)
+                                    }
+                                    Spacer()
+                                    Button {
+                                        deleteContentBlocker(at: url)
+                                    } label: {
+                                        Image(systemName: "trash")
+                                            .foregroundColor(.red)
+                                    }
+                                    .buttonStyle(.borderless)
                                 }
-                                Spacer()
-                                Button {
-                                    deleteContentBlocker(at: url)
-                                } label: {
-                                    Image(systemName: "trash")
-                                        .foregroundColor(.red)
+                                .padding()
+                                .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+                                .cornerRadius(12)
+                                .overlay(
+                                    RoundedRectangle(cornerRadius: 12)
+                                        .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                                )
+                                
+                                if index < contentBlockers.count - 1 {
+                                    Divider()
+                                        .padding(.horizontal)
                                 }
-                                .buttonStyle(.borderless)
-                            }
-                            .padding(.horizontal)
-                            .padding(.vertical, 8)
-                            
-                            if index < contentBlockers.count - 1 {
-                                Divider()
-                                    .padding(.horizontal)
                             }
                         }
+                        .padding()
                     }
                 }
             }

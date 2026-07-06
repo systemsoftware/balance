@@ -39,24 +39,24 @@ struct ExtensionsView: View {
             
             // MARK: - Extension List
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if manager.contexts.isEmpty {
-                        VStack(spacing: 12) {
-                            Image(systemName: "puzzlepiece.extension")
-                                .font(.system(size: 32))
-                                .foregroundStyle(.secondary)
-                            Text("No Extensions Installed")
-                                .font(.headline)
-                                .foregroundStyle(.secondary)
-                            Text("Use the + menu to install extensions from a .crx file or URL.")
-                                .font(.caption)
-                                .foregroundStyle(.tertiary)
-                                .multilineTextAlignment(.center)
-                        }
-                        .frame(maxWidth: .infinity)
-                        .padding(.vertical, 40)
-                    } else {
-                        ForEach(Array(manager.contexts.enumerated()), id: \.offset) { index, context in
+                if manager.contexts.isEmpty {
+                    VStack(spacing: 12) {
+                        Image(systemName: "puzzlepiece.extension")
+                            .font(.system(size: 32))
+                            .foregroundStyle(.secondary)
+                        Text("No Extensions Installed")
+                            .font(.headline)
+                            .foregroundStyle(.secondary)
+                        Text("Use the + menu to install extensions from a .crx file or URL.")
+                            .font(.caption)
+                            .foregroundStyle(.tertiary)
+                            .multilineTextAlignment(.center)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 40)
+                } else {
+                    LazyVStack(spacing: 8) {
+                        ForEach(manager.contexts, id: \.baseURL) { context in
                             ExtensionRow(context: context, onUninstall: {
                                 manager.removeExtensionFromDisk(context)
                             }, onOpenOptions: {
@@ -64,13 +64,10 @@ struct ExtensionsView: View {
                             }, onUpdate: {
                                 updateExtension(context)
                             })
-                            
-                            if index < manager.contexts.count - 1 {
-                                Divider()
-                                    .padding(.horizontal)
-                            }
                         }
                     }
+                    .padding(.horizontal)
+                    .padding(.bottom)
                 }
             }
             
@@ -236,8 +233,18 @@ struct ExtensionRow: View {
                     .fill(Color.accentColor.opacity(0.12))
                     .frame(width: 36, height: 36)
                 
-                Image(systemName: "puzzlepiece.extension.fill")
-                    .font(.system(size: 16))
+                if let icon = context.webExtension.icon(for: CGSize(width:20,height: 20)) {
+                    Image(nsImage: icon)
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 20, height: 20)
+                } else {
+                    Image(systemName: "puzzlepiece.extension")
+                        .resizable()
+                        .aspectRatio(contentMode: .fit)
+                        .frame(width: 20, height: 20)
+                        .foregroundStyle(.secondary)
+                }
             }
             
             // Info
@@ -285,8 +292,13 @@ struct ExtensionRow: View {
                 .help("Uninstall extension")
             }
         }
-        .padding(.horizontal)
-        .padding(.vertical, 8)
+        .padding()
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        )
     }
 }
 

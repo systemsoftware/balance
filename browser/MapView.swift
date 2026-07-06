@@ -1,8 +1,36 @@
 import SwiftUI
 import MapKit
+internal import Combine
 import FoundationModels
 
 private let model = SystemLanguageModel.default
+
+class SearchCompleterManager: NSObject, ObservableObject, MKLocalSearchCompleterDelegate {
+    @Published var completerResults: [MKLocalSearchCompletion] = []
+    
+    private let completer = MKLocalSearchCompleter()
+    
+    override init() {
+        super.init()
+        completer.delegate = self
+    }
+    
+    func updateSearch(query: String) {
+        if query.isEmpty {
+            completerResults = []
+        } else {
+            completer.queryFragment = query
+        }
+    }
+    
+    func completerDidUpdateResults(_ completer: MKLocalSearchCompleter) {
+        self.completerResults = completer.results
+    }
+    
+    func completer(_ completer: MKLocalSearchCompleter, didFailWithError error: Error) {
+        print("Search completer failed: \(error.localizedDescription)")
+    }
+}
 
 struct MapView: View {
     @State private var position: MapCameraPosition = .automatic
@@ -10,6 +38,10 @@ struct MapView: View {
     @State private var searchResults: [PlaceItem] = []
     @State private var extractedPlaces: [PlaceItem] = []
     @State private var selectedResult: PlaceItem?
+    
+    @FocusState private var isSearchFocused: Bool
+    
+    @StateObject private var completerManager = SearchCompleterManager()
     
     @StateObject private var placeStore = PlaceStore()
         
@@ -32,110 +64,186 @@ struct MapView: View {
     }
     
     var body: some View {
-        VStack(spacing: 0) {
-            HStack {
-                Image(systemName: "magnifyingglass")
-                    .foregroundColor(.secondary)
-                TextField("Search places...", text: $searchText)
-                    .textFieldStyle(.plain)
-                    .onSubmit {
-                        search(for: searchText)
+        Map(position: $position, selection: $selectedResult) {
+            ForEach(allPlaces, id: \.id) { place in
+                Annotation(place.name, coordinate: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude), anchor: .bottom) {
+                    let isPinned = placeStore.items.contains(where: { $0.id == place.id })
+                    
+                    VStack(spacing: -1) {
+                        HStack(spacing: 8) {
+                            ZStack {
+                                Circle()
+                                    .fill(isPinned ? Color.orange : Color.accentColor)
+                                    .frame(width: 26, height: 26)
+                                Image(systemName: isPinned ? "star.fill" : "mappin")
+                                    .font(.system(size: 12, weight: .bold))
+                                    .foregroundColor(.white)
+                            }
+                            
+                            VStack(alignment: .leading, spacing: 1) {
+                                Text(place.name)
+                                    .font(.system(size: 12, weight: .bold, design: .rounded))
+                                    .foregroundColor(.primary)
+                                    .lineLimit(1)
+                                
+                                if let url = place.sourceURL, let host = URL(string: url)?.host {
+                                    Text(host.replacingOccurrences(of: "www.", with: ""))
+                                        .font(.system(size: 9, weight: .medium))
+                                        .foregroundColor(.secondary)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .padding(.trailing, 8)
+                        }
+                        .padding(4)
+                        .background(Color(NSColor.windowBackgroundColor))
+                        .clipShape(Capsule())
+                        .overlay(
+                            Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 1)
+                        )
+                        
+                        Image(systemName: "triangle.fill")
+                            .resizable()
+                            .frame(width: 14, height: 7)
+                            .rotationEffect(.degrees(180))
+                            .foregroundColor(Color(NSColor.windowBackgroundColor))
                     }
-                if !searchText.isEmpty {
-                    Button(action: {
-                        searchText = ""
-                        searchResults = []
-                    }) {
-                        Image(systemName: "xmark.circle.fill")
-                            .foregroundColor(.secondary)
+                    .compositingGroup()
+                    .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
+                    .padding(.bottom, 2)
+                    .contextMenu {
+                        if placeStore.items.contains(where: { $0.id == place.id }) {
+                            Button("Remove Pin") {
+                                placeStore.remove(id: place.id)
+                            }
+                        } else {
+                            Button("Pin Place") {
+                                placeStore.add(place)
+                            }
+                        }
                     }
-                    .buttonStyle(.plain)
                 }
+                .tag(place)
             }
-            .padding(10)
-            .background(Color(NSColor.controlBackgroundColor))
-            
-                Divider()
+        }
+        .safeAreaInset(edge: .top) {
+            VStack(spacing: 0) {
+                // Search Bar
+                HStack(spacing: 10) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundColor(.secondary)
+                        .font(.system(size: 14, weight: .medium))
+                    TextField("Search places...", text: $searchText)
+                        .textFieldStyle(.plain)
+                        .font(.system(size: 14))
+                        .focused($isSearchFocused)
+                        .onChange(of: searchText) { old, new in
+                            completerManager.updateSearch(query: new)
+                        }
+                        .onSubmit {
+                            search(for: searchText)
+                            completerManager.completerResults = []
+                        }
+                    if !searchText.isEmpty {
+                        Button(action: {
+                            searchText = ""
+                            searchResults = []
+                            completerManager.completerResults = []
+                        }) {
+                            Image(systemName: "xmark.circle.fill")
+                                .foregroundColor(.secondary)
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 12)
+                
+                if !completerManager.completerResults.isEmpty {
+                    Divider().opacity(0.5)
+                    ScrollView {
+                        LazyVStack(alignment: .leading, spacing: 0) {
+                            ForEach(completerManager.completerResults, id: \.self) { result in
+                                Button(action: {
+                                    searchText = result.title
+                                    search(from: result)
+                                    completerManager.completerResults = []
+                                }) {
+                                    VStack(alignment: .leading, spacing: 2) {
+                                        Text(result.title).font(.system(size: 13, weight: .medium))
+                                        if !result.subtitle.isEmpty {
+                                            Text(result.subtitle).font(.system(size: 11)).foregroundColor(.secondary)
+                                        }
+                                    }
+                                    .padding(.horizontal, 14)
+                                    .padding(.vertical, 8)
+                                    .frame(maxWidth: .infinity, alignment: .leading)
+                                    .contentShape(Rectangle())
+                                }
+                                .buttonStyle(.plain)
+                                
+                                Divider().opacity(0.3)
+                            }
+                        }
+                    }
+                    .frame(maxHeight: 200)
+                }
+                
+                Divider().opacity(0.5)
+                
+                // Action Bar
                 HStack {
                     if isScanning {
                         ProgressView().controlSize(.small)
+                            .padding(.trailing, 4)
                         Text("Scanning tabs for places...")
-                            .font(.caption)
+                            .font(.system(size: 12, weight: .medium))
                             .foregroundColor(.secondary)
                     } else {
-                        HStack(spacing: 12) {
+                        HStack(spacing: 20) {
                             Button(action: scanOpenTabs) {
-                                HStack(spacing: 4) {
+                                HStack(spacing: 6) {
                                     Image(systemName: "wand.and.stars")
                                     Text("Scan All Tabs")
                                 }
                             }
-                            .buttonStyle(.link)
-                            .font(.caption)
+                            .buttonStyle(.plain)
+                            .font(.system(size: 12, weight: .semibold))
+                            .foregroundColor(.accentColor)
                             
                             if browserState != nil {
                                 Button(action: scanCurrentTab) {
-                                    HStack(spacing: 4) {
-                                        Image(systemName: "doc.text.magnifyingglass")
+                                    HStack(spacing: 6) {
+                                        Image(systemName: "rectangle.badge.sparkles")
                                         Text("Scan Tab")
                                     }
                                 }
-                                .buttonStyle(.link)
-                                .font(.caption)
+                                .buttonStyle(.plain)
+                                .font(.system(size: 12, weight: .semibold))
+                                .foregroundColor(.accentColor)
                             }
                         }
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 10)
-                .padding(.vertical, 6)
-                .background(Color(NSColor.controlBackgroundColor))
-            
-            Divider()
-            
-            Map(position: $position, selection: $selectedResult) {
-                ForEach(allPlaces, id: \.id) { place in
-                    Annotation(place.name, coordinate: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude)) {
-                        VStack(spacing: 2) {
-                            Text(place.name)
-                                .font(.caption)
-                                .fontWeight(.bold)
-                                .padding(3)
-                                .background(Color(NSColor.windowBackgroundColor).opacity(0.8))
-                                .cornerRadius(4)
-                                
-                            Image(systemName: placeStore.items.contains(where: { $0.id == place.id }) ? "mappin.circle.fill" : "mappin.and.ellipse")
-                                .font(.title)
-                                .foregroundColor(placeStore.items.contains(where: { $0.id == place.id }) ? .red : .blue)
-                            
-                            if let url = place.sourceURL, let host = URL(string: url)?.host {
-                                Text(host)
-                                    .font(.system(size: 9))
-                                    .padding(2)
-                                    .background(Color.black.opacity(0.6))
-                                    .foregroundColor(.white)
-                                    .cornerRadius(4)
-                            }
-                        }
-                        .contextMenu {
-                            if placeStore.items.contains(where: { $0.id == place.id }) {
-                                Button("Remove Pin") {
-                                    placeStore.remove(id: place.id)
-                                }
-                            } else {
-                                Button("Pin Place") {
-                                    placeStore.add(place)
-                                }
-                            }
-                        }
-                    }
-                    .tag(place)
-                }
+                .padding(.horizontal, 14)
+                .padding(.vertical, 10)
+                .background(Color.primary.opacity(0.02))
             }
-            .onChange(of: selectedResult) { old, new in
-                if let selected = new {
-                    position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: selected.latitude, longitude: selected.longitude), latitudinalMeters: 5000, longitudinalMeters: 5000))
-                }
+            .glassEffect(in: RoundedRectangle(cornerRadius: 16))
+            .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
+            .padding()
+        }
+        .simultaneousGesture(TapGesture().onEnded {
+            isSearchFocused = false
+            completerManager.completerResults = []
+        })
+        .onChange(of: selectedResult) { old, new in
+            isSearchFocused = false
+            completerManager.completerResults = []
+            
+            if let selected = new {
+                position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: selected.latitude, longitude: selected.longitude), latitudinalMeters: 5000, longitudinalMeters: 5000))
             }
         }
         .alert("Scan Result", isPresented: $showingAlert) {
@@ -155,6 +263,32 @@ struct MapView: View {
         search.start { response, error in
             guard let response = response else {
                 print("Error searching: \(error?.localizedDescription ?? "Unknown error")")
+                return
+            }
+            
+            searchResults = response.mapItems.compactMap { mapItem -> PlaceItem? in
+                let mapName = mapItem.name ?? "Unknown"
+                if mapName.isEmpty || mapName == "Unknown" { return nil }
+                return PlaceItem(
+                    name: mapName,
+                    latitude: mapItem.location.coordinate.latitude,
+                    longitude: mapItem.location.coordinate.longitude,
+                    sourceURL: nil
+                )
+            }
+            
+            if let first = searchResults.first {
+                position = .region(MKCoordinateRegion(center: CLLocationCoordinate2D(latitude: first.latitude, longitude: first.longitude), latitudinalMeters: 5000, longitudinalMeters: 5000))
+            }
+        }
+    }
+    
+    private func search(from completion: MKLocalSearchCompletion) {
+        let request = MKLocalSearch.Request(completion: completion)
+        let search = MKLocalSearch(request: request)
+        search.start { response, error in
+            guard let response = response else {
+                print("Error searching completion: \(error?.localizedDescription ?? "Unknown error")")
                 return
             }
             

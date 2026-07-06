@@ -95,6 +95,7 @@ struct CalendarSidebarView: View {
                 
             }
             .padding()
+            
 
             ScrollView {
                 if viewModel.isAuthorized {
@@ -114,6 +115,7 @@ struct CalendarSidebarView: View {
                             }
                         }
                         .padding(.horizontal)
+                        .padding(.bottom)
                     }
                 } else {
                     VStack(spacing: 20) {
@@ -195,13 +197,19 @@ struct CalendarRow: View {
                             .lineLimit(1)
                     }
                 }
-                .font(.system(size: 10, design: .monospaced))
-                .foregroundColor(.secondary)
+                .font(.system(size: 10))
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
+                
             }
             Spacer()
         }
-        .padding(.vertical, 8)
-        .padding(.horizontal, 12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+        .padding()
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        )
     }
 }
