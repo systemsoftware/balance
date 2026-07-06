@@ -197,11 +197,12 @@ struct ChatView: View {
                                 // User Query
                                 HStack {
                                     Spacer()
-                                    Text(item.query.replacingOccurrences(of: String(CurrentPage.prefix(pageCutoff)), with: ""))
+                                    Text(item.query.replacingOccurrences(of: String(CurrentPage.prefix(pageCutoff)), with: "").trimmingCharacters(in: .whitespaces))
                                         .padding(12)
                                         .background(Color.accentColor)
                                         .foregroundColor(.white)
                                         .clipShape(RoundedRectangle(cornerRadius: 16))
+                                        .textSelection(.enabled)
                                 }
                                 
                                 // AI Response
@@ -209,6 +210,7 @@ struct ChatView: View {
                                     Text(.init(item.response))
                                         .padding(12)
                                         .glassEffect(in: .rect(cornerRadius: 16))
+                                        .textSelection(.enabled)
                                     Spacer()
                                 }
                             }
