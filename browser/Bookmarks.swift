@@ -99,35 +99,59 @@ struct BookmarksView: View {
 
             
             if store.items.isEmpty {
-                ScrollView {
+                if isSettings {
                     EmptyBookmarksView()
                         .padding(.top, 40)
+                } else {
+                    ScrollView {
+                        EmptyBookmarksView()
+                            .padding(.top, 40)
+                    }
+                    .frame(minWidth: CGFloat(sidebarWidth))
                 }
-                .frame(minWidth: CGFloat(sidebarWidth))
             } else {
-                List {
-                    ForEach(store.items) { mark in
-                        BookmarkRow(
-                            bookmark: mark,
-                            action: { createNewTab(with: URL(string:mark.url)) },
-                            onDelete: { store.remove(id: mark.id) },
-                            onEdit: {
-                                urlInput = mark.url
-                                titleInput = mark.title
-                                editingBookmark = mark
-                            }
-                        )
-                        .listRowSeparator(.hidden)
-                        .listRowBackground(Color.clear)
-                        .listRowInsets(EdgeInsets(top: 4, leading: isSettings ? 5 : 16, bottom: 4, trailing: isSettings ? 5 : 16))
+                if isSettings {
+                    VStack(spacing: 8) {
+                        ForEach(store.items) { mark in
+                            BookmarkRow(
+                                bookmark: mark,
+                                action: { createNewTab(with: URL(string:mark.url)) },
+                                onDelete: { store.remove(id: mark.id) },
+                                onEdit: {
+                                    urlInput = mark.url
+                                    titleInput = mark.title
+                                    editingBookmark = mark
+                                }
+                            )
+                        }
                     }
-                    .onMove { source, destination in
-                        store.move(from: source, to: destination)
+                    .padding(.trailing, 16)
+                    .padding(.vertical, 8)
+                } else {
+                    List {
+                        ForEach(store.items) { mark in
+                            BookmarkRow(
+                                bookmark: mark,
+                                action: { createNewTab(with: URL(string:mark.url)) },
+                                onDelete: { store.remove(id: mark.id) },
+                                onEdit: {
+                                    urlInput = mark.url
+                                    titleInput = mark.title
+                                    editingBookmark = mark
+                                }
+                            )
+                            .listRowSeparator(.hidden)
+                            .listRowBackground(Color.clear)
+                            .listRowInsets(EdgeInsets(top: 4, leading: 16, bottom: 4, trailing: 16))
+                        }
+                        .onMove { source, destination in
+                            store.move(from: source, to: destination)
+                        }
                     }
+                    .listStyle(.plain)
+                    .scrollContentBackground(.hidden)
+                    .frame(minWidth: CGFloat(sidebarWidth))
                 }
-                .listStyle(.plain)
-                .scrollContentBackground(.hidden)
-                .frame(minWidth: CGFloat(sidebarWidth))
             }
 
         }
