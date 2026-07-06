@@ -409,6 +409,16 @@ struct ContentView: View {
                                 .glassEffect(.regular.interactive())
                                 .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
                                 .keyboardShortcut(.leftArrow, modifiers: .command)
+                                .contextMenu {
+                                    if let webView = browserState.webView {
+                                        let list = Array(webView.backForwardList.backList.reversed())
+                                        ForEach(list, id: \.self) { item in
+                                                Button(item.url.absoluteString) {
+                                                    location = item.url
+                                                }
+                                        }
+                                    }
+                                }
                             }
                             
                             if browserState.canGoForward {
@@ -424,6 +434,16 @@ struct ContentView: View {
                                 .glassEffect(.regular.interactive())
                                 .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
                                 .keyboardShortcut(.rightArrow, modifiers: .command)
+                                .contextMenu {
+                                    if let webView = browserState.webView {
+                                        let list = Array(webView.backForwardList.forwardList.reversed())
+                                        ForEach(list, id: \.self) { item in
+                                                Button(item.url.absoluteString) {
+                                                    location = item.url
+                                                }
+                                            }
+                                    }
+                                }
                             }
                         }
                     }
