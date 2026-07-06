@@ -24,8 +24,6 @@ struct browserApp: App {
     @AppStorage("clearCookiesOnClose", store:Config.sharedDefaults)
     var clearCookiesOnClose: Bool = false
     
-    @AppStorage("showTabsInDockMenu", store:Config.sharedDefaults)
-    var showTabsInDockMenu: Bool = false
     
     @AppStorage("themePreference", store:Config.sharedDefaults)
     var themePreference: String = "system"
@@ -33,6 +31,10 @@ struct browserApp: App {
     @Environment(\.modelContext) private var modelContext
     
     var downloadStore = DownloadStore()
+    
+    init () {
+        NSWindow.allowsAutomaticWindowTabbing = false
+    }
     
     private func applyTheme(_ theme: String) {
         switch theme {
@@ -66,9 +68,6 @@ struct browserApp: App {
                     }
                     cleanTemporaryDirectory()
                 }
-        }
-        .onChange(of: showTabsInDockMenu) { _, _ in
-            updateDockMenuTabsVisibility()
         }
         .modelContainer(HistoryManager.sharedContainer)
         .environmentObject(WindowManager.shared)
@@ -104,10 +103,6 @@ func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = 
 
 func createNewTab(with url: URL? = nil, inBackground: Bool = false, browserState: BrowserState? = nil) {
     WindowManager.shared.createTab(initialURL: url, inBackground: inBackground, providedState: browserState)
-}
-
-func updateDockMenuTabsVisibility() {
-    WindowManager.shared.objectWillChange.send()
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {

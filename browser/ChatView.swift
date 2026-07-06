@@ -120,6 +120,7 @@ struct ChatView: View {
                                         selectedSessionId = sessions.first?.id
                                         chatStore.items = sessions
                                         chatStore.save()
+                                        resetSession()
                                     }
                                 }
                                 Divider()
@@ -167,6 +168,7 @@ struct ChatView: View {
                         selectedSessionId = new.id
                         chatStore.items = sessions
                         chatStore.save()
+                        resetSession()
                     }) {
                         Image(systemName: "plus")
                             .padding(8)
@@ -308,11 +310,14 @@ struct ChatView: View {
     private func sendMessage() {
         guard !query.isEmpty else { return }
         
+        let cappedPage = String(CurrentPage.prefix(12000))
+        let currentQuery = "\(cappedPage) \(query)"
+        
         if sessions[currentSessionIndex].items.isEmpty {
-            let titleQuery = query
+            let titleQuery = currentQuery
             let sessionID = sessions[currentSessionIndex].id
             Task {
-                let titleSession = LanguageModelSession(instructions: "Summarize this into a short chat title of 2-5 words. Output ONLY the title.")
+                let titleSession = LanguageModelSession(instructions: "Generate a short chat title of 2-5 words based on this prompt. Output ONLY the title, no conversational text.")
                 if let title = try? await titleSession.respond(to: titleQuery).content {
                     await MainActor.run {
                         if let idx = sessions.firstIndex(where: { $0.id == sessionID }) {
@@ -325,8 +330,6 @@ struct ChatView: View {
             }
         }
         
-        let cappedPage = String(CurrentPage.prefix(12000))
-        let currentQuery = "\(cappedPage) \(query)"
         query = ""
         
         let newItem = ChatItem(query: currentQuery, response: "")

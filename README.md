@@ -78,8 +78,9 @@ Additional browsing features include:
 
 | Action        | Shortcut |
 | ------------- | -------- |
-| Go Back       | `⌘ [`    |
-| Go Forward    | `⌘ ]`    |
+| Palette       | `⌘ K`    |
+| Go Back       | `⌘ →`    |
+| Go Forward    | `⌘ ←`    |
 | Reload Page   | `⌘ R`    |
 | Find in Page  | `⌘ F`    |
 | Share Link    | `⌘ ⇧ S`  |

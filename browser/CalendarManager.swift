@@ -1,4 +1,5 @@
 import Foundation
+import SwiftUI
 import AppKit
 
 class MacCalendarManager {
@@ -49,37 +50,32 @@ class MacCalendarManager {
     }
 }
 
-struct EventExtraction: Decodable {
+struct EventExtraction: Decodable, Identifiable {
+    var id = UUID()
     let events: [ExtractedEvent]
+    
+    enum CodingKeys: String, CodingKey {
+        case events
+    }
 }
 
-struct ExtractedEvent: Decodable {
+struct ExtractedEvent: Decodable, Identifiable {
+    var id = UUID()
     let name: String
     let start: String
     let end: String
     let location: String
     let notes: String
-}
-
-func showEventPicker(events: [ExtractedEvent], onSelect: @escaping (ExtractedEvent) -> Void) {
-    let alert = NSAlert()
-    alert.messageText = "Select Event"
     
-    let popup = NSPopUpButton(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-    popup.addItems(withTitles: events.map { "\($0.name) (\(readableDate($0.start) ?? "unknown"))" })
-
-    alert.accessoryView = popup
-    alert.addButton(withTitle: "Add")
-    alert.addButton(withTitle: "Cancel")
-
-    let response = alert.runModal()
-
-    if response == .alertFirstButtonReturn {
-        let index = popup.indexOfSelectedItem
-        guard events.indices.contains(index) else { return }
-        onSelect(events[index])
+    enum CodingKeys: String, CodingKey {
+        case name
+        case start
+        case end
+        case location
+        case notes
     }
 }
+
 
 func normalizeDate(_ input: String) -> String? {
     let formats = [
@@ -175,4 +171,48 @@ private func collapseImmediateDuplicates(_ text: String) -> String {
         }
     }
     return result
+}
+
+struct EventListSheet: View {
+    let events: [EventExtraction]
+    @Environment(\.dismiss) var dismiss
+    let calManager = MacCalendarManager()
+
+    var body: some View {
+        VStack(spacing: 0) {
+            Text("Extracted Events")
+                .font(.headline)
+                .padding()
+            
+            List(events.flatMap(\.events)) { event in
+                HStack {
+                    VStack(alignment: .leading) {
+                        Text(event.name).font(.headline)
+                        let start = readableDate(event.start) ?? event.start
+                        let end = readableDate(event.end) ?? event.end
+                        Text("\(start) - \(end)").font(.subheadline).foregroundColor(.secondary)
+                    }
+                    Spacer()
+                    Button("Add") {
+                        calManager.presentAddEventPopup(
+                            title: event.name,
+                            startDateString: event.start,
+                            endDateString: event.end,
+                            location: event.location,
+                            notes: event.notes
+                        )
+                        dismiss()
+                    }
+                    .buttonStyle(.borderedProminent)
+                }
+                .padding(.vertical, 4)
+            }
+            
+            Button("Close") {
+                dismiss()
+            }
+            .padding()
+        }
+        .frame(minWidth: 400, minHeight: 300)
+    }
 }

@@ -38,9 +38,16 @@ extension WKWebView {
                     return null;
                 }
 
+                var rawText = article.textContent || "";
+                var cleanedTextContent = rawText.split('\\n')
+                    .map(function(line) { return line.trim(); })
+                    .join('\\n')
+                    .replace(/\\n{3,}/g, '\\n\\n')
+                    .trim();
+
                 return {
                     title: article.title || "",
-                    textContent: article.textContent.trim(),
+                    textContent: cleanedTextContent,
                     htmlContent: article.content || "",
                     excerpt: article.excerpt || "",
                     byline: article.byline || "",
@@ -88,7 +95,12 @@ extension WKWebView {
 
     func getCleanText(completion: @escaping (String?) -> Void) {
         getCleanArticle { article in
-            completion(article?.textContent)
+            guard let article = article else {
+                completion(nil)
+                return
+            }
+            let fullText = "\(article.title)\n\n\(article.textContent)"
+            completion(fullText)
         }
     }
 }

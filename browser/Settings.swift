@@ -460,14 +460,6 @@ var Settings: [Setting] = [
         defaultValueBool: true
     ),
     Setting(
-        name: "Show Tabs in Dock",
-        icon: "dock.arrow.down.rectangle",
-        category: catAdvanced,
-        type: "toggle",
-        appStorageKey: "showTabsInDockMenu",
-        defaultValueBool: false
-    ),
-    Setting(
         name: "Open App Data",
         icon: "folder",
         category: catAdvanced,

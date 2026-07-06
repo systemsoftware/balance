@@ -116,12 +116,20 @@ private struct TrustIndicator: View {
 private struct AddressField: View {
     @Binding var text: String
     var onSubmit: () -> Void
+    @FocusState private var isFocused: Bool
+    
     var body: some View {
         VStack {
             TextField("Search or enter website name", text: $text)
+                .focused($isFocused)
                 .onSubmit(onSubmit)
                 .padding(Layout.controlPadding)
                 .textFieldStyle(.plain)
+                .onAppear {
+                    if text.isEmpty {
+                        isFocused = true
+                    }
+                }
         }
     }
 }
@@ -366,6 +374,9 @@ struct ContentView: View {
     
     @State private var isSlideOverVisible = false
     
+    @State private var showEventPopup = false
+    @State private var events: [EventExtraction] = []
+    
     var body: some View {
         VStack(spacing: 0) {
             // MARK: - Address Bar
@@ -503,6 +514,9 @@ struct ContentView: View {
                         .padding()
                         .buttonStyle(.borderedProminent)
                         .tint(.red)
+                    }
+                    .sheet(isPresented: $showEventPopup) {
+                        EventListSheet(events: events)
                     }
                 }
                 
@@ -1523,6 +1537,7 @@ struct ContentView: View {
         
     }
     
+    @MainActor
     private func scanEvents() async {
         
         scanningForEvents = true
@@ -1601,15 +1616,8 @@ struct ContentView: View {
                     notes: e.notes
                 )
             } else {
-                showEventPicker(events: decoded.events) { selected in
-                    calManager.presentAddEventPopup(
-                        title: selected.name,
-                        startDateString: selected.start,
-                        endDateString: selected.end,
-                        location: selected.location,
-                        notes: selected.notes
-                    )
-                }
+                events = [decoded]
+                showEventPopup = true
             }
             
         } catch {
@@ -1634,7 +1642,7 @@ struct ContentView: View {
 
         return text.trimmingCharacters(in: .whitespacesAndNewlines)
     }
-
+    
     private func handleURLChange(from oldValue: URL?, to newValue: URL?) {
         guard let newURL = newValue else { return }
         
