@@ -59,7 +59,7 @@ struct AutoFillView: View {
                         systemImage: "magnifyingglass",
                         description: Text("Try a different search.")
                     )
-                    .frame(maxWidth: .infinity, minHeight: 350)
+                    .frame(maxWidth: .infinity, minHeight: 300)
                     .listRowBackground(Color.clear)
                 } else {
                     Text("Type to get suggestions from \(engine.contains("google") ? "Google" : "DuckDuckGo")")

@@ -333,7 +333,7 @@ enum BrowserCommand: String, CaseIterable {
         switch self {
         case .zoomIn, .zoomOut, .resetZoom:
             return "Zoom"
-        case .duplicateTab, .duplicateWindow, .openInFocus:
+        case .duplicateTab, .duplicateWindow:
             return "Duplicate"
         case .showDevTools, .forceReload:
             return "Developer"

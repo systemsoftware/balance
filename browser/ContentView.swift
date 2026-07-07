@@ -608,7 +608,6 @@ struct ContentView: View {
                             } label: {
                                 Label("Palette", systemImage: "command.square")
                             }
-                            .keyboardShortcut("k", modifiers: [.command])
                                                         
                             Divider()
                             
@@ -619,7 +618,6 @@ struct ContentView: View {
                                 } label: {
                                     Label(showFindNavigator ? "Hide Find In Page" : "Find In Page", systemImage: "magnifyingglass")
                                 }
-                                .keyboardShortcut("f", modifiers: .command)
                                 Divider()
                                 
                                 Menu() {
@@ -628,14 +626,12 @@ struct ContentView: View {
                                     } label: {
                                         Label("In", systemImage:"plus.magnifyingglass")
                                     }
-                                    .keyboardShortcut("+", modifiers: .command)
                                     
                                     Button() {
                                         browserState.zoomOut()
                                     } label: {
                                         Label("Out", systemImage:"minus.magnifyingglass")
                                     }
-                                    .keyboardShortcut("-", modifiers: .command)
                                     
                                     Divider()
                                     
@@ -656,7 +652,6 @@ struct ContentView: View {
                                     } label: {
                                         Label("Search Tabs", systemImage: "rectangle.and.text.magnifyingglass")
                                     }
-                                    .keyboardShortcut("s", modifiers: [.command, .option])
                                 }
                                 
                                 Divider()
@@ -666,7 +661,6 @@ struct ContentView: View {
                                 } label: {
                                     browserState.isAudioMuted ? Label("Unmute Tab", systemImage:"speaker.slash") : Label("Mute Tab", systemImage:"speaker")
                                 }
-                                .keyboardShortcut("m", modifiers: [.command, .shift])
                                 
                                 Divider()
                                 
@@ -706,7 +700,6 @@ struct ContentView: View {
                                     NSPasteboard.general.clearContents()
                                     NSPasteboard.general.setString(url.absoluteString, forType: .string)
                                 }
-                                .keyboardShortcut("c", modifiers: [.command, .control])
                                 
                                 Divider()
                                 
@@ -793,7 +786,6 @@ struct ContentView: View {
                                             url: url.absoluteString
                                         ))
                                     }
-                                    .keyboardShortcut("b", modifiers: [.command, .shift])
                                     
                                     
                                     Button("Sidebar", systemImage: "sidebar.left") {
@@ -819,7 +811,6 @@ struct ContentView: View {
                                 Button("Reader Mode", systemImage: "eyeglasses") {
                                     showReader.toggle()
                                 }
-                                .keyboardShortcut("r", modifiers: [.command, .option])
                                 
                                 Divider()
                                 
@@ -828,7 +819,6 @@ struct ContentView: View {
                                         let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
                                         inspector?.perform(NSSelectorFromString("show"))
                                     }
-                                    .keyboardShortcut("i", modifiers: [.command, .option])
                                     
                                     Divider()
                                     
