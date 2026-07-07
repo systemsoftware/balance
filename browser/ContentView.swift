@@ -235,7 +235,8 @@ struct ContentView: View {
     @AppStorage("showAddrBarInToolbar", store:Config.sharedDefaults) var showAddrBarInToolbar = true
     @AppStorage("showReloadInToolbar", store:Config.sharedDefaults) var showReloadInToolbar = true
     @AppStorage("showClockInToolbar", store:Config.sharedDefaults) var showClockInToolbar = false
-
+    @AppStorage("showHomeInToolbar", store:Config.sharedDefaults) var showHomeInToolbar = false
+ 
 
 
     @Namespace private var backforwardNamespace
@@ -449,6 +450,18 @@ struct ContentView: View {
                     }
                 }
                 
+                if showHomeInToolbar && location != nil {
+                    Button {
+                        location = nil
+                        urlInput = ""
+                    } label: {
+                        Image(systemName:"house")
+                            .padding(Layout.controlPadding)
+                    }
+                    .buttonStyle(.plain)
+                    .glassEffect(.regular.interactive(), in: .circle)
+                    .keyboardShortcut("h", modifiers: [.command, .shift])
+                }
                 
                 if location != nil {
                     if location?.absoluteString.starts(with: "http") == true && showShareInToolbar {

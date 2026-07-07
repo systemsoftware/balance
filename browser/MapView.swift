@@ -121,6 +121,15 @@ struct MapView: View {
                                 placeStore.add(place)
                             }
                         }
+                        
+                        Divider()
+                        
+                        Button("Open in Maps") {
+                            let placemark = MKPlacemark(coordinate: CLLocationCoordinate2D(latitude: place.latitude, longitude: place.longitude))
+                            let mapItem = MKMapItem(placemark: placemark)
+                            mapItem.name = place.name
+                            mapItem.openInMaps()
+                        }
                     }
                 }
                 .tag(place)

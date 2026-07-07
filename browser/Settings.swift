@@ -373,6 +373,14 @@ var Settings: [Setting] = [
         defaultValueBool: true
     ),
     Setting(
+        name: "Home Button",
+        icon: "house",
+        category: catToolbar,
+        type: "toggle",
+        appStorageKey: "showHomeInToolbar",
+        defaultValueBool: false
+    ),
+    Setting(
         name: "Reload Button",
         icon: "arrow.clockwise",
         category: catToolbar,
