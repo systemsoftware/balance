@@ -149,9 +149,9 @@ var Settings: [Setting] = [
         category: catBrowsing,
         type: "dropdownString",
         appStorageKey: "autofillEngine",
-        defaultValueString: "https://ac.duckduckgo.com/ac/?&type=list&q=",
+        defaultValueString: "https://ac.duckduckgo.com/ac/?type=list&q=",
         dropdownOptions: .staticTaggedOptions([
-            "https://ac.duckduckgo.com/ac/?&type=list&q=": "DuckDuckGo",
+            "https://ac.duckduckgo.com/ac/?type=list&q=": "DuckDuckGo",
             "https://suggestqueries.google.com/complete/search?client=firefox&hl=en&q=": "Google"
         ])
     ),
@@ -289,11 +289,9 @@ var Settings: [Setting] = [
             WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations], modifiedSince: Date.distantPast, completionHandler: {
                 if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
                     let webKitCache = cacheURL.appendingPathComponent("WebKit")
-                    let bundleID = Bundle.main.bundleIdentifier ?? "bryce.browser"
-                    let appCache = cacheURL.appendingPathComponent(bundleID)
                     try? FileManager.default.removeItem(at: webKitCache)
-                    try? FileManager.default.removeItem(at: appCache)
                 }
+                URLCache.shared.removeAllCachedResponses()
             })
         }
     ),
@@ -1164,11 +1162,9 @@ struct SettingsSectionContent: View {
                 completionHandler: {
                     if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
                         let webKitCache = cacheURL.appendingPathComponent("WebKit")
-                        let bundleID = Bundle.main.bundleIdentifier ?? "bryce.browser"
-                        let appCache = cacheURL.appendingPathComponent(bundleID)
                         try? FileManager.default.removeItem(at: webKitCache)
-                        try? FileManager.default.removeItem(at: appCache)
                     }
+                    URLCache.shared.removeAllCachedResponses()
                     windowAlert(message: "Default cache cleared.")
                 }
             )

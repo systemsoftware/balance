@@ -1,24 +1,24 @@
 import SwiftUI
 import WebKit
 
-func createFocusWindow(with url: URL, userAgent: String) {
+func createFocusWindow(with url: URL) {
     let window = NSWindow(
         contentRect: NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600),
-        styleMask: [.titled, .closable, .miniaturizable, .resizable],
+        styleMask: [.closable, .miniaturizable, .resizable],
         backing: .buffered,
         defer: false
     )
     window.title = "Focus"
     window.isReleasedWhenClosed = false
     
-    let focusView = FocusWebView(url: url, userAgent: userAgent, window: window)
+    let focusView = FocusWebView(url: url, window: window)
     window.contentView = NSHostingView(rootView: focusView)
     window.makeKeyAndOrderFront(nil)
 }
 
 struct FocusWebView: View {
     let url: URL
-    let userAgent: String
+    @AppStorage("userAgent", store:Config.sharedDefaults) var userAgent = ""
     weak var window: NSWindow?
     @StateObject var page = BrowserState()
     

@@ -8,6 +8,38 @@ func switchToTab(tabID: String) {
     WindowManager.shared.selectTab(tabID)
 }
 
+func handleDeepLink(_ url: URL) {
+    guard let scheme = url.scheme,
+          scheme == "balance" || scheme == "balance-focus"
+    else { return }
+
+    let isFocus = scheme == "balance-focus"
+
+    guard let host = url.host else {
+        print("No host in deep link:", url)
+        return
+    }
+
+    var components = URLComponents()
+    components.scheme = "https"
+    components.host = host
+    components.path = url.path
+    components.query = url.query
+
+    guard let destination = components.url else {
+        print("Failed converting:", url)
+        return
+    }
+
+    print("Opening:", destination)
+
+    if isFocus {
+        createFocusWindow(with: destination)
+    } else {
+        createNewTab(with: destination)
+    }
+}
+
 @main
 struct browserApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
@@ -46,6 +78,10 @@ struct browserApp: App {
             NSApp.appearance = nil
         }
     }
+    
+   
+    
+
     
     var body: some Scene {
         WindowGroup(for: String.self) { $windowID in
@@ -106,6 +142,35 @@ func createNewTab(with url: URL? = nil, inBackground: Bool = false, browserState
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    func applicationWillFinishLaunching(_ notification: Notification) {
+        NSAppleEventManager.shared().setEventHandler(
+            self,
+            andSelector: #selector(handleAppleEvent(_:withReplyEvent:)),
+            forEventClass: AEEventClass(kInternetEventClass),
+            andEventID: AEEventID(kAEGetURL)
+        )
+    }
+
+    func application(_ application: NSApplication, open urls: [URL]) {
+        for url in urls {
+            if url.isFileURL, url.pathExtension == "bpage" {
+                if let content = try? String(contentsOf: url, encoding: .utf8),
+                   let parsedURL = URL(string: content.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                    createNewTab(with: parsedURL)
+                }
+            } else {
+                handleDeepLink(url)
+            }
+        }
+    }
+
+    @objc func handleAppleEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
+        if let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
+           let url = URL(string: urlString) {
+            handleDeepLink(url)
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if #available(macOS 13.3, *) {
             let manager = ASAuthorizationWebBrowserPublicKeyCredentialManager()
@@ -151,11 +216,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                 if clearCache {
                     if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
                         let webKitCache = cacheURL.appendingPathComponent("WebKit")
-                        let bundleID = Bundle.main.bundleIdentifier ?? "bryce.browser"
-                        let appCache = cacheURL.appendingPathComponent(bundleID)
                         try? FileManager.default.removeItem(at: webKitCache)
-                        try? FileManager.default.removeItem(at: appCache)
                     }
+                    URLCache.shared.removeAllCachedResponses()
                 }
                 sender.reply(toApplicationShouldTerminate: true)
             }
@@ -222,7 +285,7 @@ enum BrowserCommand: String, CaseIterable {
     case copyURL, printPage, toggleReader, renameTab, savePage
     case showDevTools, forceReload
     case summarize, addEvents, cite
-    case closeTab
+    case shortcut, closeTab
     
     var title: String {
         switch self {
@@ -252,6 +315,7 @@ enum BrowserCommand: String, CaseIterable {
         case .summarize: return "Summarize"
         case .addEvents: return "Add Events to Calendar"
         case .cite: return "Cite"
+        case .shortcut: return "Save Shortcut"
         case .closeTab: return "Close Tab"
         }
     }
@@ -312,7 +376,7 @@ enum BrowserCommand: String, CaseIterable {
         case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .savePage: return true
         case .zoomOut, .duplicateWindow: return true
         case .showDevTools: return true
-        case .summarize, .addEvents, .forceReload, .cite: return true
+        case .summarize, .addEvents, .forceReload, .cite, .shortcut: return true
         default: return false
         }
     }

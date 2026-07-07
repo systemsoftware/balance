@@ -8,6 +8,7 @@ struct SessionState: Codable {
 }
 
 struct WindowSessionState: Codable {
+    var windowID: String?
     var tabs: [TabSessionState]
     var frameString: String?
     var activeTabIndex: Int
@@ -58,12 +59,8 @@ class SessionManager {
                 TabRegistry.shared.states[tab.id]
             }
             guard !tabStates.isEmpty else { return nil }
-            let activeIndex = max(0, window.tabs.firstIndex(where: { $0.id == window.activeTabID }) ?? 0)
-            return WindowSessionState(
-                tabs: tabStates,
-                frameString: window.frameString,
-                activeTabIndex: activeIndex
-            )
+            let activeIndex = window.tabs.firstIndex(where: { $0.id == window.activeTabID }) ?? 0
+            return WindowSessionState(windowID: window.id, tabs: tabStates, frameString: window.frameString, activeTabIndex: activeIndex)
         }
         
         if let data = try? JSONEncoder().encode(SessionState(

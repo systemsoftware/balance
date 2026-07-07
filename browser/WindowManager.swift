@@ -47,7 +47,7 @@ final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
 }
 
 final class BrowserWindowModel: ObservableObject, Identifiable {
-    let id: String
+    var id: String
     @Published var tabs: [BrowserTabModel]
     @Published var activeTabID: String
     var frameString: String?
@@ -147,6 +147,7 @@ final class WindowManager: ObservableObject {
             guard !tabs.isEmpty else { return nil }
             let activeIndex = min(max(windowState.activeTabIndex, 0), tabs.count - 1)
             return BrowserWindowModel(
+                id: windowState.windowID ?? UUID().uuidString,
                 tabs: tabs,
                 activeTabID: tabs[activeIndex].id,
                 frameString: windowState.frameString
@@ -289,7 +290,43 @@ final class WindowManager: ObservableObject {
     }
 
     func window(for id: String) -> BrowserWindowModel? {
-        browserWindows.first { $0.id == id }
+        if let win = browserWindows.first(where: { $0.id == id }) {
+            return win
+        }
+        
+        // If SwiftUI passes an old window ID from its saved state, but we restored session windows with new IDs, 
+        // we can assign this requested ID to our first unmapped window so the app doesn't close.
+        if browserWindows.count == 1 {
+            let win = browserWindows[0]
+            win.id = id
+            return win
+        }
+        
+        return nil
+    }
+
+    func bindOrCreateWindow(for id: String) {
+        if browserWindows.isEmpty {
+            restoreSavedSessionIfNeeded()
+        }
+        
+        if let _ = browserWindows.first(where: { $0.id == id }) {
+            return
+        }
+        
+        if browserWindows.count == 1 {
+            let win = browserWindows[0]
+            win.id = id
+            return
+        }
+        
+        let tab = BrowserTabModel(spaceIndex: currentSpaceIndex)
+        let window = BrowserWindowModel(id: id, tabs: [tab])
+        browserWindows.append(window)
+        if activeWindowID == nil {
+            activeWindowID = window.id
+        }
+        rebuildTabProjection()
     }
 
     func rebuildTabProjection() {
@@ -329,7 +366,7 @@ struct BrowserWindowHost: View {
                 ProgressView()
                     .frame(width: 800, height: 800)
                     .onAppear {
-                        dismiss()
+                        windowManager.bindOrCreateWindow(for: windowID)
                     }
             }
         }

@@ -691,7 +691,7 @@ struct ContentView: View {
                                     Divider()
                                     
                                     Button {
-                                        createFocusWindow(with: url, userAgent: userAgent)
+                                        createFocusWindow(with: url)
                                     } label: {
                                         Label("Open in Focus", systemImage: "macwindow")
                                     }
@@ -1282,7 +1282,7 @@ struct ContentView: View {
             case .toggleMute: browserState.toggleMute()
             case .duplicateTab: if let url = location { createNewTab(with: url) }
             case .duplicateWindow: if let url = location { createNewWindow(with: url) }
-            case .openInFocus: if let url = location { createFocusWindow(with: url, userAgent: userAgent) }
+            case .openInFocus: if let url = location { createFocusWindow(with: url) }
             case .copyURL:
                 if let url = location {
                     NSPasteboard.general.clearContents()
@@ -1408,6 +1408,24 @@ struct ContentView: View {
                     webView.load(request)
 
                 }
+            case .shortcut:
+                let savePanel = NSSavePanel()
+                    savePanel.title = "Save Page"
+                    savePanel.nameFieldStringValue = "\(location?.host ?? "page")"
+                    savePanel.canCreateDirectories = false
+                    savePanel.allowedContentTypes = [.bpage]
+                    
+                    savePanel.begin { response in
+                        if response == .OK, let targetURL = savePanel.url {
+                            do {
+                                let urlString = location?.absoluteString ?? "about:blank"
+                                try urlString.write(to: targetURL, atomically: true, encoding: .utf8)
+                                print("Successfully saved file to: \(targetURL.path)")
+                            } catch {
+                                print("Failed to save file: \(error.localizedDescription)")
+                            }
+                        }
+                    }
             }
         } : nil)
     }

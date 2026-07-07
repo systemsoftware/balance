@@ -1323,6 +1323,31 @@ struct BrowserWebView: NSViewRepresentable {
             
             if let url = navigationAction.request.url {
                 print("decidePolicyFor:", url.absoluteString)
+                
+                if let scheme = url.scheme?.lowercased(),
+                   !["http", "https", "file", "about", "data", "blob"].contains(scheme) {
+
+                    if let appURL = NSWorkspace.shared.urlForApplication(toOpen: url) {
+                        let appName = appURL.deletingPathExtension().lastPathComponent
+
+                        print("Handler app:", appName)
+                        print("Path:", appURL.path)
+
+                        let alert = NSAlert()
+                        alert.messageText = "Open URL in \(appName)?"
+                        alert.addButton(withTitle: "Open")
+                        alert.addButton(withTitle: "Cancel")
+
+                        if alert.runModal() == .alertSecondButtonReturn {
+                            decisionHandler(.cancel, preferences)
+                            return
+                        }
+
+                        NSWorkspace.shared.open(url)
+                        decisionHandler(.cancel, preferences)
+                        return
+                    }
+                }
             }
             
             if let url = navigationAction.request.url {

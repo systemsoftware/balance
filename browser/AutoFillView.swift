@@ -25,7 +25,7 @@ struct AutoFillView: View {
     @State private var result: GoogleSuggestions?
     @State private var isLoading = false
     
-    @AppStorage("autofillEngine", store:Config.sharedDefaults) private var engine: String = "https://ac.duckduckgo.com/ac/?&type=list&q="
+    @AppStorage("autofillEngine", store:Config.sharedDefaults) private var engine: String = "https://ac.duckduckgo.com/ac/?type=list&q="
     
     var noContentAvView = false
     

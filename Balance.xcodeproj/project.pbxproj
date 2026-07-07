@@ -291,8 +291,10 @@
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleTypeRole = Viewer;\n    CFBundleURLName = \"Web site URL\";\n    CFBundleURLSchemes =     (\n        http,\n        https\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "We need access to your calendar to display events in the sidebar.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Balance needs access to your camera to let websites use it for video calls and other features.";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Balance needs your location for websites that request it.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Balance needs your location for websites that request it.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Balance needs access to your microphone to let websites use it for audio calls and other features.";
 				INFOPLIST_KEY_NSUserActivityTypes = NSUserActivityTypeBrowsingWeb;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
@@ -368,8 +370,10 @@
 				INFOPLIST_KEY_CFBundleURLTypes = "{\n    CFBundleTypeRole = Viewer;\n    CFBundleURLName = \"Web site URL\";\n    CFBundleURLSchemes =     (\n        http,\n        https\n    );\n}";
 				INFOPLIST_KEY_LSApplicationCategoryType = "public.app-category.utilities";
 				INFOPLIST_KEY_NSCalendarsUsageDescription = "We need access to your calendar to display events in the sidebar.";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Balance needs access to your camera to let websites use it for video calls and other features.";
 				INFOPLIST_KEY_NSLocationUsageDescription = "Balance needs your location for websites that request it.";
 				INFOPLIST_KEY_NSLocationWhenInUseUsageDescription = "Balance needs your location for websites that request it.";
+				INFOPLIST_KEY_NSMicrophoneUsageDescription = "Balance needs access to your microphone to let websites use it for audio calls and other features.";
 				INFOPLIST_KEY_NSUserActivityTypes = NSUserActivityTypeBrowsingWeb;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphoneos*]" = YES;
 				"INFOPLIST_KEY_UIApplicationSceneManifest_Generation[sdk=iphonesimulator*]" = YES;
