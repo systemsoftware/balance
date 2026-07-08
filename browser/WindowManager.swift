@@ -376,6 +376,11 @@ struct BrowserWindowHost: View {
                 }
                 windowManager.activeWindowID = windowID
             }
+            .onChange(of: windowManager.browserWindows.contains(where: { $0.id == windowID })) { _, exists in
+                if !exists {
+                    dismiss()
+                }
+            }
             .onDisappear {
                 windowManager.closeWindow(windowID)
             }

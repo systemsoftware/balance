@@ -803,7 +803,6 @@ struct ContentView: View {
                                 Button("Print Page", systemImage: "printer") {
                                     printCurrentPage()
                                 }
-                                .keyboardShortcut("p", modifiers: [.command])
                                 
                                 Divider()
                                 
