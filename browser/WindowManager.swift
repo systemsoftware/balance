@@ -294,13 +294,7 @@ final class WindowManager: ObservableObject {
             return win
         }
         
-        // If SwiftUI passes an old window ID from its saved state, but we restored session windows with new IDs, 
-        // we can assign this requested ID to our first unmapped window so the app doesn't close.
-        if browserWindows.count == 1 {
-            let win = browserWindows[0]
-            win.id = id
-            return win
-        }
+
         
         return nil
     }
@@ -314,11 +308,7 @@ final class WindowManager: ObservableObject {
             return
         }
         
-        if browserWindows.count == 1 {
-            let win = browserWindows[0]
-            win.id = id
-            return
-        }
+
         
         let tab = BrowserTabModel(spaceIndex: currentSpaceIndex)
         let window = BrowserWindowModel(id: id, tabs: [tab])
@@ -355,6 +345,7 @@ final class WindowManager: ObservableObject {
 struct BrowserWindowHost: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
+    @Environment(\.controlActiveState) private var controlActiveState
     @EnvironmentObject private var windowManager: WindowManager
     let windowID: String
 
@@ -383,6 +374,11 @@ struct BrowserWindowHost: View {
             }
             .onDisappear {
                 windowManager.closeWindow(windowID)
+            }
+            .onChange(of: controlActiveState) { _, newState in
+                if newState == .key {
+                    windowManager.activeWindowID = windowID
+                }
             }
     }
 }

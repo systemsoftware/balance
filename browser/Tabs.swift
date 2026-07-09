@@ -441,93 +441,93 @@ private struct TabRow: View {
     @AppStorage("tabMode", store:Config.sharedDefaults) var tabMode = 0
 
     var body: some View {
-        Button {
-            switchToTab(tabID: state.tabID)
-        } label: {
-            HStack(spacing: 8) {
-                // Favicon / loading indicator
-                ZStack {
-                    if state.isLoading {
-                        ProgressView()
-                            .scaleEffect(0.5)
-                            .frame(width: 16, height: 16)
-                    } else {
-                        CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(state.url?.host ?? "")")) { phase in
-                            if let img = phase.image {
-                                img.resizable().scaledToFit()
-                            } else {
-                                Image(systemName: "globe")
-                                    .font(.system(size: 10))
-                                    .foregroundStyle(.secondary)
-                            }
-                        }
+        HStack(spacing: 8) {
+            // Favicon / loading indicator
+            ZStack {
+                if state.isLoading {
+                    ProgressView()
+                        .scaleEffect(0.5)
                         .frame(width: 16, height: 16)
-                    }
-                }
-                .frame(width: 16, height: 16)
-
-                // Title + URL
-                VStack(alignment: .leading, spacing: 1) {
-                    HStack(spacing: 4) {
-                        Text(state.title.isEmpty ? "New Tab" : state.title)
-                            .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                            .lineLimit(1)
-                        
-                        if state.isSleeping {
-                            Image(systemName: "moon.zzz.fill")
-                                .font(.system(size: 9))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
-
-                    if let url = state.url {
-                        if showURL {
-                            Text(url.host ?? url.absoluteString)
+                } else {
+                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(state.url?.host ?? "")")) { phase in
+                        if let img = phase.image {
+                            img.resizable().scaledToFit()
+                        } else {
+                            Image(systemName: "globe")
                                 .font(.system(size: 10))
                                 .foregroundStyle(.secondary)
-                                .lineLimit(1)
                         }
                     }
-                }
-                .frame(maxWidth: .infinity, alignment: .leading)
-
-                // Audio indicator
-                if state.isAudioMuted {
-                    Image(systemName: "speaker.slash.fill")
-                        .font(.system(size: 10))
-                        .foregroundStyle(.tertiary)
-                }
-
-                Spacer()
-                
-                Button {
-                    windowManager.closeTab(state.tabID)
-                } label:{
-                    Image(systemName: "xmark")
-                }
-                .buttonStyle(.plain)
-                .font(.caption)
-                
-                
-            }
-            .padding(.horizontal, 8)
-            .padding(.vertical, 7)
-            .background {
-                if isActive {
-                    RoundedRectangle(cornerRadius: 9)
-                        .fill(.tint.opacity(0.18))
-                        .overlay(
-                            RoundedRectangle(cornerRadius: 9)
-                                .strokeBorder(.tint.opacity(0.35), lineWidth: 0.75)
-                        )
-                } else if isHovered {
-                    RoundedRectangle(cornerRadius: 9)
-                        .fill(.secondary.opacity(0.1))
+                    .frame(width: 16, height: 16)
                 }
             }
-            .contentShape(RoundedRectangle(cornerRadius: 9))
+            .frame(width: 16, height: 16)
+
+            // Title + URL
+            VStack(alignment: .leading, spacing: 1) {
+                HStack(spacing: 4) {
+                    Text(state.title.isEmpty ? "New Tab" : state.title)
+                        .font(.system(size: 12, weight: isActive ? .semibold : .regular))
+                        .lineLimit(1)
+                    
+                    if state.isSleeping {
+                        Image(systemName: "moon.zzz.fill")
+                            .font(.system(size: 9))
+                            .foregroundStyle(.secondary)
+                    }
+                }
+
+                if let url = state.url {
+                    if showURL {
+                        Text(url.host ?? url.absoluteString)
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+            // Audio indicator
+            if state.isAudioMuted {
+                Image(systemName: "speaker.slash.fill")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.tertiary)
+            }
+
+            Spacer()
+            
+            Button {
+                windowManager.closeTab(state.tabID)
+            } label:{
+                Image(systemName: "xmark")
+            }
+            .buttonStyle(.plain)
+            .font(.caption)
+            
+            
         }
-        .buttonStyle(.plain)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 7)
+        .background {
+            if isActive {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(.tint.opacity(0.18))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 9)
+                            .strokeBorder(.tint.opacity(0.35), lineWidth: 0.75)
+                    )
+            } else if isHovered {
+                RoundedRectangle(cornerRadius: 9)
+                    .fill(.secondary.opacity(0.1))
+            } else {
+                Color.clear
+            }
+        }
+        .contentShape(RoundedRectangle(cornerRadius: 9))
+        .onTapGesture {
+            switchToTab(tabID: state.tabID)
+        }
         .contextMenu {
             Button("Focus Tab") {
                 switchToTab(tabID: state.tabID)

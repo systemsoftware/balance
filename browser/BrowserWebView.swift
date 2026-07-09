@@ -834,7 +834,7 @@ struct BrowserWebView: NSViewRepresentable {
         
         let controller = WebExtensionManager.shared.controller(for: profileContext)
         config.webExtensionController = controller
-        config.webExtensionController?.delegate = context.coordinator
+        config.webExtensionController?.delegate = WebExtensionManager.shared
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
         webView.downloadStore = DownloadStore(profile: profile)
@@ -968,7 +968,7 @@ struct BrowserWebView: NSViewRepresentable {
         coordinator.state.cleanup()
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKWebExtensionControllerDelegate, CLLocationManagerDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, CLLocationManagerDelegate {
         
         let downloadStore: DownloadStore
         var locationManager: CLLocationManager?
@@ -1017,58 +1017,7 @@ struct BrowserWebView: NSViewRepresentable {
             manager.stopUpdatingLocation()
         }
         
-        // MARK: - WKWebExtensionControllerDelegate
-        
-        func webExtensionController(_ controller: WKWebExtensionController, openWindowsFor extensionContext: WKWebExtensionContext) -> [any WKWebExtensionWindow] {
-            [WebExtensionManager.shared.window]
-        }
-        
-        func webExtensionController(_ controller: WKWebExtensionController, focusedWindowFor extensionContext: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
-            WebExtensionManager.shared.window
-        }
-        
-        func webExtensionController(_ controller: WKWebExtensionController, presentActionPopup action: WKWebExtension.Action, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
-            DispatchQueue.main.async {
-                WebExtensionManager.shared.popupWebView = action.popupWebView
-                WebExtensionManager.shared.popupContext = extensionContext
-                WebExtensionManager.shared.showPopup = true
-                completionHandler(nil)
-            }
-        }
-        
-        func webExtensionController(_ controller: WKWebExtensionController, promptForPermissions permissions: Set<WKWebExtension.Permission>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
-            // Auto-grant all requested permissions
-            completionHandler(permissions, nil)
-        }
-        
-        func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionMatchPatterns matchPatterns: Set<WKWebExtension.MatchPattern>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void) {
-            // Auto-grant all requested match patterns
-            completionHandler(matchPatterns, nil)
-        }
-        
-        func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<URL>, Date?) -> Void) {
-            // Auto-grant access to all URLs
-            completionHandler(urls, nil)
-        }
-        
-        func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
-            if let optionsURL = extensionContext.optionsPageURL {
-                DispatchQueue.main.async {
-                    createNewTab(with: optionsURL)
-                }
-            }
-            completionHandler(nil)
-        }
-        
-        func webExtensionController(_ controller: WKWebExtensionController, openNewTabUsing configuration: WKWebExtension.TabConfiguration, for extensionContext: WKWebExtensionContext, completionHandler: @escaping ((any WKWebExtensionTab)?, Error?) -> Void) {
-            let newState = BrowserState()
-            if let url = configuration.url {
-                DispatchQueue.main.async {
-                    createNewTab(with: url, browserState: newState)
-                }
-            }
-            completionHandler(newState, nil)
-        }
+
         
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "installExtension", let extId = message.body as? String {
@@ -1686,7 +1635,7 @@ struct BrowserWebView: NSViewRepresentable {
 
 // MARK: - Manager
 
-final class WebExtensionManager: ObservableObject {
+final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionControllerDelegate {
     static let shared = WebExtensionManager()
     
     private var controllers: [String: WKWebExtensionController] = [:]
@@ -1705,7 +1654,59 @@ final class WebExtensionManager: ObservableObject {
     var hasOpenedWindow = false
     private var hasLoaded = false
     
-    private init() {}
+    private override init() {
+        super.init()
+    }
+    
+    // MARK: - WKWebExtensionControllerDelegate
+    
+    func webExtensionController(_ controller: WKWebExtensionController, openWindowsFor extensionContext: WKWebExtensionContext) -> [any WKWebExtensionWindow] {
+        [WebExtensionManager.shared.window]
+    }
+    
+    func webExtensionController(_ controller: WKWebExtensionController, focusedWindowFor extensionContext: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
+        WebExtensionManager.shared.window
+    }
+    
+    func webExtensionController(_ controller: WKWebExtensionController, presentActionPopup action: WKWebExtension.Action, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
+        DispatchQueue.main.async {
+            WebExtensionManager.shared.popupWebView = action.popupWebView
+            WebExtensionManager.shared.popupContext = extensionContext
+            WebExtensionManager.shared.showPopup = true
+            completionHandler(nil)
+        }
+    }
+    
+    func webExtensionController(_ controller: WKWebExtensionController, promptForPermissions permissions: Set<WKWebExtension.Permission>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
+        completionHandler(permissions, nil)
+    }
+    
+    func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionMatchPatterns matchPatterns: Set<WKWebExtension.MatchPattern>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void) {
+        completionHandler(matchPatterns, nil)
+    }
+    
+    func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<URL>, Date?) -> Void) {
+        completionHandler(urls, nil)
+    }
+    
+    func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
+        if let optionsURL = extensionContext.optionsPageURL {
+            DispatchQueue.main.async {
+                createNewTab(with: optionsURL)
+            }
+        }
+        completionHandler(nil)
+    }
+    
+    func webExtensionController(_ controller: WKWebExtensionController, openNewTabUsing configuration: WKWebExtension.TabConfiguration, for extensionContext: WKWebExtensionContext, completionHandler: @escaping ((any WKWebExtensionTab)?, Error?) -> Void) {
+        let newState = BrowserState()
+        if let url = configuration.url {
+            DispatchQueue.main.async {
+                createNewTab(with: url, browserState: newState)
+            }
+        }
+        completionHandler(newState, nil)
+    }
     
     func controller(for profile: String) -> WKWebExtensionController {
         let key = profile.isEmpty ? "default" : profile
