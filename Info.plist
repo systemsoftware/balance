@@ -2,6 +2,8 @@
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
+	<key>LSApplicationCategoryType</key>
+	<string>public.app-category.utilities</string>
 	<key>CFBundleDocumentTypes</key>
 	<array>
 		<dict>
@@ -17,10 +19,17 @@
 			</array>
 		</dict>
 		<dict>
+			<key>CFBundleTypeName</key>
+			<string>HTML Document</string>
 			<key>CFBundleTypeRole</key>
-			<string>Editor</string>
+			<string>Viewer</string>
 			<key>LSHandlerRank</key>
 			<string>Default</string>
+			<key>LSItemContentTypes</key>
+			<array>
+				<string>public.html</string>
+				<string>public.xhtml</string>
+			</array>
 		</dict>
 	</array>
 	<key>CFBundleURLTypes</key>
@@ -45,10 +54,19 @@
 				<string>balance-focus</string>
 			</array>
 		</dict>
+		<dict>
+			<key>CFBundleURLName</key>
+			<string>Web Site URL</string>
+			<key>CFBundleURLSchemes</key>
+			<array>
+				<string>http</string>
+				<string>https</string>
+			</array>
+		</dict>
 	</array>
 	<key>NSAppTransportSecurity</key>
 	<dict>
-		<key>NSAllowsArbitraryLoads</key>
+		<key>NSAllowsArbitraryLoadsInWebContent</key>
 		<true/>
 	</dict>
 	<key>UTExportedTypeDeclarations</key>
@@ -73,5 +91,13 @@
 			</dict>
 		</dict>
 	</array>
+	<key>NSCameraUsageDescription</key>
+	<string>This app requires camera access for websites that request it.</string>
+	<key>NSMicrophoneUsageDescription</key>
+	<string>This app requires microphone access for websites that request it.</string>
+	<key>NSCalendarsUsageDescription</key>
+	<string>This app requires calendar access for websites that request it.</string>
+	<key>NSLocationUsageDescription</key>
+	<string>This app requires location access for websites that request it.</string>
 </dict>
 </plist>

@@ -9,9 +9,14 @@ func switchToTab(tabID: String) {
 }
 
 func handleDeepLink(_ url: URL) {
-    guard let scheme = url.scheme,
-          scheme == "balance" || scheme == "balance-focus"
-    else { return }
+    guard let scheme = url.scheme else { return }
+    
+    if scheme.lowercased() == "http" || scheme.lowercased() == "https" || scheme.lowercased() == "file" {
+        createNewTab(with: url)
+        return
+    }
+    
+    guard scheme == "balance" || scheme == "balance-focus" else { return }
 
     let isFocus = scheme == "balance-focus"
 
