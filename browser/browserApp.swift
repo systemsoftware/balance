@@ -147,6 +147,10 @@ func createNewTab(with url: URL? = nil, inBackground: Bool = false, browserState
 }
 
 class AppDelegate: NSObject, NSApplicationDelegate {
+    // URLs queued before launch is complete (e.g. Finder double-click cold launch).
+    private var pendingFileURLs: [URL] = []
+    private var didFinishLaunching = false
+
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSAppleEventManager.shared().setEventHandler(
             self,
@@ -161,11 +165,24 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if url.isFileURL, url.pathExtension == "bpage" {
                 if let content = try? String(contentsOf: url, encoding: .utf8),
                    let parsedURL = URL(string: content.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                    createNewTab(with: parsedURL)
+                    openOrQueue(parsedURL)
                 }
+            } else if url.isFileURL {
+                // File URLs need special handling: pass the URL object directly
+                // (not reconstructed from string) so sandbox access is preserved.
+                openOrQueue(url)
             } else {
                 handleDeepLink(url)
             }
+        }
+    }
+
+    /// Opens a URL in a new tab, or queues it if launch hasn't finished yet.
+    private func openOrQueue(_ url: URL) {
+        if didFinishLaunching {
+            createNewTab(with: url)
+        } else {
+            pendingFileURLs.append(url)
         }
     }
 
@@ -181,19 +198,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let manager = ASAuthorizationWebBrowserPublicKeyCredentialManager()
             if manager.authorizationStateForPlatformCredentials == .notDetermined {
                 Task {
-                        await manager.requestAuthorizationForPublicKeyCredentials()                   
+                    await manager.requestAuthorizationForPublicKeyCredentials()
                 }
             }
         }
-        
+
         WindowManager.shared.restoreSavedSessionIfNeeded()
-        
+
         // Show setup window on first launch
         let defaults = Config.sharedDefaults ?? UserDefaults.standard
         if !defaults.bool(forKey: "sawSetup") {
             DispatchQueue.main.async {
                 SetupWindowManager.shared.showSetupWindow()
             }
+        }
+
+        // Mark launch complete and drain any URLs that arrived before we were ready.
+        didFinishLaunching = true
+        let queued = pendingFileURLs
+        pendingFileURLs.removeAll()
+        for url in queued {
+            createNewTab(with: url)
         }
     }
     
@@ -288,7 +313,7 @@ enum BrowserCommand: String, CaseIterable {
     case reload, toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
     case copyURL, printPage, toggleReader, renameTab, savePage
-    case showDevTools, forceReload
+    case forceReload
     case summarize, addEvents, cite
     case shortcut, closeTab
     
@@ -315,7 +340,6 @@ enum BrowserCommand: String, CaseIterable {
         case .toggleReader: return "Reader"
         case .renameTab: return "Rename Tab"
         case .savePage: return "Save Page As..."
-        case .showDevTools: return "Dev Tools"
         case .forceReload: return "Reload Ignoring Cache"
         case .summarize: return "Summarize"
         case .addEvents: return "Add Events to Calendar"
@@ -340,7 +364,7 @@ enum BrowserCommand: String, CaseIterable {
             return "Zoom"
         case .duplicateTab, .duplicateWindow:
             return "Duplicate"
-        case .showDevTools, .forceReload:
+        case .forceReload:
             return "Developer"
         case .summarize, .addEvents, .cite:
             return "AI"
@@ -366,7 +390,6 @@ enum BrowserCommand: String, CaseIterable {
         case .toggleReader: return KeyboardShortcut("r", modifiers: [.command, .option])
         case .downloads: return KeyboardShortcut("d", modifiers: [.command, .shift])
         case .history: return KeyboardShortcut("y", modifiers: [.command])
-        case .showDevTools: return KeyboardShortcut("i", modifiers: [.command, .option])
         case .summarize: return KeyboardShortcut("/", modifiers: [.command])
         case .addEvents: return KeyboardShortcut("/", modifiers: [.command, .option])
         case .forceReload: return KeyboardShortcut("r", modifiers: [.command, .shift])
@@ -380,7 +403,6 @@ enum BrowserCommand: String, CaseIterable {
         case .palette, .reload, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete: return true
         case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .savePage: return true
         case .zoomOut, .duplicateWindow: return true
-        case .showDevTools: return true
         case .summarize, .addEvents, .forceReload, .cite, .shortcut: return true
         default: return false
         }

@@ -295,8 +295,16 @@ struct ContentView: View {
         
         let initURLString = providedState?.url?.absoluteString ?? latestState?.url ?? initialURL?.absoluteString
         if(initURLString != nil) { self.initialURLString = initURLString } else { print("nil initial url") }
-        
-        self._location = State(initialValue: initURLString != nil ? URL(string: initURLString!) : nil)
+
+        // For file:// URLs, preserve the original URL object so sandbox access
+        // context is not lost when reconstructing from string.
+        let initURL: URL?
+        if let initial = initialURL, initial.isFileURL, latestState == nil, providedState == nil {
+            initURL = initial
+        } else {
+            initURL = initURLString.flatMap { URL(string: $0) }
+        }
+        self._location = State(initialValue: initURL)
         self._splitURL = State(initialValue: latestState?.splitURL ?? "")
         self._sidebarURL = State(initialValue: latestState?.sidebarURL != nil ? URL(string: latestState!.sidebarURL!) : nil)
         
@@ -814,12 +822,6 @@ struct ContentView: View {
                                 Divider()
                                 
                                 Menu {
-                                    Button("Dev Tools", systemImage: "chevron.left.forwardslash.chevron.right") {
-                                        let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
-                                        inspector?.perform(NSSelectorFromString("show"))
-                                    }
-                                    
-                                    Divider()
                                     
                                     Button() {
                                         let alert = NSAlert()
@@ -1299,10 +1301,6 @@ struct ContentView: View {
                         browserState.title = newTitle
                     }
                 }
-            case .showDevTools:
-                let inspector = browserState.webView?.value(forKey: "inspector") as? NSObject
-                inspector?.perform(NSSelectorFromString("show"))
-
             case .summarize: Task { summarizing = true; await createSummaryWindow(state: browserState); summarizing = false }
             case .addEvents: Task { await scanEvents() }
             case .cite: Task { await cite() }

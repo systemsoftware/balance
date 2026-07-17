@@ -925,8 +925,10 @@ struct BrowserWebView: NSViewRepresentable {
             }
         
         context.coordinator.lastLoadedRequestURL = request.url
-        if let url = request.url, url.isFileURL, url.absoluteString.hasPrefix("file://") {
-            webView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+        if let url = request.url, url.isFileURL {
+            // Grant access to the root so relative resources (CSS/JS/images) can load.
+            // Security-scoped access from Finder open is already active on the URL.
+            webView.loadFileURL(url, allowingReadAccessTo: URL(fileURLWithPath: "/"))
         } else {
             webView.load(request)
         }
@@ -956,8 +958,8 @@ struct BrowserWebView: NSViewRepresentable {
 
         if context.coordinator.lastLoadedRequestURL != request.url {
             context.coordinator.lastLoadedRequestURL = request.url
-            if let url = request.url, url.isFileURL, url.absoluteString.hasPrefix("file://") {
-                nsView.loadFileURL(url, allowingReadAccessTo: url.deletingLastPathComponent())
+            if let url = request.url, url.isFileURL {
+                nsView.loadFileURL(url, allowingReadAccessTo: URL(fileURLWithPath: "/"))
             } else {
                 nsView.load(request)
             }
