@@ -129,3 +129,6 @@ Customize the browser from **Settings**, including:
 ## License
 
 Licensed under the MIT License. See **LICENSE** for details.
+
+# Contact
+Use discussions here, or email at support@coolstone.dev
