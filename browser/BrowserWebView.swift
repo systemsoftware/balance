@@ -18,6 +18,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var canGoForward: Bool = false
     @Published var favicon: NSImage?
     weak var webView: WKWebView?
+    var preloadedWebView: WKWebView?
     @Published var isFindBarVisible: Bool = false
     @Published var findQuery: String = ""
     @Published var findMatchCount: Int = 0
@@ -226,6 +227,11 @@ extension BrowserState {
                 return
             }
 
+            // JSON-encode the query string to produce a safe JS string literal,
+            // preventing injection when query contains quotes, backslashes, or newlines.
+            guard let queryData = try? JSONEncoder().encode(query),
+                  let queryJSON = String(data: queryData, encoding: .utf8) else { return }
+
             let js = """
             (function() {
                 // Clear previous highlights first
@@ -234,7 +240,7 @@ extension BrowserState {
                 });
                 document.normalize();
 
-                const query = JSON.stringify(\(query));
+                const query = \(queryJSON);
                 if (!query) return 0;
 
                 const walker = document.createTreeWalker(
@@ -448,6 +454,26 @@ struct BrowserWebView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> WKWebView {
+        if let preloaded = state.preloadedWebView as? BrowserWKWebView {
+            let host = request.url?.host ?? "default"
+            preloaded.downloadStore = DownloadStore(profile: profile)
+            if !userAgent.isEmpty {
+                preloaded.customUserAgent = userAgent
+            }
+            let defaultZoom = SitePermissionStore.shared.zoomLevel(for: host)
+            preloaded.pageZoom = CGFloat(defaultZoom) / 100.0
+            preloaded.state = state
+            preloaded.navigationDelegate = context.coordinator
+            preloaded.uiDelegate = context.coordinator
+            
+            DispatchQueue.main.async {
+                state.attach(preloaded)
+            }
+            
+            state.preloadedWebView = nil
+            return preloaded
+        }
+
         let config = WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.preferences.setValue(true, forKey: "fullScreenEnabled")
@@ -819,14 +845,19 @@ struct BrowserWebView: NSViewRepresentable {
         if !profile.isEmpty {
             profileContext = "profile"
         }
-        
+
         switch profileContext {
 
         case "priv":
             config.websiteDataStore = .nonPersistent()
 
         case "profile":
-            config.websiteDataStore = WKWebsiteDataStore(forIdentifier: UUID(uuidString: profile)!)
+            // Guard against malformed profile UUID strings to avoid a force-unwrap crash.
+            if let profileUUID = UUID(uuidString: profile) {
+                config.websiteDataStore = WKWebsiteDataStore(forIdentifier: profileUUID)
+            } else {
+                config.websiteDataStore = .default()
+            }
             
         default:
             config.websiteDataStore = .default()
@@ -926,9 +957,21 @@ struct BrowserWebView: NSViewRepresentable {
         
         context.coordinator.lastLoadedRequestURL = request.url
         if let url = request.url, url.isFileURL {
-            // Grant access to the root so relative resources (CSS/JS/images) can load.
-            // Security-scoped access from Finder open is already active on the URL.
-            webView.loadFileURL(url, allowingReadAccessTo: URL(fileURLWithPath: "/"))
+            let manager = LocalFileAccessManager.shared
+            if let accessURL = manager.grantedAccessURL(for: url) {
+                // Already have a cached bookmark or powerbox grant — load immediately.
+                webView.loadFileURL(url, allowingReadAccessTo: accessURL)
+            } else {
+                // No existing grant: show NSOpenPanel so the user can pick the project
+                // root. This is required for MAS sandbox compliance.
+                let suggested = url.deletingLastPathComponent()
+                Task { @MainActor in
+                    manager.requestDirectoryAccess(suggestedDirectory: suggested) { accessURL in
+                        guard let accessURL else { return }
+                        webView.loadFileURL(url, allowingReadAccessTo: accessURL)
+                    }
+                }
+            }
         } else {
             webView.load(request)
         }
@@ -959,7 +1002,21 @@ struct BrowserWebView: NSViewRepresentable {
         if context.coordinator.lastLoadedRequestURL != request.url {
             context.coordinator.lastLoadedRequestURL = request.url
             if let url = request.url, url.isFileURL {
-                nsView.loadFileURL(url, allowingReadAccessTo: URL(fileURLWithPath: "/"))
+                let manager = LocalFileAccessManager.shared
+                if let accessURL = manager.grantedAccessURL(for: url) {
+                    // Already have a cached bookmark or powerbox grant — load immediately.
+                    nsView.loadFileURL(url, allowingReadAccessTo: accessURL)
+                } else {
+                    // No existing grant: show NSOpenPanel so the user can pick the project
+                    // root. This is required for MAS sandbox compliance.
+                    let suggested = url.deletingLastPathComponent()
+                    Task { @MainActor in
+                        manager.requestDirectoryAccess(suggestedDirectory: suggested) { accessURL in
+                            guard let accessURL else { return }
+                            nsView.loadFileURL(url, allowingReadAccessTo: accessURL)
+                        }
+                    }
+                }
             } else {
                 nsView.load(request)
             }
@@ -1242,7 +1299,8 @@ struct BrowserWebView: NSViewRepresentable {
                     css += customCSS + "\n"
                 }
                 
-                guard let jsCSSString = String(data: try! JSONEncoder().encode(css), encoding: .utf8) else { return }
+                guard let cssEncodedData = try? JSONEncoder().encode(css),
+                      let jsCSSString = String(data: cssEncodedData, encoding: .utf8) else { return }
                 
                 let jsCode = """
                 (function() {
@@ -1396,6 +1454,9 @@ struct BrowserWebView: NSViewRepresentable {
                     self?.downloadTo[download] = url.path
                     completionHandler(url)
                 } else {
+                    // Clean up tracking dictionaries for cancelled downloads to prevent leaks.
+                    self?.downloadTitles.removeValue(forKey: download)
+                    self?.downloadFrom.removeValue(forKey: download)
                     completionHandler(nil)
                 }
             }
@@ -1429,24 +1490,28 @@ struct BrowserWebView: NSViewRepresentable {
                      for navigationAction: WKNavigationAction,
                      windowFeatures: WKWindowFeatures) -> WKWebView? {
 
-            if let url = navigationAction.request.url {
-                let isLinkActivated = navigationAction.navigationType == .linkActivated
-                
-                if !isLinkActivated {
-                    if let host = webView.url?.host {
-                        let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .block)
-                        if popupSetting == .block {
+            let isLinkActivated = navigationAction.navigationType == .linkActivated
+            
+            if !isLinkActivated {
+                if let host = webView.url?.host {
+                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .block)
+                    if popupSetting == .block {
+                        if let url = navigationAction.request.url {
                             print("Blocked popup to \(url)")
-                            return nil
                         }
+                        return nil
                     }
                 }
-                
-                DispatchQueue.main.async {
-                    createNewTab(with: url, inBackground: true)
-                }
             }
-            return nil
+            
+            let newWebView = BrowserWKWebView(frame: .zero, configuration: configuration)
+            let newState = BrowserState()
+            newState.preloadedWebView = newWebView
+            
+            DispatchQueue.main.async {
+                createNewTab(with: navigationAction.request.url, inBackground: false, browserState: newState)
+            }
+            return newWebView
         }
 
         @available(macOS 12.0, *)

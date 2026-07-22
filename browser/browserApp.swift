@@ -168,8 +168,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     openOrQueue(parsedURL)
                 }
             } else if url.isFileURL {
-                // File URLs need special handling: pass the URL object directly
-                // (not reconstructed from string) so sandbox access is preserved.
+                // Register with the access manager so BrowserWebView knows the OS
+                // already granted powerbox access — no panel prompt needed.
+                LocalFileAccessManager.shared.registerPowerboxURL(url)
                 openOrQueue(url)
             } else {
                 handleDeepLink(url)
@@ -187,8 +188,17 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
 
     @objc func handleAppleEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
-        if let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue,
-           let url = URL(string: urlString) {
+        guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue else { return }
+        // URL(string:) silently fails on file paths containing spaces or other characters
+        // that are not percent-encoded. Fall back to URL(fileURLWithPath:) for file:// URLs.
+        let url: URL?
+        if urlString.hasPrefix("file://"),
+           let decoded = urlString.removingPercentEncoding {
+            url = URL(fileURLWithPath: String(decoded.dropFirst("file://".count)))
+        } else {
+            url = URL(string: urlString)
+        }
+        if let url = url {
             handleDeepLink(url)
         }
     }
@@ -223,7 +233,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        return true
+        // Return false during app launch to prevent a premature quit. When a file is
+        // opened from Finder on a cold launch, the OS delivers the file before our
+        // initial window exists, creating a brief zero-window moment. Returning true
+        // here during that window would terminate the app before it finishes opening.
+        return didFinishLaunching
     }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {

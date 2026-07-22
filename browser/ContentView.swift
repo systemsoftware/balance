@@ -1174,10 +1174,13 @@ struct ContentView: View {
                         .alert("Enter URL", isPresented: $showingSidebarAddAlert) {
                             TextField("URL", text: $userInput)
                             Button("OK") {
-                                sidebarStore.add(SidebarItem(
-                                    icon: "https://www.google.com/s2/favicons?domain=\(userInput)",
-                                    url: URL(string: userInput)!
-                                ))
+                                // Guard against an invalid URL crashing with a force-unwrap.
+                                let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput) 
+                                    sidebarStore.add(SidebarItem(
+                                        icon: "https://www.google.com/s2/favicons?domain=\(userInput)",
+                                        url: sidebarItemURL
+                                    ))
+                                
                             }
                             Button("Cancel", role: .cancel) { }
                         }
@@ -1192,8 +1195,14 @@ struct ContentView: View {
         }.onAppear {
             if let initialURLString {
                 print("has initialURLString: \(initialURLString)")
-                location = URL(string:initialURLString)
                 urlInput = initialURLString
+                // Do NOT overwrite location for file:// URLs — ContentView.init already
+                // sets the State from the original URL object (which has the sandbox
+                // security-scoped access granted by Finder/the open panel). Reconstructing
+                // from an absoluteString loses that grant and causes load failures.
+                if location?.isFileURL != true {
+                    location = URL(string: initialURLString)
+                }
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -1472,6 +1481,9 @@ struct ContentView: View {
         let url: URL?
         if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
             url = URL(string: trimmed)
+        } else if trimmed.hasPrefix("/") {
+            // Bare POSIX path (e.g. /Users/foo/bar/index.html) — load as file://
+            url = URL(fileURLWithPath: trimmed)
         } else if trimmed.contains(".") && !trimmed.contains(" ") {
             url = URL(string: "https://\(trimmed)")
         } else if(trimmed == "default-home" || trimmed.count == 0) {

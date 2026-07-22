@@ -92,12 +92,14 @@
 		</dict>
 	</array>
 	<key>NSCameraUsageDescription</key>
-	<string>This app requires camera access for websites that request it.</string>
+	<string>This app requires camera access to allow websites you visit to use your camera for video calls and taking pictures, when you explicitly grant them permission.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>This app requires microphone access for websites that request it.</string>
+	<string>This app requires microphone access to allow websites you visit to use your microphone for voice calls and recording audio, when you explicitly grant them permission.</string>
 	<key>NSCalendarsUsageDescription</key>
-	<string>This app requires calendar access for websites that request it.</string>
+	<string>This app requires calendar access to display your upcoming events directly in the browser's calendar sidebar.</string>
+	<key>NSCalendarsFullAccessUsageDescription</key>
+	<string>This app requires full calendar access to display your upcoming events directly in the browser's calendar sidebar.</string>
 	<key>NSLocationUsageDescription</key>
-	<string>This app requires location access for websites that request it.</string>
+	<string>This app requires location access to allow websites you visit to show you relevant local information, such as weather forecasts or nearby stores, when you explicitly grant them permission.</string>
 </dict>
 </plist>

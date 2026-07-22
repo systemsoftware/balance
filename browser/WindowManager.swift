@@ -373,6 +373,12 @@ struct BrowserWindowHost: View {
                 }
             }
             .onDisappear {
+                // Guard against SwiftUI calling onDisappear during view re-renders or
+                // background transitions. Only close if the window still exists in the
+                // model — if it was already removed (e.g., via the .onChange above when
+                // `dismiss()` fired), calling closeWindow again would be a no-op, but
+                // this guard also prevents false closures from transient SwiftUI teardowns.
+                guard windowManager.window(for: windowID) != nil else { return }
                 windowManager.closeWindow(windowID)
             }
             .onChange(of: controlActiveState) { _, newState in
