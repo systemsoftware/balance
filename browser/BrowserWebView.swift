@@ -470,6 +470,24 @@ struct BrowserWebView: NSViewRepresentable {
                 state.attach(preloaded)
             }
             
+            preloaded.addObserver(context.coordinator, forKeyPath: "estimatedProgress", options: .new, context: nil)
+            preloaded.addObserver(context.coordinator, forKeyPath: "title", options: .new, context: nil)
+            preloaded.addObserver(context.coordinator, forKeyPath: "URL", options: .new, context: nil)
+            preloaded.addObserver(context.coordinator, forKeyPath: "canGoBack", options: .new, context: nil)
+            preloaded.addObserver(context.coordinator, forKeyPath: "canGoForward", options: .new, context: nil)
+            
+            let manager = WebExtensionManager.shared
+            manager.allTabs.insert(state)
+            if let extController = preloaded.configuration.webExtensionController {
+                if !manager.hasOpenedWindow {
+                    extController.didOpenWindow(manager.window)
+                    manager.hasOpenedWindow = true
+                }
+                extController.didOpenTab(state)
+                extController.didActivateTab(state)
+            }
+            
+            context.coordinator.lastLoadedRequestURL = request.url
             state.preloadedWebView = nil
             return preloaded
         }
@@ -1494,7 +1512,7 @@ struct BrowserWebView: NSViewRepresentable {
             
             if !isLinkActivated {
                 if let host = webView.url?.host {
-                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .block)
+                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .allow)
                     if popupSetting == .block {
                         if let url = navigationAction.request.url {
                             print("Blocked popup to \(url)")
@@ -1512,6 +1530,12 @@ struct BrowserWebView: NSViewRepresentable {
                 createNewTab(with: navigationAction.request.url, inBackground: false, browserState: newState)
             }
             return newWebView
+        }
+
+        func webViewDidClose(_ webView: WKWebView) {
+            DispatchQueue.main.async {
+                WindowManager.shared.closeTab(self.state.tabID)
+            }
         }
 
         @available(macOS 12.0, *)

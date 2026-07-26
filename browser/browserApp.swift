@@ -9,6 +9,7 @@ func switchToTab(tabID: String) {
 }
 
 func handleDeepLink(_ url: URL) {
+    NSApp.activate(ignoringOtherApps: true)
     guard let scheme = url.scheme else { return }
     
     if scheme.lowercased() == "http" || scheme.lowercased() == "https" || scheme.lowercased() == "file" {
@@ -97,6 +98,28 @@ struct browserApp: App {
                 .onChange(of: themePreference) { _, newValue in
                     applyTheme(newValue)
                 }
+
+                .onOpenURL { url in
+                    if url.isFileURL, url.pathExtension == "bpage" {
+                        if let content = try? String(contentsOf: url, encoding: .utf8),
+                           let parsedURL = URL(string: content.trimmingCharacters(in: .whitespacesAndNewlines)) {
+                            if appDelegate.didFinishLaunching {
+                                createNewTab(with: parsedURL)
+                            } else {
+                                appDelegate.pendingFileURLs.append(parsedURL)
+                            }
+                        }
+                    } else if url.isFileURL {
+                        LocalFileAccessManager.shared.registerPowerboxURL(url)
+                        if appDelegate.didFinishLaunching {
+                            createNewTab(with: url)
+                        } else {
+                            appDelegate.pendingFileURLs.append(url)
+                        }
+                    } else {
+                        handleDeepLink(url)
+                    }
+                }
                 .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
                     print("App is about to close.")
                     if(clearHistoryOnClose) {
@@ -110,6 +133,7 @@ struct browserApp: App {
                     cleanTemporaryDirectory()
                 }
         }
+        .handlesExternalEvents(matching: ["*"])
         .modelContainer(HistoryManager.sharedContainer)
         .environmentObject(WindowManager.shared)
         .commands {
@@ -148,8 +172,8 @@ func createNewTab(with url: URL? = nil, inBackground: Bool = false, browserState
 
 class AppDelegate: NSObject, NSApplicationDelegate {
     // URLs queued before launch is complete (e.g. Finder double-click cold launch).
-    private var pendingFileURLs: [URL] = []
-    private var didFinishLaunching = false
+    var pendingFileURLs: [URL] = []
+    var didFinishLaunching = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSAppleEventManager.shared().setEventHandler(
@@ -160,32 +184,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         )
     }
 
-    func application(_ application: NSApplication, open urls: [URL]) {
-        for url in urls {
-            if url.isFileURL, url.pathExtension == "bpage" {
-                if let content = try? String(contentsOf: url, encoding: .utf8),
-                   let parsedURL = URL(string: content.trimmingCharacters(in: .whitespacesAndNewlines)) {
-                    openOrQueue(parsedURL)
-                }
-            } else if url.isFileURL {
-                // Register with the access manager so BrowserWebView knows the OS
-                // already granted powerbox access — no panel prompt needed.
-                LocalFileAccessManager.shared.registerPowerboxURL(url)
-                openOrQueue(url)
-            } else {
-                handleDeepLink(url)
-            }
-        }
-    }
-
-    /// Opens a URL in a new tab, or queues it if launch hasn't finished yet.
-    private func openOrQueue(_ url: URL) {
-        if didFinishLaunching {
-            createNewTab(with: url)
-        } else {
-            pendingFileURLs.append(url)
-        }
-    }
 
     @objc func handleAppleEvent(_ event: NSAppleEventDescriptor, withReplyEvent replyEvent: NSAppleEventDescriptor) {
         guard let urlString = event.paramDescriptor(forKeyword: AEKeyword(keyDirectObject))?.stringValue else { return }
@@ -233,11 +231,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {
-        // Return false during app launch to prevent a premature quit. When a file is
-        // opened from Finder on a cold launch, the OS delivers the file before our
-        // initial window exists, creating a brief zero-window moment. Returning true
-        // here during that window would terminate the app before it finishes opening.
-        return didFinishLaunching
+        return false
     }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
@@ -555,3 +549,4 @@ func cleanTemporaryDirectory() {
         print("Failed to clear tmp: \(error)")
     }
 }
+

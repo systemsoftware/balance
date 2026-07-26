@@ -230,6 +230,12 @@ final class WindowManager: ObservableObject {
         guard let windowIndex = browserWindows.firstIndex(where: { $0.tabs.contains(where: { $0.id == tabID }) }) else { return }
         let window = browserWindows[windowIndex]
         guard let tabIndex = window.tabs.firstIndex(where: { $0.id == tabID }) else { return }
+        // Determine next active tab BEFORE removing the current one to prevent SwiftUI from rendering a gray window
+        if window.activeTabID == tabID && window.tabs.count > 1 {
+            let nextActiveIndex = (tabIndex == window.tabs.count - 1) ? tabIndex - 1 : tabIndex + 1
+            window.activeTabID = window.tabs[nextActiveIndex].id
+        }
+
         let tab = window.tabs.remove(at: tabIndex)
 
         if let state = TabRegistry.shared.states[tabID] {
@@ -246,11 +252,6 @@ final class WindowManager: ObservableObject {
         if window.tabs.isEmpty {
             closeWindow(window.id)
             return
-        }
-
-        if !window.tabs.contains(where: { $0.id == window.activeTabID }) {
-            let nextIndex = min(tabIndex, window.tabs.count - 1)
-            window.activeTabID = window.tabs[nextIndex].id
         }
         rebuildTabProjection()
         objectWillChange.send()
@@ -396,6 +397,7 @@ private struct BrowserWindowContent: View {
         ZStack {
             ForEach(window.tabs) { tab in
                 BrowserWindowTabContainer(tab: tab, activeTabID: window.activeTabID)
+                    .zIndex(window.activeTabID == tab.id ? 1 : 0)
             }
             if let activeTab = window.activeTab {
                 ActiveTabTitleObserver(state: activeTab.browserState)

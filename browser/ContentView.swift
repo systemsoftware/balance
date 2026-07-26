@@ -520,7 +520,7 @@ struct ContentView: View {
                         if priv {
                             Image(systemName:"eye.slash.fill")
                                 .help("Private Mode")
-                                .padding(0.25)
+                                .padding(.trailing, 10)
                         }
                         
                         
@@ -956,8 +956,8 @@ struct ContentView: View {
                     if (location != nil) {
                         
                         
-                        if showReader {
-                            ReaderView(sourceWebView:browserState.webView!)
+                        if showReader, let webView = browserState.webView {
+                            ReaderView(sourceWebView: webView)
                                 .zIndex(100)
                         }
                         
@@ -1121,7 +1121,7 @@ struct ContentView: View {
                             GlassEffectContainer {
                                 ForEach(sidebarStore.items) { item in
                                     Button(action: {
-                                        let targetURL = item.url ?? URL(string: "\(item.view!).view")
+                                        let targetURL = item.url ?? URL(string: "\(item.view ?? "").view")
                                         if sidebarURL == targetURL {
                                             sidebarURL = nil
                                         } else {
@@ -1174,8 +1174,7 @@ struct ContentView: View {
                         .alert("Enter URL", isPresented: $showingSidebarAddAlert) {
                             TextField("URL", text: $userInput)
                             Button("OK") {
-                                // Guard against an invalid URL crashing with a force-unwrap.
-                                let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput) 
+                                let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput)
                                     sidebarStore.add(SidebarItem(
                                         icon: "https://www.google.com/s2/favicons?domain=\(userInput)",
                                         url: sidebarItemURL
@@ -1196,10 +1195,6 @@ struct ContentView: View {
             if let initialURLString {
                 print("has initialURLString: \(initialURLString)")
                 urlInput = initialURLString
-                // Do NOT overwrite location for file:// URLs — ContentView.init already
-                // sets the State from the original URL object (which has the sandbox
-                // security-scoped access granted by Finder/the open panel). Reconstructing
-                // from an absoluteString loses that grant and causes load failures.
                 if location?.isFileURL != true {
                     location = URL(string: initialURLString)
                 }
@@ -1476,8 +1471,8 @@ struct ContentView: View {
     
     private func submitURL() {
         let trimmed = urlInput.trimmingCharacters(in: .whitespaces)
-     //   guard !trimmed.isEmpty else { return }
-
+        //   guard !trimmed.isEmpty else { return }
+        
         let url: URL?
         if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
             url = URL(string: trimmed)
@@ -1488,7 +1483,9 @@ struct ContentView: View {
             url = URL(string: "https://\(trimmed)")
         } else if(trimmed == "default-home" || trimmed.count == 0) {
             url = nil
-        } else {
+        } else if trimmed.hasPrefix("localhost") {
+                url = URL(string: "http://\(trimmed)")
+            } else {
             let encoded = trimmed.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? trimmed
             url = URL(string: "\(searchURL)\(encoded)")
         }
