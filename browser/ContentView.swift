@@ -388,6 +388,7 @@ struct ContentView: View {
     
     var body: some View {
         VStack(spacing: 0) {
+            
             // MARK: - Address Bar
 
             if leftSidebarMode == 0 {
@@ -967,7 +968,7 @@ struct ContentView: View {
                           
                             ZStack {
                                 BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
-                                    .roundedBorderStyleNoFrame()
+                                    .roundedBorderStyleNoFrame(enabled: showPageShine)
                                     .transition(.opacity)
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                                     .onChange(of: browserState.url) { oldValue, newValue in
@@ -1722,12 +1723,29 @@ struct ContentView: View {
         }
     }
     
+    @AppStorage("themePreference", store:Config.sharedDefaults) var themePreference = "system"
+    
+    @State var showPageShine = false
+    
     private func handleTitleChange(to newTitle: String) {
         if priv == true { return }
         
         if recordHistory == true, let newURL = browserState.url, newURL.absoluteString != homepage {
             let historyTitle = newTitle.isEmpty ? (newURL.host() ?? "No Title") : newTitle
             let historyURL = newURL.absoluteString
+            
+            if themePreference == "match" {
+                showPageShine = false
+                Task {
+                    let clr = await browserState.getBackground()
+                    if let window = NSApplication.shared.windows.first {
+                        window.backgroundColor = clr
+                        window.appearance = NSAppearance(named: clr.isLight ? .aqua : .darkAqua)
+                    }
+                }
+            } else{
+                showPageShine = true
+            }
             
             HistoryManager.addToHistory(
                 title: historyTitle,

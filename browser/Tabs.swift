@@ -16,6 +16,7 @@ struct Tabs: View {
     @State private var searchText = ""
     @State private var hoveredID: ObjectIdentifier?
     @State private var draggedPin: Bookmark?
+    @State private var draggedTab: BrowserState?
     
     @AppStorage("tabMode", store:Config.sharedDefaults) var tabMode = 0
     
@@ -160,6 +161,11 @@ struct Tabs: View {
                                             hoveredID = over ? ObjectIdentifier(tab) : nil
                                         }
                                     }
+                                    .onDrag {
+                                        self.draggedTab = tab
+                                        return NSItemProvider(object: tab.tabID as NSString)
+                                    }
+                                    .onDrop(of: [UTType.text], delegate: TabDropDelegate(item: tab, windowManager: windowManager, draggedItem: $draggedTab))
                                 }
                             }
                         }
@@ -327,6 +333,11 @@ struct Tabs: View {
                                 isHorizAnimatingIn = true
                             }
                         }
+                        .onDrag {
+                            self.draggedTab = tab
+                            return NSItemProvider(object: tab.tabID as NSString)
+                        }
+                        .onDrop(of: [UTType.text], delegate: TabDropDelegate(item: tab, windowManager: windowManager, draggedItem: $draggedTab))
                     }
                 }
                 .padding(.top)
@@ -360,6 +371,24 @@ struct PinDropDelegate: DropDelegate {
         withAnimation {
             store.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
         }
+    }
+}
+
+struct TabDropDelegate: DropDelegate {
+    let item: BrowserState
+    var windowManager: WindowManager
+    @Binding var draggedItem: BrowserState?
+
+    func performDrop(info: DropInfo) -> Bool {
+        draggedItem = nil
+        return true
+    }
+    
+    func dropEntered(info: DropInfo) {
+        guard let draggedItem = self.draggedItem else { return }
+        guard draggedItem != item else { return }
+        
+        windowManager.moveTab(draggedItem.tabID, toTabID: item.tabID)
     }
 }
 

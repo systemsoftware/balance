@@ -257,6 +257,20 @@ final class WindowManager: ObservableObject {
         objectWillChange.send()
     }
 
+    func moveTab(_ fromTabID: String, toTabID targetTabID: String) {
+        guard fromTabID != targetTabID else { return }
+        guard let windowIndex = browserWindows.firstIndex(where: { $0.tabs.contains(where: { $0.id == fromTabID }) }) else { return }
+        let window = browserWindows[windowIndex]
+        
+        guard let from = window.tabs.firstIndex(where: { $0.id == fromTabID }),
+              let to = window.tabs.firstIndex(where: { $0.id == targetTabID }) else { return }
+        
+        withAnimation {
+            window.tabs.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
+            rebuildTabProjection()
+        }
+    }
+
     func closeWindow(_ windowID: String) {
         guard let index = browserWindows.firstIndex(where: { $0.id == windowID }) else { return }
         let window = browserWindows.remove(at: index)

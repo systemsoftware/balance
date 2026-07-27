@@ -83,6 +83,13 @@ struct browserApp: App {
         default:
             NSApp.appearance = nil
         }
+        
+        if theme != "match" {
+            for window in NSApplication.shared.windows {
+                window.backgroundColor = .windowBackgroundColor
+                window.appearance = nil
+            }
+        }
     }
     
    
@@ -133,6 +140,7 @@ struct browserApp: App {
                     cleanTemporaryDirectory()
                 }
         }
+        .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: ["*"])
         .modelContainer(HistoryManager.sharedContainer)
         .environmentObject(WindowManager.shared)

@@ -9,6 +9,10 @@ import UserNotifications
 
 final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var tabID: String = ""
+    @Published var webView: WKWebView?
+    weak var underlyingWebView: WKWebView?
+    var pendingURL: URL?
+    
     @Published var url: URL?
     @Published var title: String = ""
     @Published var customTitle: String? = nil
@@ -17,7 +21,6 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var canGoBack: Bool = false
     @Published var canGoForward: Bool = false
     @Published var favicon: NSImage?
-    weak var webView: WKWebView?
     var preloadedWebView: WKWebView?
     @Published var isFindBarVisible: Bool = false
     @Published var findQuery: String = ""
@@ -39,7 +42,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     }
     
     func webView(for context: WKWebExtensionContext) -> WKWebView? {
-        self.webView
+        self.webView ?? self.underlyingWebView
     }
     
     func title(for context: WKWebExtensionContext) -> String? {
@@ -47,7 +50,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     }
     
     func url(for context: WKWebExtensionContext) -> URL? {
-        self.url
+        self.url ?? self.pendingURL ?? self.underlyingWebView?.url
     }
     
     func isLoadingComplete(for context: WKWebExtensionContext) -> Bool {
@@ -60,7 +63,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     func isPlayingAudio(for context: WKWebExtensionContext) -> Bool { false }
     func isMuted(for context: WKWebExtensionContext) -> Bool { self.isAudioMuted }
     func size(for context: WKWebExtensionContext) -> CGSize {
-        webView?.frame.size ?? .zero
+        (webView ?? underlyingWebView)?.frame.size ?? .zero
     }
     func zoomFactor(for context: WKWebExtensionContext) -> Double { 1.0 }
     
@@ -83,6 +86,19 @@ func applyZoom() {
     })
 }
 
+    @MainActor
+    func getBackground() async -> NSColor {
+        do {
+            let result = try await webView?.evaluateJavaScript("window.getComputedStyle(document.body).backgroundColor")
+            guard let rgbString = result as? String,
+                  let nsColor = NSColor.from(rgbString: rgbString) else {
+                return .gray
+            }
+            return nsColor.alphaComponent == 0 ? NSColor.white : nsColor
+        } catch {
+            return .gray
+        }
+    }
     
     public func zoomIn() {
         zoomLevel = min(2.0, zoomLevel + 0.1)
@@ -160,6 +176,7 @@ func applyZoom() {
         }
         
         self.webView = nil
+        self.underlyingWebView = nil
     }
 }
 
@@ -897,6 +914,9 @@ struct BrowserWebView: NSViewRepresentable {
         webView.navigationDelegate = context.coordinator
         webView.uiDelegate = context.coordinator
 
+        state.underlyingWebView = webView
+        state.pendingURL = request.url
+
         DispatchQueue.main.async {
             state.attach(webView)
         }
@@ -1063,6 +1083,7 @@ struct BrowserWebView: NSViewRepresentable {
         }
         
         var activeLocationRequests: [(id: Int, isWatch: Bool)] = []
+        
         
         func sendLocationToJS(id: Int, location: CLLocation) {
             let lat = location.coordinate.latitude
@@ -1352,7 +1373,7 @@ struct BrowserWebView: NSViewRepresentable {
                 print("decidePolicyFor:", url.absoluteString)
                 
                 if let scheme = url.scheme?.lowercased(),
-                   !["http", "https", "file", "about", "data", "blob"].contains(scheme) {
+                   !["http", "https", "file", "about", "data", "blob", "webkit-extension", "chrome-extension"].contains(scheme) {
 
                     if let appURL = NSWorkspace.shared.urlForApplication(toOpen: url) {
                         let appName = appURL.deletingPathExtension().lastPathComponent
@@ -1391,15 +1412,18 @@ struct BrowserWebView: NSViewRepresentable {
                 }
             }
             
-            if let host = navigationAction.request.url?.host {
-                let jsSetting = SitePermissionStore.shared.setting(for: host, type: "javascript", defaultState: .allow)
-                preferences.allowsContentJavaScript = (jsSetting == .allow)
-            }
-
             let isExtensionScheme = navigationAction.request.url?.scheme?.hasSuffix("extension") == true
-            if !isExtensionScheme && navigationAction.shouldPerformDownload {
-                decisionHandler(.download, preferences)
-                return
+            
+            if !isExtensionScheme {
+                if let host = navigationAction.request.url?.host {
+                    let jsSetting = SitePermissionStore.shared.setting(for: host, type: "javascript", defaultState: .allow)
+                    preferences.allowsContentJavaScript = (jsSetting == .allow)
+                }
+                
+                if navigationAction.shouldPerformDownload {
+                    decisionHandler(.download, preferences)
+                    return
+                }
             }
             decisionHandler(.allow, preferences)
         }
@@ -1802,12 +1826,22 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
     func controller(for profile: String) -> WKWebExtensionController {
         let key = profile.isEmpty ? "default" : profile
         if let existing = controllers[key] { return existing }
-        let newController = WKWebExtensionController()
+        let extConfig = WKWebExtensionController.Configuration.default()
+        if !profile.isEmpty, let profileUUID = UUID(uuidString: profile) {
+            extConfig.defaultWebsiteDataStore = WKWebsiteDataStore(forIdentifier: profileUUID)
+        } else {
+            extConfig.defaultWebsiteDataStore = .default()
+        }
+        let newController = WKWebExtensionController(configuration: extConfig)
         controllers[key] = newController
         
         // Load existing contexts into the new controller
         for context in contexts {
-            try? newController.load(context)
+            do {
+                try newController.load(context)
+            } catch {
+                print("Failed to load context into new controller '\(key)': \(error)")
+            }
         }
         
         return newController
@@ -1852,8 +1886,12 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
                     context.setPermissionStatus(.grantedExplicitly, for: allURLs, expirationDate: nil)
                 }
                 
-                for (_, controller) in controllers {
-                    try? controller.load(context)
+                for (key, controller) in controllers {
+                    do {
+                        try controller.load(context)
+                    } catch {
+                        print("Failed to load extension into controller '\(key)': \(error)")
+                    }
                 }
                 contexts.append(context)
             } catch {
@@ -1919,21 +1957,29 @@ enum ExtensionStorage {
         return dir
     }
     
+    static func removeQuarantine(from url: URL) {
+        removexattr(url.path, "com.apple.quarantine", 0)
+        if let enumerator = FileManager.default.enumerator(at: url, includingPropertiesForKeys: nil) {
+            for case let fileURL as URL in enumerator {
+                removexattr(fileURL.path, "com.apple.quarantine", 0)
+            }
+        }
+    }
+    
     static func loadInstalledExtensions() {
-        do {
-            let dir = try extensionsDirectory()
-            let contents = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-            
+        guard let dir = try? extensionsDirectory() else { return }
+        
+        removeQuarantine(from: dir)
+        
+        if let contents = try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil) {
             for folder in contents {
                 var isDir: ObjCBool = false
                 if FileManager.default.fileExists(atPath: folder.path, isDirectory: &isDir),
                    isDir.boolValue {
-                    
-                    WebExtensionManager.shared.loadExtension(from: folder)
+                    let dirURL = URL(fileURLWithPath: folder.path, isDirectory: true)
+                    WebExtensionManager.shared.loadExtension(from: dirURL)
                 }
             }
-        } catch {
-            print("Failed to load extensions:", error)
         }
     }
 }
@@ -2000,8 +2046,8 @@ enum CRXInstaller {
             }
             
             let root = manifestURL.deletingLastPathComponent()
-            
-             WebExtensionManager.shared.loadExtension(from: root)
+            let dirURL = URL(fileURLWithPath: root.path, isDirectory: true)
+            WebExtensionManager.shared.loadExtension(from: dirURL)
         } catch {
             // Clean up the empty/invalid directory so it doesn't appear as an empty extension
             try? FileManager.default.removeItem(at: dest)
@@ -2073,6 +2119,9 @@ func extractCRX(at url: URL, to destination: URL) throws {
     try zipData.write(to: zipURL)
     
     try FileManager.default.unzipItem(at: zipURL, to: destination)
+    
+    // Remove quarantine attribute so WebKit's network process can read the files
+    ExtensionStorage.removeQuarantine(from: destination)
     
     try? FileManager.default.removeItem(at: zipURL)
 }

@@ -564,7 +564,7 @@ struct BrowserHomepage: View {
             Menu {
                 Toggle("Clock", isOn: $showClock)
                 Toggle("Weather", isOn: $showWeather)
-                Toggle("Boomarks", isOn: $showBookmarks)
+                Toggle("Bookmarks", isOn: $showBookmarks)
                 
                 if isEmailConfigured {
                     Toggle("Email", isOn: $showEmail)

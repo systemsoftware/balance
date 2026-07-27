@@ -488,6 +488,7 @@ var Settings: [Setting] = [
         dropdownOptions: .staticTaggedOptions([
             "system": "System",
             "light": "Light",
+            "match": "Match Page",
             "dark": "Dark"
         ])
     ),

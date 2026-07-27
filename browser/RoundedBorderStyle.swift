@@ -49,14 +49,19 @@ extension View {
     }
     
     func roundedBorderStyleNoFrame(
+        enabled: Bool = true,
         cornerRadius: CGFloat = 20,
         lineWidth: CGFloat = 1,
         color: Color = .gray
     ) -> some View {
-        self.modifier(RoundedBorderStyleNoFrame(
-            cornerRadius: cornerRadius,
-            lineWidth: lineWidth,
-            color: color
-        ))
+        if enabled == true {
+            self.modifier(RoundedBorderStyleNoFrame(
+                cornerRadius: cornerRadius,
+                lineWidth: lineWidth,
+                color: color
+            ))
+        } else {
+            self.modifier(RoundedBorderStyleNoFrame(cornerRadius: 0, lineWidth: 0, color: .clear))
+        }
     }
 }
