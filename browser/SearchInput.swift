@@ -18,10 +18,78 @@ struct SearchInputVisualConfig {
     var animation: Animation? = .easeInOut(duration: 0.15)
 }
 
+// MARK: - NSViewRepresentable wrapper
+//
+// SwiftUI's FocusBridge deadlocks while resolving the key-view loop on
+// macOS 26/27 beta whenever a TextField backed by @FocusState is clicked.
+// Using NSViewRepresentable keeps the text field out of that path entirely.
+// The IsolatedSearchField subclass also severs the key-view chain so the
+// system cannot traverse into SwiftUI-managed views when focus is set.
+final class IsolatedSearchField: NSTextField {
+    override var nextKeyView: NSView? {
+        get { nil }
+        set { /* intentionally ignored */ }
+    }
+    override var previousKeyView: NSView? { nil }
+    override var nextValidKeyView: NSView? { nil }
+    override var previousValidKeyView: NSView? { nil }
+}
+
+struct NativeSearchField: NSViewRepresentable {
+    @Binding var text: String
+    var placeholder: String
+    var onFocusChange: (Bool) -> Void
+
+    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
+
+    func makeNSView(context: Context) -> IsolatedSearchField {
+        let field = IsolatedSearchField()
+        field.delegate = context.coordinator
+        field.placeholderString = placeholder
+        field.font = NSFont.systemFont(ofSize: NSFont.systemFontSize - 2)
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.stringValue = text
+        return field
+    }
+
+    func updateNSView(_ field: IsolatedSearchField, context: Context) {
+        context.coordinator.parent = self
+        // Do not overwrite text while the user is typing.
+        if field.currentEditor() == nil, field.stringValue != text {
+            field.stringValue = text
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: NativeSearchField
+
+        init(parent: NativeSearchField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func controlTextDidBeginEditing(_ notification: Notification) {
+            parent.onFocusChange(true)
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            parent.onFocusChange(false)
+        }
+    }
+}
+
+// MARK: - SearchInputView
+
 struct SearchInputView: View {
     @Binding var text: String
     var config: SearchInputVisualConfig = SearchInputVisualConfig()
-    @FocusState private var isFocused: Bool
+    @State private var isFocused: Bool = false
 
     var body: some View {
         HStack(spacing: 4) {
@@ -30,13 +98,13 @@ struct SearchInputView: View {
                 .font(.system(size: 11, weight: .medium))
                 .frame(width: 16)
 
-            TextField("", text: $text, prompt: Text(config.placeholderText)
-                .foregroundColor(config.placeholderColor))
-                .focused($isFocused)
-                .foregroundColor(config.textColor)
-                .font(config.font)
-                .textFieldStyle(.plain)
-                .autocorrectionDisabled()
+            NativeSearchField(
+                text: $text,
+                placeholder: config.placeholderText,
+                onFocusChange: { focused in
+                    withAnimation(config.animation) { isFocused = focused }
+                }
+            )
 
             if !text.isEmpty {
                 Button(action: {

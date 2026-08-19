@@ -12,14 +12,16 @@ struct FindBarView: View {
     
     var body: some View {
         HStack(spacing: 6) {
-            TextField("Find in page", text: $state.findQuery)
-                .textFieldStyle(.plain)
-                .frame(width: 200)
-                .onSubmit { state.find(state.findQuery) }
-                .onChange(of: state.findQuery) { old, query in
-                    state.find(query)
-                }
-                .padding(Layout.controlPadding)
+            NativeSearchField(
+                text: $state.findQuery,
+                placeholder: "Find in page",
+                onFocusChange: { _ in }
+            )
+            .frame(width: 200)
+            .onChange(of: state.findQuery) { old, query in
+                state.find(query)
+            }
+            .padding(Layout.controlPadding)
 
             Button(action: { state.find(state.findQuery, forward: false) }) {
                 Image(systemName: "chevron.up")

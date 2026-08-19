@@ -879,7 +879,7 @@ class SetupWindowManager {
         window.level = .floating
         
         let setupView = SetupView {
-            DispatchQueue.main.async { [weak self] in
+            DispatchQueue.main.async { [weak self = self] in
                 self?.dismissSetupWindow()
             }
         }

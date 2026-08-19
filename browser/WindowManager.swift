@@ -320,6 +320,9 @@ final class WindowManager: ObservableObject {
         }
         
         if let _ = browserWindows.first(where: { $0.id == id }) {
+            // Window model already exists — just nudge observers so the
+            // ProgressView placeholder re-evaluates and transitions to content.
+            objectWillChange.send()
             return
         }
         
@@ -435,28 +438,61 @@ private struct BrowserWindowTabContainer: View {
     let tab: BrowserTabModel
     let activeTabID: String
     @EnvironmentObject private var windowManager: WindowManager
-    
+
+    /// Tracks whether this tab has ever been the active (visible) tab.
+    /// Until it is first activated we render a transparent placeholder so
+    /// the tab contributes zero focusable views to the key-view loop,
+    /// preventing FocusBridge.updateDefaultKeyViewLoop() from hanging on
+    /// launch when many tabs are restored from a session.
+    @State private var hasAppearedActive: Bool
+
     init(tab: BrowserTabModel, activeTabID: String) {
         self.tab = tab
         self.state = tab.browserState
         self.activeTabID = activeTabID
+        // Start with a non-focusable placeholder. The initial SwiftUI window
+        // must be ordered before the browser's large control hierarchy is
+        // installed, otherwise macOS 27 can stall in FocusBridge while it
+        // builds the key-view loop.
+        self._hasAppearedActive = State(initialValue: false)
     }
-    
+
     var body: some View {
-        if !state.isSleeping {
-            ContentView(
-                initialURL: tab.initialURL,
-                pvt: tab.isPrivate,
-                profile: tab.profile,
-                profileIcon: tab.profileIcon,
-                tabID: tab.id,
-                restoredState: tab.restoredState,
-                providedState: tab.browserState
-            )
-            .environmentObject(windowManager)
-            .opacity(activeTabID == tab.id ? 1 : 0)
-            .allowsHitTesting(activeTabID == tab.id)
-            .accessibilityHidden(activeTabID != tab.id)
+        let isActive = activeTabID == tab.id
+
+        Group {
+            if hasAppearedActive && !state.isSleeping {
+                ContentView(
+                    initialURL: tab.initialURL,
+                    pvt: tab.isPrivate,
+                    profile: tab.profile,
+                    profileIcon: tab.profileIcon,
+                    tabID: tab.id,
+                    restoredState: tab.restoredState,
+                    providedState: tab.browserState
+                )
+                .environmentObject(windowManager)
+                .opacity(isActive ? 1 : 0)
+                .allowsHitTesting(isActive)
+                .accessibilityHidden(!isActive)
+            } else {
+                // Lightweight placeholder — no focusable elements.
+                Color.clear
+            }
+        }
+        .onAppear {
+            guard activeTabID == tab.id, !hasAppearedActive else { return }
+            // Run after AppKit completes makeKeyAndOrderFront. Setting this
+            // synchronously would put ContentView back into the launch-time
+            // key-view-loop calculation and reproduce the hang.
+            DispatchQueue.main.async {
+                hasAppearedActive = true
+            }
+        }
+        .onChange(of: activeTabID) { _, newActiveID in
+            if newActiveID == tab.id {
+                hasAppearedActive = true
+            }
         }
     }
 }

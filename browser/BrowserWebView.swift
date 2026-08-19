@@ -1142,7 +1142,7 @@ struct BrowserWebView: NSViewRepresentable {
                         
                         let frameInfo = message.frameInfo
                         
-                        AutofillPopoverManager.shared.show(relativeTo: rect, in: webView, domain: host, credentials: credentials) { [weak self] cred in
+                        AutofillPopoverManager.shared.show(relativeTo: rect, in: webView, domain: host, credentials: credentials) { [weak self = self] cred in
                             let pass = PasswordManager.shared.fetchPasswordData(for: cred.username, domain: host) ?? ""
                             
                             let credentialsArray = [cred.username, pass]
@@ -1151,7 +1151,7 @@ struct BrowserWebView: NSViewRepresentable {
                                 let js = "window.__balanceAutofill(\(jsonStr)[0], \(jsonStr)[1]);"
                                 self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: .page, completionHandler: { _ in })
                             }
-                        } onSave: { [weak self] in
+                        } onSave: { [weak self = self] in
                             self?.state.webView?.evaluateJavaScript("window.__balanceGetFormValues()", in: frameInfo, in: .page) { result in
                                 switch result {
                                 case .success(let res):

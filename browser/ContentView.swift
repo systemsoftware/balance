@@ -116,23 +116,89 @@ private struct TrustIndicator: View {
 private struct AddressField: View {
     @Binding var text: String
     var onSubmit: () -> Void
-    @FocusState private var isFocused: Bool
-    
+
     var body: some View {
-        VStack {
-            TextField("Search or enter website name", text: $text)
-                .focused($isFocused)
-                .onSubmit(onSubmit)
-                .padding(Layout.controlPadding)
-                .textFieldStyle(.plain)
-                .onAppear {
-                    if text.isEmpty {
-                        isFocused = true
-                    }
-                }
+        NativeAddressField(text: $text, onSubmit: onSubmit)
+            .padding(Layout.controlPadding)
+    }
+}
+
+/// An NSTextField subclass that severs itself from the key-view loop.
+///
+/// On macOS 26/27 beta the system traverses nextKeyView/previousKeyView when
+/// any text field becomes first responder. That traversal re-enters SwiftUI's
+/// FocusBridge and deadlocks the main thread. Returning nil from every key-view
+/// accessor stops the traversal before it reaches SwiftUI-managed views.
+private final class IsolatedTextField: NSTextField {
+    override var nextKeyView: NSView? {
+        get { nil }
+        set { /* intentionally ignored */ }
+    }
+    override var previousKeyView: NSView? { nil }
+    override var nextValidKeyView: NSView? { nil }
+    override var previousValidKeyView: NSView? { nil }
+}
+
+/// Keeps the address bar out of SwiftUI's FocusBridge, which can deadlock while
+/// resolving the key-view loop on macOS 27 beta when this field is clicked.
+private struct NativeAddressField: NSViewRepresentable {
+    @Binding var text: String
+    let onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> IsolatedTextField {
+        let field = IsolatedTextField()
+        field.delegate = context.coordinator
+        field.placeholderString = "Search or enter website name"
+        field.font = .systemFont(ofSize: NSFont.systemFontSize)
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.stringValue = text
+        return field
+    }
+
+    func updateNSView(_ field: IsolatedTextField, context: Context) {
+        context.coordinator.parent = self
+
+        // Never replace text while the user is typing; that discards the
+        // insertion point and composition state. Navigation updates still
+        // refresh the field whenever it is not being edited.
+        if field.currentEditor() == nil, field.stringValue != text {
+            field.stringValue = text
+        }
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: NativeAddressField
+
+        init(parent: NativeAddressField) {
+            self.parent = parent
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy commandSelector: Selector
+        ) -> Bool {
+            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else {
+                return false
+            }
+
+            parent.onSubmit()
+            return true
         }
     }
 }
+
 
 private struct AutoFillPopover: View {
     @Binding var searchTerm: String

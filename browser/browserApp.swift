@@ -98,7 +98,7 @@ struct browserApp: App {
     
     var body: some Scene {
         WindowGroup(for: String.self) { $windowID in
-            BrowserWindowHost(windowID: windowID ?? WindowManager.shared.initialWindowID)
+            BrowserWindowHost(windowID: windowID)
                 .onAppear {
                     applyTheme(themePreference)
                 }
@@ -139,6 +139,8 @@ struct browserApp: App {
                     }
                     cleanTemporaryDirectory()
                 }
+        } defaultValue: {
+            WindowManager.shared.initialWindowID
         }
         .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: ["*"])
