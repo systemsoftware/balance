@@ -163,8 +163,8 @@ class BrowserImporter: ObservableObject {
         let bookmarksPath = "\(basePath)/Bookmarks"
         if FileManager.default.fileExists(atPath: bookmarksPath) {
             let bookmarks = parseChromiumBookmarks(at: bookmarksPath)
-            for bm in bookmarks {
-                bookmarkStore.add(bm)
+            DispatchQueue.main.sync {
+                bookmarkStore.add(contentsOf: bookmarks)
             }
             result.bookmarksCount = bookmarks.count
         } else {
@@ -397,8 +397,8 @@ class BrowserImporter: ObservableObject {
         // Bookmarks
         if FileManager.default.fileExists(atPath: placesPath) {
             let bookmarks = readFirefoxBookmarks(at: placesPath)
-            for bm in bookmarks {
-                bookmarkStore.add(bm)
+            DispatchQueue.main.sync {
+                bookmarkStore.add(contentsOf: bookmarks)
             }
             result.bookmarksCount = bookmarks.count
             

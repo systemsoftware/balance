@@ -7,7 +7,7 @@ final class SidebarStore: ObservableObject {
     
     @Published var items: [SidebarItem] = []
 
-    private let defaults = UserDefaults(suiteName:Config.appGroupIdentifier)
+    private let defaults = Config.defaults
     private let profile: String
     private var storageKey: String {
         return profile.isEmpty ? "sidebar" : "sidebar_\(profile)"
@@ -20,7 +20,7 @@ final class SidebarStore: ObservableObject {
 
     func load() {
         guard
-            let data = defaults?.data(forKey: storageKey),
+            let data = defaults.data(forKey: storageKey),
             let decoded = try? JSONDecoder().decode([SidebarItem].self, from: data)
         else {
             items = Array(builtInSidebar.prefix(5))
@@ -32,7 +32,7 @@ final class SidebarStore: ObservableObject {
 
     func save() {
         guard let data = try? JSONEncoder().encode(items) else { return }
-        defaults?.set(data, forKey: storageKey)
+        defaults.set(data, forKey: storageKey)
     }
 
     func add(_ item: SidebarItem) {

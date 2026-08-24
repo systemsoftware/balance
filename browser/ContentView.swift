@@ -159,6 +159,11 @@ private struct NativeAddressField: NSViewRepresentable {
         field.isBordered = false
         field.drawsBackground = false
         field.focusRingType = .none
+        field.usesSingleLineMode = true
+        field.maximumNumberOfLines = 1
+        field.lineBreakMode = .byTruncatingTail
+        field.cell?.wraps = false
+        field.cell?.isScrollable = true
         field.stringValue = text
         return field
     }
@@ -1814,12 +1819,12 @@ struct ContentView: View {
                 showPageShine = false
                 Task {
                     let clr = await browserState.getBackground()
-                    if let window = NSApplication.shared.windows.first {
+                    if let window = NSApplication.shared.keyWindow {
                         window.backgroundColor = clr
                         window.appearance = NSAppearance(named: clr.isLight ? .aqua : .darkAqua)
                     }
                 }
-            } else{
+            } else {
                 showPageShine = true
             }
             

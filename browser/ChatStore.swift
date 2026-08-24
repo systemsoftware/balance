@@ -4,7 +4,7 @@ internal import Combine
 final class ChatStore: ObservableObject {
     @Published var items: [ChatSession] = []
 
-    private let defaults = UserDefaults(suiteName: Config.appGroupIdentifier)
+    private let defaults = Config.defaults
     private let profile: String
     private var storageKey: String {
         return profile.isEmpty ? "chats" : "chats_\(profile)"
@@ -17,7 +17,7 @@ final class ChatStore: ObservableObject {
 
     func load() {
         guard
-            let data = defaults?.data(forKey: storageKey),
+            let data = defaults.data(forKey: storageKey),
             let decoded = try? JSONDecoder().decode([ChatSession].self, from: data)
         else {
             items = []
@@ -28,7 +28,7 @@ final class ChatStore: ObservableObject {
 
     func save() {
         guard let data = try? JSONEncoder().encode(items) else { return }
-        defaults?.set(data, forKey: storageKey)
+        defaults.set(data, forKey: storageKey)
     }
 
     func add(_ bookmark: ChatSession) {

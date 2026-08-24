@@ -14,7 +14,7 @@ struct PlaceItem: Identifiable, Codable, Hashable {
 final class PlaceStore: ObservableObject {
     @Published var items: [PlaceItem] = []
     
-    private let defaults = UserDefaults(suiteName: Config.appGroupIdentifier)
+    private let defaults = Config.defaults
     
     init() {
         load()
@@ -22,7 +22,7 @@ final class PlaceStore: ObservableObject {
     
     func load() {
         guard
-            let data = defaults?.data(forKey: "savedPlaces"),
+            let data = defaults.data(forKey: "savedPlaces"),
             let decoded = try? JSONDecoder().decode([PlaceItem].self, from: data)
         else {
             return
@@ -32,7 +32,7 @@ final class PlaceStore: ObservableObject {
     
     func save() {
         guard let data = try? JSONEncoder().encode(items) else { return }
-        defaults?.set(data, forKey: "savedPlaces")
+        defaults.set(data, forKey: "savedPlaces")
     }
     
     func add(_ item: PlaceItem) {

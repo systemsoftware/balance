@@ -5,7 +5,7 @@ import SwiftUI
 final class PinStore: ObservableObject {
     @Published var items: [Bookmark] = []
 
-    private let defaults = UserDefaults(suiteName: Config.appGroupIdentifier)
+    private let defaults = Config.defaults
     private let profile: String
     private var storageKey: String {
         return profile.isEmpty ? "pins" : "pins_\(profile)"
@@ -18,7 +18,7 @@ final class PinStore: ObservableObject {
 
     func load() {
         guard
-            let data = defaults?.data(forKey: storageKey),
+            let data = defaults.data(forKey: storageKey),
             let decoded = try? JSONDecoder().decode([Bookmark].self, from: data)
         else {
             items = []
@@ -29,7 +29,7 @@ final class PinStore: ObservableObject {
 
     func save() {
         guard let data = try? JSONEncoder().encode(items) else { return }
-        defaults?.set(data, forKey: storageKey)
+        defaults.set(data, forKey: storageKey)
     }
 
     func add(_ bookmark: Bookmark) {

@@ -11,12 +11,12 @@ func switchToTab(tabID: String) {
 func handleDeepLink(_ url: URL) {
     NSApp.activate(ignoringOtherApps: true)
     guard let scheme = url.scheme else { return }
-    
+
     if scheme.lowercased() == "http" || scheme.lowercased() == "https" || scheme.lowercased() == "file" {
         createNewTab(with: url)
         return
     }
-    
+
     guard scheme == "balance" || scheme == "balance-focus" else { return }
 
     let isFocus = scheme == "balance-focus"
@@ -212,13 +212,36 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
+    func describePasskeyState(
+        _ state: ASAuthorizationWebBrowserPublicKeyCredentialManager.AuthorizationState
+    ) -> String {
+        switch state {
+        case .authorized:
+            return "authorized"
+        case .denied:
+            return "denied"
+        case .notDetermined:
+            return "notDetermined"
+        @unknown default:
+            return "unknown (\(state.rawValue))"
+        }
+    }
+
     func applicationDidFinishLaunching(_ notification: Notification) {
         if #available(macOS 13.3, *) {
+
             let manager = ASAuthorizationWebBrowserPublicKeyCredentialManager()
-            self.credentialManager = manager
+            credentialManager = manager
+
             if manager.authorizationStateForPlatformCredentials == .notDetermined {
-                manager.requestAuthorizationForPublicKeyCredentials { _ in }
+                manager.requestAuthorizationForPublicKeyCredentials { state in
+                    print(
+                        "Passkey authorization:",
+                        self.describePasskeyState(state)
+                    )
+                }
             }
+
         }
 
         WindowManager.shared.restoreSavedSessionIfNeeded()
@@ -397,14 +420,14 @@ enum BrowserCommand: String, CaseIterable {
         case .reload: return KeyboardShortcut("r", modifiers: [.command])
         case .searchTabs: return KeyboardShortcut("s", modifiers: [.command, .control])
         case .reopenLastTab: return KeyboardShortcut("t", modifiers: [.command, .shift])
-        case .autocomplete: return KeyboardShortcut("s", modifiers: [.command])
+        case .autocomplete: return KeyboardShortcut("s", modifiers: [.control])
         case .toggleFind: return KeyboardShortcut("f", modifiers: [.command])
         case .zoomIn: return KeyboardShortcut("+", modifiers: [.command])
         case .zoomOut: return KeyboardShortcut("-", modifiers: [.command])
         case .toggleMute: return KeyboardShortcut("m", modifiers: [.command, .shift])
         case .copyURL: return KeyboardShortcut("c", modifiers: [.command, .control])
         case .printPage: return KeyboardShortcut("p", modifiers: [.command])
-        case .savePage: return KeyboardShortcut("s", modifiers: [.command, .option])
+        case .savePage: return KeyboardShortcut("s", modifiers: [.command,  .option])
         case .toggleReader: return KeyboardShortcut("r", modifiers: [.command, .option])
         case .downloads: return KeyboardShortcut("d", modifiers: [.command, .shift])
         case .history: return KeyboardShortcut("y", modifiers: [.command])
@@ -559,4 +582,3 @@ func cleanTemporaryDirectory() {
         print("Failed to clear tmp: \(error)")
     }
 }
-
