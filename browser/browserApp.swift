@@ -184,6 +184,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     // URLs queued before launch is complete (e.g. Finder double-click cold launch).
     var pendingFileURLs: [URL] = []
     var didFinishLaunching = false
+    var credentialManager: Any?
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSAppleEventManager.shared().setEventHandler(
@@ -214,10 +215,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
         if #available(macOS 13.3, *) {
             let manager = ASAuthorizationWebBrowserPublicKeyCredentialManager()
+            self.credentialManager = manager
             if manager.authorizationStateForPlatformCredentials == .notDetermined {
-                Task {
-                    await manager.requestAuthorizationForPublicKeyCredentials()
-                }
+                manager.requestAuthorizationForPublicKeyCredentials { _ in }
             }
         }
 

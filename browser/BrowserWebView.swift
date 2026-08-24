@@ -33,6 +33,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var spaceIndex: Int = 0
     var restoredScrollX: Int?
     var restoredScrollY: Int?
+    @Published var serverTrust: SecTrust?
 
     
     // MARK: - WKWebExtensionTab
@@ -132,12 +133,6 @@ func applyZoom() {
         
         if let webView {
             if let coordinator = webView.navigationDelegate as? BrowserWebView.Coordinator {
-                webView.removeObserver(coordinator, forKeyPath: "estimatedProgress")
-                webView.removeObserver(coordinator, forKeyPath: "title")
-                webView.removeObserver(coordinator, forKeyPath: "URL")
-                webView.removeObserver(coordinator, forKeyPath: "canGoBack")
-                webView.removeObserver(coordinator, forKeyPath: "canGoForward")
-                
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "installExtension")
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "scrollObserver")
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "balanceLocation")
@@ -487,11 +482,36 @@ struct BrowserWebView: NSViewRepresentable {
                 state.attach(preloaded)
             }
             
-            preloaded.addObserver(context.coordinator, forKeyPath: "estimatedProgress", options: .new, context: nil)
-            preloaded.addObserver(context.coordinator, forKeyPath: "title", options: .new, context: nil)
-            preloaded.addObserver(context.coordinator, forKeyPath: "URL", options: .new, context: nil)
-            preloaded.addObserver(context.coordinator, forKeyPath: "canGoBack", options: .new, context: nil)
-            preloaded.addObserver(context.coordinator, forKeyPath: "canGoForward", options: .new, context: nil)
+            context.coordinator.observers = [
+                preloaded.observe(\.estimatedProgress, options: .new) { [weak state] webView, _ in
+                    DispatchQueue.main.async {
+                        state?.progress = webView.estimatedProgress
+                        state?.isLoading = webView.isLoading
+                    }
+                },
+                preloaded.observe(\.title, options: .new) { [weak state] webView, _ in
+                    DispatchQueue.main.async {
+                        if state?.customTitle == nil { state?.title = webView.title ?? "Page" }
+                    }
+                },
+                preloaded.observe(\.url, options: .new) { [weak state] webView, _ in
+                    DispatchQueue.main.async {
+                        state?.url = webView.url
+                        if let extController = webView.configuration.webExtensionController, let state = state {
+                            extController.didChangeTabProperties([.URL], for: state)
+                        }
+                    }
+                },
+                preloaded.observe(\.canGoBack, options: .new) { [weak state] webView, _ in
+                    DispatchQueue.main.async { state?.canGoBack = webView.canGoBack }
+                },
+                preloaded.observe(\.canGoForward, options: .new) { [weak state] webView, _ in
+                    DispatchQueue.main.async { state?.canGoForward = webView.canGoForward }
+                },
+                preloaded.observe(\.serverTrust, options: [.initial, .new]) { [weak state] webView, _ in
+                    DispatchQueue.main.async { state?.serverTrust = webView.serverTrust }
+                }
+            ]
             
             let manager = WebExtensionManager.shared
             manager.allTabs.insert(state)
@@ -932,11 +952,36 @@ struct BrowserWebView: NSViewRepresentable {
         extController.didActivateTab(state)
         manager.activeTab = state
 
-        webView.addObserver(context.coordinator, forKeyPath: "estimatedProgress", options: .new, context: nil)
-        webView.addObserver(context.coordinator, forKeyPath: "title", options: .new, context: nil)
-        webView.addObserver(context.coordinator, forKeyPath: "URL", options: .new, context: nil)
-        webView.addObserver(context.coordinator, forKeyPath: "canGoBack", options: .new, context: nil)
-        webView.addObserver(context.coordinator, forKeyPath: "canGoForward", options: .new, context: nil)
+        context.coordinator.observers = [
+            webView.observe(\.estimatedProgress, options: .new) { [weak state] webView, _ in
+                DispatchQueue.main.async {
+                    state?.progress = webView.estimatedProgress
+                    state?.isLoading = webView.isLoading
+                }
+            },
+            webView.observe(\.title, options: .new) { [weak state] webView, _ in
+                DispatchQueue.main.async {
+                    if state?.customTitle == nil { state?.title = webView.title ?? "Page" }
+                }
+            },
+            webView.observe(\.url, options: .new) { [weak state] webView, _ in
+                DispatchQueue.main.async {
+                    state?.url = webView.url
+                    if let extController = webView.configuration.webExtensionController, let state = state {
+                        extController.didChangeTabProperties([.URL], for: state)
+                    }
+                }
+            },
+            webView.observe(\.canGoBack, options: .new) { [weak state] webView, _ in
+                DispatchQueue.main.async { state?.canGoBack = webView.canGoBack }
+            },
+            webView.observe(\.canGoForward, options: .new) { [weak state] webView, _ in
+                DispatchQueue.main.async { state?.canGoForward = webView.canGoForward }
+            },
+            webView.observe(\.serverTrust, options: [.initial, .new]) { [weak state] webView, _ in
+                DispatchQueue.main.async { state?.serverTrust = webView.serverTrust }
+            }
+        ]
         
         webView.allowsBackForwardNavigationGestures = true
         
@@ -1067,6 +1112,7 @@ struct BrowserWebView: NSViewRepresentable {
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, CLLocationManagerDelegate {
         
+        var observers: [NSKeyValueObservation] = []
         let downloadStore: DownloadStore
         var locationManager: CLLocationManager?
 
@@ -1250,40 +1296,11 @@ struct BrowserWebView: NSViewRepresentable {
 
 
 
-        override func observeValue(
-            forKeyPath keyPath: String?,
-            of object: Any?,
-            change: [NSKeyValueChangeKey : Any]?,
-            context: UnsafeMutableRawPointer?
-        ) {
-            guard let webView = object as? WKWebView else { return }
 
-            DispatchQueue.main.async {
-                switch keyPath {
-                case "estimatedProgress":
-                    self.state.progress = webView.estimatedProgress
-                    self.state.isLoading = webView.isLoading
-                case "title":
-                    if self.state.customTitle == nil {
-                        self.state.title = webView.title ?? "Page"
-                    }
-                case "URL":
-                    self.state.url = webView.url
-                    if let extController = webView.configuration.webExtensionController {
-                        extController.didChangeTabProperties([.URL], for: self.state)
-                    }
-                case "canGoBack":
-                    self.state.canGoBack = webView.canGoBack
-                case "canGoForward":
-                    self.state.canGoForward = webView.canGoForward
-                default:
-                    break
-                }
-            }
-        }
 
         func webView(_ webView: WKWebView, didStartProvisionalNavigation navigation: WKNavigation!) {
             state.isLoading = true
+            state.serverTrust = webView.serverTrust
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {
@@ -1299,6 +1316,7 @@ struct BrowserWebView: NSViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             state.isLoading = false
             state.url = webView.url
+            state.serverTrust = webView.serverTrust
             if state.customTitle == nil {
                 state.title = webView.title ?? "Page"
             }
@@ -1362,6 +1380,7 @@ struct BrowserWebView: NSViewRepresentable {
 
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
             state.url = webView.url
+            state.serverTrust = webView.serverTrust
         }
 
         func webView(_ webView: WKWebView,

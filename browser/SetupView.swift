@@ -31,36 +31,53 @@ enum ImportBrowser: String, CaseIterable, Identifiable {
     }
     
     var profilePath: String {
-        // In a sandboxed app, homeDirectoryForCurrentUser returns the container.
-        // Use getpwuid to get the real user home directory.
         let home: String
+
         if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
             home = String(cString: dir)
         } else {
             home = FileManager.default.homeDirectoryForCurrentUser.path
         }
+
+        print("PROFILE PATH SELF:", self)
+
         switch self {
         case .chrome:
+            print("→ CHROME")
             return "\(home)/Library/Application Support/Google/Chrome/Default"
+
         case .edge:
+            print("→ EDGE")
             return "\(home)/Library/Application Support/Microsoft Edge/Default"
+
         case .firefox:
+            print("→ FIREFOX")
             return "\(home)/Library/Application Support/Firefox/Profiles"
         }
     }
     
-    var isInstalled: Bool {
-        let fm = FileManager.default
-        if self == .firefox {
-            // Check that the Profiles directory exists and contains at least one profile
-            guard fm.fileExists(atPath: profilePath),
-                  let contents = try? fm.contentsOfDirectory(atPath: profilePath),
-                  !contents.isEmpty
-            else { return false }
-            return true
+    var bundleIdentifier: String {
+        switch self {
+        case .chrome: return "com.google.Chrome"
+        case .edge: return "com.microsoft.edgemac"
+        case .firefox: return "org.mozilla.firefox"
         }
-        // For Chromium browsers, check that the Default profile directory exists
-        return fm.fileExists(atPath: profilePath)
+    }
+
+    /// Whether the browser app itself is installed.
+    ///
+    /// Deliberately does NOT touch the profile folder under
+    /// `~/Library/Application Support/...` — under App Sandbox we have no
+    /// grant for that path until the user goes through the NSOpenPanel
+    /// flow in `SandboxedFileAccess`, and a sandboxed `fileExists`/
+    /// `contentsOfDirectory` call against an ungranted path just returns
+    /// false/empty rather than throwing, which looks identical to "not
+    /// installed" even when the folder genuinely exists.
+    ///
+    /// Launch Services lookups aren't gated the same way, so this works
+    /// pre-grant.
+    var isInstalled: Bool {
+        NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) != nil
     }
     
     var keychainService: String {
@@ -101,21 +118,38 @@ class BrowserImporter: ObservableObject {
     func importFrom(_ browser: ImportBrowser) {
         currentlyImporting = browser
         var result = ImportResult()
-        
-        DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+
+        // Sandbox gate: we can't touch ~/Library/Application Support/...
+        // for another app until the user grants it via NSOpenPanel. This
+        // resolves a cached security-scoped bookmark if we have one, or
+        // prompts the user if not.
+        SandboxedFileAccess.shared.resolvedAccessURL(for: browser) { [weak self] accessURL in
             guard let self else { return }
-            
-            if browser == .firefox {
-                self.importFirefox(&result)
-            } else {
-                self.importChromium(browser, &result)
+
+            guard let accessURL else {
+                result.errors.append("Access to \(browser.rawValue) data wasn't granted")
+                result.completed = true
+                DispatchQueue.main.async {
+                    self.results[browser] = result
+                    self.currentlyImporting = nil
+                }
+                return
             }
-            
-            result.completed = true
-            
-            DispatchQueue.main.async {
-                self.results[browser] = result
-                self.currentlyImporting = nil
+
+            DispatchQueue.global(qos: .userInitiated).async {
+                if browser == .firefox {
+                    self.importFirefox(&result)
+                } else {
+                    self.importChromium(browser, &result)
+                }
+
+                result.completed = true
+
+                DispatchQueue.main.async {
+                    self.results[browser] = result
+                    self.currentlyImporting = nil
+                    SandboxedFileAccess.shared.release(accessURL)
+                }
             }
         }
     }

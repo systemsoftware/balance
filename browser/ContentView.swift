@@ -115,10 +115,11 @@ private struct TrustIndicator: View {
 
 private struct AddressField: View {
     @Binding var text: String
+    var focusOnAppear: Bool = false
     var onSubmit: () -> Void
 
     var body: some View {
-        NativeAddressField(text: $text, onSubmit: onSubmit)
+        NativeAddressField(text: $text, onSubmit: onSubmit, focusOnAppear: focusOnAppear)
             .padding(Layout.controlPadding)
     }
 }
@@ -144,6 +145,7 @@ private final class IsolatedTextField: NSTextField {
 private struct NativeAddressField: NSViewRepresentable {
     @Binding var text: String
     let onSubmit: () -> Void
+    var focusOnAppear: Bool = false
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -170,10 +172,18 @@ private struct NativeAddressField: NSViewRepresentable {
         if field.currentEditor() == nil, field.stringValue != text {
             field.stringValue = text
         }
+        
+        if focusOnAppear && !context.coordinator.didFocus {
+            context.coordinator.didFocus = true
+            DispatchQueue.main.async {
+                field.window?.makeFirstResponder(field)
+            }
+        }
     }
 
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: NativeAddressField
+        var didFocus = false
 
         init(parent: NativeAddressField) {
             self.parent = parent
@@ -567,9 +577,9 @@ struct ContentView: View {
                     
                     HStack{
                         if location?.absoluteString.starts(with: "http") == true {
-                            TrustIndicator(trust: browserState.webView?.serverTrust, url: location, isPresented: $showTrustInfo)
+                            TrustIndicator(trust: browserState.serverTrust, url: location, isPresented: $showTrustInfo)
                                 .popover(isPresented: $showTrustInfo) {
-                                    ServerTrustView(trust: browserState.webView?.serverTrust, url: browserState.url, dataStore: browserState.webView?.configuration.websiteDataStore,
+                                    ServerTrustView(trust: browserState.serverTrust, url: browserState.url, dataStore: browserState.webView?.configuration.websiteDataStore,
                                                     onAttemptHTTPS: {
                                         location = URL(string: "https://" + location!.absoluteString.split(separator: ":")[1])
                                     }
@@ -578,7 +588,7 @@ struct ContentView: View {
                                 .padding(.leading)
                         }
                         
-                        AddressField(text: $urlInput, onSubmit: submitURL)
+                        AddressField(text: $urlInput, focusOnAppear: initialURLString == nil, onSubmit: submitURL)
                         
                         
                         Spacer()
