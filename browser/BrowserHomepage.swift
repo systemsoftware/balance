@@ -139,8 +139,15 @@ class NewsViewModel: ObservableObject {
     func fetch() {
         isLoading = true
         items = []
-        let urlString = sources[selectedSource].url
-        guard let url = URL(string: urlString) else { return }
+        guard sources.indices.contains(selectedSource) else {
+            isLoading = false
+            return
+        }
+        let selectedSource = sources[selectedSource]
+        guard let url = URL(string: selectedSource.url) else {
+            isLoading = false
+            return
+        }
 
         URLSession.shared.dataTask(with: url) { data, _, _ in
             guard let data = data,
@@ -149,7 +156,7 @@ class NewsViewModel: ObservableObject {
                 DispatchQueue.main.async { self.isLoading = false }
                 return
             }
-            let parsed = Self.parseRSS(xml, source: self.sources[self.selectedSource].name)
+            let parsed = Self.parseRSS(xml, source: selectedSource.name)
             DispatchQueue.main.async {
                 self.items = parsed
                 self.isLoading = false

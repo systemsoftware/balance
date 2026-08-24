@@ -367,8 +367,11 @@ struct PinDropDelegate: DropDelegate {
         guard let draggedItem = self.draggedItem else { return }
         guard draggedItem != item else { return }
         
-        let from = store.items.firstIndex(of: draggedItem)!
-        let to = store.items.firstIndex(of: item)!
+        guard let from = store.items.firstIndex(of: draggedItem),
+              let to = store.items.firstIndex(of: item) else {
+            self.draggedItem = nil
+            return
+        }
         
         withAnimation {
             store.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)

@@ -553,9 +553,9 @@ struct ContentView: View {
                     .keyboardShortcut("h", modifiers: [.command, .shift])
                 }
                 
-                if location != nil {
-                    if location?.absoluteString.starts(with: "http") == true && showShareInToolbar {
-                        ShareLink(item: location!) {
+                if let currentLocation = location {
+                    if currentLocation.absoluteString.starts(with: "http") && showShareInToolbar {
+                        ShareLink(item: currentLocation) {
                             Image(systemName: "square.and.arrow.up")
                                 .padding(Layout.controlPadding)
                         }
@@ -586,7 +586,13 @@ struct ContentView: View {
                                 .popover(isPresented: $showTrustInfo) {
                                     ServerTrustView(trust: browserState.serverTrust, url: browserState.url, dataStore: browserState.webView?.configuration.websiteDataStore,
                                                     onAttemptHTTPS: {
-                                        location = URL(string: "https://" + location!.absoluteString.split(separator: ":")[1])
+                                        guard let currentLocation = location,
+                                              var components = URLComponents(
+                                                url: currentLocation,
+                                                resolvingAgainstBaseURL: false
+                                              ) else { return }
+                                        components.scheme = "https"
+                                        location = components.url
                                     }
                                     )
                                 }

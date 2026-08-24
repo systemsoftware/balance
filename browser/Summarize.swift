@@ -2,42 +2,43 @@ import SwiftUI
 import WebKit
 import FoundationModels
 
-func createSummaryWindow(state:BrowserState) async {
-    let window = NSWindow(
-        contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
-        styleMask: [.titled, .closable, .miniaturizable, .resizable],
-        backing: .buffered,
-        defer: false
-    )
-    window.title = "Summary of \(state.title)"
-    window.isReleasedWhenClosed = false
-    
+@MainActor
+func createSummaryWindow(state: BrowserState) async {
     let text = await withCheckedContinuation { continuation in
-        DispatchQueue.main.async {
-            state.webView?.getCleanText { result in
-                continuation.resume(returning: result ?? "")
-            }
+        guard let webView = state.webView else {
+            continuation.resume(returning: "")
+            return
+        }
+        webView.getCleanText { result in
+            continuation.resume(returning: result ?? "")
         }
     }
-    
-    let session = LanguageModelSession()
-    
-    if text.isEmpty {
-        Task {
-            let a = NSAlert()
-            a.messageText = "No text found"
-            a.runModal()
-        }
+
+    let cleanedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard !cleanedText.isEmpty else {
+        showSummaryError(
+            title: "Nothing to summarize",
+            message: "This page doesn't contain enough readable text to create a summary."
+        )
         return
     }
-    
-    let prompt = String("Summarize this page: \(text)".prefix(3000))
+
+    let prompt = String("Summarize this page: \(cleanedText)".prefix(3000))
     
     do {
         
-        let result = try await session.respond(to: prompt).content
+        let result = try await LanguageModelSession().respond(to: prompt).content
         
         if let url = state.url {
+            let window = NSWindow(
+                contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
+                styleMask: [.titled, .closable, .miniaturizable, .resizable],
+                backing: .buffered,
+                defer: false
+            )
+            window.title = "Summary of \(state.title)"
+            window.isReleasedWhenClosed = false
+
             let focusView = SummaryWindow(url: url, title:state.title, summary: result)
             let hostingView = NSHostingView(rootView: focusView)
 
@@ -61,8 +62,21 @@ func createSummaryWindow(state:BrowserState) async {
         }
         
     } catch {
-        print(error)
+        showSummaryError(
+            title: "Couldn't summarize this page",
+            message: error.localizedDescription
+        )
     }
+}
+
+@MainActor
+private func showSummaryError(title: String, message: String) {
+    let alert = NSAlert()
+    alert.alertStyle = .informational
+    alert.messageText = title
+    alert.informativeText = message
+    alert.addButton(withTitle: "OK")
+    alert.runModal()
 }
 
 struct SummaryWindow: View {

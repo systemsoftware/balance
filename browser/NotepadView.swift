@@ -53,8 +53,8 @@ struct NoteView: View {
                     }
                 ) { scope in
                     let MAX_CHAR = 10
-                    if scope == .domain {
-                        Text("\((browserState.url!.domainID!).prefix(MAX_CHAR))\(browserState.url!.domainID!.count > MAX_CHAR ? "..." : "")").tag(scope)
+                    if scope == .domain, let domain = browserState.url?.domainID {
+                        Text("\(domain.prefix(MAX_CHAR))\(domain.count > MAX_CHAR ? "..." : "")").tag(scope)
                     } else {
                         Text(scope.rawValue).tag(scope)
                     }

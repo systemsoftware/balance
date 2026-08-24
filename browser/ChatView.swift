@@ -120,7 +120,8 @@ struct ChatView: View {
                                         selectedSessionId = sessions.first?.id
                                         chatStore.items = sessions
                                         chatStore.save()
-                                        resetSession()
+                                        hasSession = false
+                                        self.session = nil
                                     }
                                 }
                                 Divider()
@@ -334,8 +335,8 @@ struct ChatView: View {
         
         let newItem = ChatItem(query: currentQuery, response: "")
         let itemID = newItem.id
+        let currentSessionID = sessions[currentSessionIndex].id
         sessions[currentSessionIndex].items.append(newItem)
-        let currentSessionIdx = currentSessionIndex
         
         chatStore.items = sessions
         chatStore.save()
@@ -352,15 +353,17 @@ struct ChatView: View {
                     maximumResponseTokens: maxTokens
                 )
                 
-                let stream = session!.streamResponse(
+                guard let activeModelSession = session else { return }
+                let stream = activeModelSession.streamResponse(
                     to: currentQuery,
                     options: options
                 )
                 
                 for try await snapshot in stream {
                     await MainActor.run {
-                        if let idx = sessions[currentSessionIdx].items.firstIndex(where: { $0.id == itemID }) {
-                            sessions[currentSessionIdx].items[idx].response = snapshot.content
+                        if let sessionIndex = sessions.firstIndex(where: { $0.id == currentSessionID }),
+                           let itemIndex = sessions[sessionIndex].items.firstIndex(where: { $0.id == itemID }) {
+                            sessions[sessionIndex].items[itemIndex].response = snapshot.content
                         }
                     }
                 }
@@ -371,8 +374,9 @@ struct ChatView: View {
                 }
             } catch {
                 await MainActor.run {
-                    if let idx = sessions[currentSessionIdx].items.firstIndex(where: { $0.id == itemID }) {
-                        sessions[currentSessionIdx].items[idx].response = "Error: \(error.localizedDescription)"
+                    if let sessionIndex = sessions.firstIndex(where: { $0.id == currentSessionID }),
+                       let itemIndex = sessions[sessionIndex].items.firstIndex(where: { $0.id == itemID }) {
+                        sessions[sessionIndex].items[itemIndex].response = "Error: \(error.localizedDescription)"
                     }
                 }
             }

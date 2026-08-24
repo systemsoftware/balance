@@ -26,7 +26,7 @@ public struct CachedAsyncImage<Content>: View where Content: View {
     
 
     public init(url: URL?, urlCache: URLCache = .shared,  scale: CGFloat = 1) where Content == Image {
-        let urlRequest = url == nil ? nil : URLRequest(url: url!)
+        let urlRequest = url.map { URLRequest(url: $0) }
         self.init(urlRequest: urlRequest, urlCache: urlCache, scale: scale)
     }
 
@@ -41,7 +41,7 @@ public struct CachedAsyncImage<Content>: View where Content: View {
     }
 
     public init<I, P>(url: URL?, urlCache: URLCache = .shared,  scale: CGFloat = 1, @ViewBuilder content: @escaping (Image) -> I, @ViewBuilder placeholder: @escaping () -> P) where Content == _ConditionalContent<I, P>, I : View, P : View {
-        let urlRequest = url == nil ? nil : URLRequest(url: url!)
+        let urlRequest = url.map { URLRequest(url: $0) }
         self.init(urlRequest: urlRequest, urlCache: urlCache, scale: scale, content: content, placeholder: placeholder)
     }
     
@@ -57,7 +57,7 @@ public struct CachedAsyncImage<Content>: View where Content: View {
     }
  
     public init(url: URL?, urlCache: URLCache = .shared, scale: CGFloat = 1, transaction: Transaction = Transaction(), @ViewBuilder content: @escaping (AsyncImagePhase) -> Content) {
-        let urlRequest = url == nil ? nil : URLRequest(url: url!)
+        let urlRequest = url.map { URLRequest(url: $0) }
         self.init(urlRequest: urlRequest, urlCache: urlCache, scale: scale, transaction: transaction, content: content)
     }
   
@@ -85,7 +85,7 @@ public struct CachedAsyncImage<Content>: View where Content: View {
         do {
             if let urlRequest = urlRequest {
                 let (image, metrics) = try await remoteImage(from: urlRequest, session: urlSession)
-                if metrics.transactionMetrics.last?.resourceFetchType == .localCache {
+                if metrics?.transactionMetrics.last?.resourceFetchType == .localCache {
                     // WARNING: This does not behave well when the url is changed with another
                     phase = .success(image)
                 } else {
@@ -119,13 +119,17 @@ private extension AsyncImage {
 
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
 private extension CachedAsyncImage {
-    private func remoteImage(from request: URLRequest, session: URLSession) async throws -> (Image, URLSessionTaskMetrics) {
+    private func remoteImage(from request: URLRequest, session: URLSession) async throws -> (Image, URLSessionTaskMetrics?) {
         let (data, _, metrics) = try await session.data(for: request)
-        if metrics.redirectCount > 0, let lastResponse = metrics.transactionMetrics.last?.response {
+        if let metrics,
+           metrics.redirectCount > 0,
+           let lastResponse = metrics.transactionMetrics.last?.response {
             let requests = metrics.transactionMetrics.map { $0.request }
-            requests.forEach(session.configuration.urlCache!.removeCachedResponse)
-            let lastCachedResponse = CachedURLResponse(response: lastResponse, data: data)
-            session.configuration.urlCache!.storeCachedResponse(lastCachedResponse, for: request)
+            if let cache = session.configuration.urlCache {
+                requests.forEach(cache.removeCachedResponse)
+                let lastCachedResponse = CachedURLResponse(response: lastResponse, data: data)
+                cache.storeCachedResponse(lastCachedResponse, for: request)
+            }
         }
         return (try image(from: data), metrics)
     }
@@ -166,9 +170,9 @@ private class URLSessionTaskController: NSObject, URLSessionTaskDelegate {
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
 private extension URLSession {
     
-    func data(for request: URLRequest) async throws -> (Data, URLResponse, URLSessionTaskMetrics) {
+    func data(for request: URLRequest) async throws -> (Data, URLResponse, URLSessionTaskMetrics?) {
         let controller = URLSessionTaskController()
         let (data, response) = try await data(for: request, delegate: controller)
-        return (data, response, controller.metrics!)
+        return (data, response, controller.metrics)
     }
 }

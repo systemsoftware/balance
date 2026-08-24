@@ -63,7 +63,8 @@ class HistoryManager {
         }
     }
     
-    static func clearAllHistory(profile: String = "") {
+    @discardableResult
+    static func clearAllHistory(profile: String = "") -> Bool {
         let searchProfile = profile
         let descriptor = FetchDescriptor<HistoryItem>(
             predicate: #Predicate { $0.profile == searchProfile }
@@ -74,8 +75,11 @@ class HistoryManager {
                 sharedContainer.mainContext.delete(item)
             }
             try sharedContainer.mainContext.save()
+            return true
         } catch {
             print("❌ Failed to clear history: \(error)")
+            sharedContainer.mainContext.rollback()
+            return false
         }
     }
     
@@ -120,7 +124,7 @@ struct HistoryView: View {
                     .font(.system(.headline, design: .rounded))
                 Spacer()
                 Button("Clear All") {
-                    HistoryManager.clearAllHistory(profile: profile)
+                    clearHistory()
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
@@ -164,6 +168,15 @@ struct HistoryView: View {
             }
         }
         .background(Color.black.opacity(0.02))
+    }
+
+    private func clearHistory() {
+        // End any row interaction before invalidating every model backing the list.
+        // Deferring by one main-actor turn also lets SwiftUI dismiss a context menu.
+        Task { @MainActor in
+            await Task.yield()
+            _ = HistoryManager.clearAllHistory(profile: profile)
+        }
     }
 }
 
