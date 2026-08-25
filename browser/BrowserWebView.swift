@@ -6,6 +6,52 @@ import CoreLocation
 import AuthenticationServices
 import UserNotifications
 
+private enum DownloadFilenameResolver {
+    private static let extensionsByMIMEType: [String: String] = [
+        "application/zip": "zip",
+        "application/x-zip-compressed": "zip",
+        "application/x-apple-diskimage": "dmg",
+        "application/x-7z-compressed": "7z",
+        "application/vnd.rar": "rar",
+        "application/x-rar-compressed": "rar",
+        "application/x-tar": "tar",
+        "application/gzip": "gz",
+        "application/x-gzip": "gz",
+        "application/x-bzip2": "bz2"
+    ]
+
+    static func filename(
+        linkFilename: String?,
+        suggestedFilename: String,
+        response: URLResponse
+    ) -> String {
+        let linkFilename = linkFilename?.trimmingCharacters(in: .whitespacesAndNewlines)
+        let suggestedFilename = suggestedFilename.trimmingCharacters(in: .whitespacesAndNewlines)
+
+        var filename: String
+        if let linkFilename, !linkFilename.isEmpty {
+            filename = linkFilename
+        } else if !suggestedFilename.isEmpty, suggestedFilename != "download" {
+            filename = suggestedFilename
+        } else if let lastComponent = response.url?.lastPathComponent, !lastComponent.isEmpty {
+            filename = lastComponent
+        } else {
+            filename = "download"
+        }
+
+        // A site's `download` attribute or Content-Disposition header can label a ZIP
+        // as an .app. Finder then tries to launch the ZIP bytes as an application.
+        // For archive formats, the response MIME type is the reliable extension.
+        if let mimeType = response.mimeType?.lowercased(),
+           let expectedExtension = extensionsByMIMEType[mimeType],
+           (filename as NSString).pathExtension.lowercased() != expectedExtension {
+            filename = (filename as NSString).deletingPathExtension + "." + expectedExtension
+        }
+
+        return (filename as NSString).lastPathComponent
+    }
+}
+
 
 final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var tabID: String = ""
@@ -1708,22 +1754,18 @@ struct BrowserWebView: NSViewRepresentable {
         var downloadTitles: [WKDownload: String] = [:]
         var downloadFrom: [WKDownload: String] = [:]
         var downloadTo: [WKDownload: String] = [:]
+        var downloadTemporaryURLs: [WKDownload: URL] = [:]
 
         func download(_ download: WKDownload,
                       decideDestinationUsing response: URLResponse,
                       suggestedFilename: String,
                       completionHandler: @escaping (URL?) -> Void) {
 
-            var filename: String = suggestedFilename
-            if let preTitle = downloadTitles[download], !preTitle.isEmpty {
-                filename = preTitle
-            } else if !suggestedFilename.isEmpty && suggestedFilename != "download" {
-                filename = suggestedFilename
-            } else if let lastComponent = response.url?.lastPathComponent, !lastComponent.isEmpty {
-                filename = lastComponent
-            } else {
-                filename = "download"
-            }
+            let filename = DownloadFilenameResolver.filename(
+                linkFilename: downloadTitles[download],
+                suggestedFilename: suggestedFilename,
+                response: response
+            )
             
             downloadTitles[download] = filename
             downloadFrom[download] = response.url?.absoluteString
@@ -1733,11 +1775,16 @@ struct BrowserWebView: NSViewRepresentable {
 
             panel.begin { [weak self] result in
                 if result == .OK, let url = panel.url {
-                    if FileManager.default.fileExists(atPath: url.path) {
-                        try? FileManager.default.removeItem(at: url)
-                    }
                     self?.downloadTo[download] = url.path
-                    completionHandler(url)
+
+                    // WKDownload writes directly to its destination. Using the user's
+                    // final path here exposes a partial ZIP/DMG to Finder, where it can
+                    // be opened and reported as corrupt before the download finishes.
+                    let temporaryName = UUID().uuidString + "." + url.pathExtension
+                    let temporaryURL = FileManager.default.temporaryDirectory
+                        .appendingPathComponent(temporaryName)
+                    self?.downloadTemporaryURLs[download] = temporaryURL
+                    completionHandler(temporaryURL)
                 } else {
                     // Clean up tracking dictionaries for cancelled downloads to prevent leaks.
                     self?.downloadTitles.removeValue(forKey: download)
@@ -1753,6 +1800,24 @@ struct BrowserWebView: NSViewRepresentable {
                     let title = downloadTitles[download] ?? "Unknown File"
                     let url = downloadFrom[download] ?? "Unknown Location"
                     let to = downloadTo[download] ?? "Unknown path"
+
+                    guard let temporaryURL = downloadTemporaryURLs[download],
+                          let destinationURL = downloadTo[download].map(URL.init(fileURLWithPath:)) else {
+                        finishTracking(download)
+                        return
+                    }
+
+                    do {
+                        if FileManager.default.fileExists(atPath: destinationURL.path) {
+                            try FileManager.default.removeItem(at: destinationURL)
+                        }
+                        try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
+                    } catch {
+                        print("Failed to finalize download: \(error.localizedDescription)")
+                        try? FileManager.default.removeItem(at: temporaryURL)
+                        finishTracking(download)
+                        return
+                    }
                     
                     downloadStore.add(Download(
                         title: title,
@@ -1760,14 +1825,24 @@ struct BrowserWebView: NSViewRepresentable {
                         to:to,
                         time:Date()
                     ))
-                    downloads.remove(download)
-                    DockProgressManager.shared.remove(download: download)
+                    finishTracking(download)
                 }
 
                 func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
                     print("Download failed with error: \(error.localizedDescription)")
+                    if let temporaryURL = downloadTemporaryURLs[download] {
+                        try? FileManager.default.removeItem(at: temporaryURL)
+                    }
+                    finishTracking(download)
+                }
+
+                private func finishTracking(_ download: WKDownload) {
                     downloads.remove(download)
                     DockProgressManager.shared.remove(download: download)
+                    downloadTitles.removeValue(forKey: download)
+                    downloadFrom.removeValue(forKey: download)
+                    downloadTo.removeValue(forKey: download)
+                    downloadTemporaryURLs.removeValue(forKey: download)
                 }
 
         func webView(_ webView: WKWebView,
