@@ -7,9 +7,9 @@ internal import UniformTypeIdentifiers
 
 // MARK: - Layout Constants
 enum Layout {
-    static let outerPadding: CGFloat = 12
-    static let controlPadding: CGFloat = 7
-    static let toolbarButtonSize: CGFloat = 35
+    static let outerPadding: CGFloat = 5
+    static let controlPadding: CGFloat = 2
+    static let toolbarButtonSize: CGFloat = 36
     static let cornerRadius: CGFloat = 20
     static let sidebarIconSize: CGFloat = 20
     static let sidebarIconPadding: CGFloat = 12
@@ -565,6 +565,7 @@ struct ContentView: View {
                                 .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                         }
                     }
+                    // MARK: Sidebar Items
                     if showSidebar {
                         VStack(spacing: Layout.sidebarItemSpacing) {
              //               GlassEffectContainer {
@@ -588,6 +589,7 @@ struct ContentView: View {
                                     .padding(1)
                      //           .glassEffectUnion(id: item.id, namespace: sidebarNamespace)
                                     .buttonStyle(.plain)
+                                    .padding(.horizontal, 5)
                                     .onDrag {
                                         draggedSidebarItem = item
                                         return NSItemProvider(object: item.id.uuidString as NSString)

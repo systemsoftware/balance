@@ -18,6 +18,7 @@ struct NavigationButtons: View {
                                 .padding(Layout.controlPadding)
                                 .font(.title2)
                         }
+                        .padding(6)
                         .buttonStyle(.plain)
                         .glassEffect(.regular.interactive())
                         .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
@@ -43,6 +44,7 @@ struct NavigationButtons: View {
                                 .padding(Layout.controlPadding)
                                 .font(.title2)
                         }
+                        .padding(6)
                         .buttonStyle(.plain)
                         .glassEffect(.regular.interactive())
                         .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
