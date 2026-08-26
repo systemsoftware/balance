@@ -142,6 +142,10 @@ struct browserApp: App {
         } defaultValue: {
             WindowManager.shared.initialWindowID
         }
+        .defaultSize(
+            width: NSScreen.main?.visibleFrame.width ?? 1440,
+            height: NSScreen.main?.visibleFrame.height ?? 900
+        )
         .windowStyle(.hiddenTitleBar)
         .handlesExternalEvents(matching: ["*"])
         .modelContainer(HistoryManager.sharedContainer)
@@ -164,7 +168,7 @@ struct browserApp: App {
         
         SwiftUI.Settings {
             SettingsView(isStandalone: true)
-                .frame(minWidth: 400, minHeight: 450)
+                .frame(minWidth: 400, minHeight: 360)
         }
     }
 }
@@ -349,26 +353,25 @@ enum MenuBarSection: String, CaseIterable {
 
 enum BrowserCommand: String, CaseIterable {
     // Browser
-    case palette, searchTabs, reopenLastTab, downloads, history, autocomplete, showSetup
+    case searchTabs, reopenLastTab, downloads, history, showSetup
     // Page
-    case reload, toggleFind, zoomIn, zoomOut, resetZoom, toggleMute
+    case reload, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
     case copyURL, printPage, toggleReader, renameTab, savePage
+    case findInPage
     case forceReload
     case summarize, addEvents, cite
     case shortcut, closeTab
+    case goTo
     
     var title: String {
         switch self {
-        case .palette: return "Palette"
         case .showSetup: return "Setup & Import"
         case .searchTabs: return "Search All Tabs"
         case .reopenLastTab: return "Reopen Closed Tab"
         case .downloads: return "Downloads"
         case .history: return "History"
-        case .autocomplete: return "Autocomplete"
         case .reload: return "Reload Page"
-        case .toggleFind: return "Find In Page"
         case .zoomIn: return "In"
         case .zoomOut: return "Out"
         case .resetZoom: return "Reset"
@@ -387,12 +390,14 @@ enum BrowserCommand: String, CaseIterable {
         case .cite: return "Cite"
         case .shortcut: return "Save Shortcut"
         case .closeTab: return "Close Tab"
+        case .goTo: return "Go To"
+        case .findInPage: return "Find in Page"
         }
     }
     
     var section: MenuBarSection {
         switch self {
-        case .palette, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete, .showSetup:
+        case .searchTabs, .reopenLastTab, .downloads, .history, .showSetup:
             return .browser
         default:
             return .page
@@ -416,12 +421,9 @@ enum BrowserCommand: String, CaseIterable {
     
     var shortcut: KeyboardShortcut? {
         switch self {
-        case .palette: return KeyboardShortcut("k", modifiers: [.command])
         case .reload: return KeyboardShortcut("r", modifiers: [.command])
         case .searchTabs: return KeyboardShortcut("s", modifiers: [.command, .control])
         case .reopenLastTab: return KeyboardShortcut("t", modifiers: [.command, .shift])
-        case .autocomplete: return KeyboardShortcut("s", modifiers: [.control])
-        case .toggleFind: return KeyboardShortcut("f", modifiers: [.command])
         case .zoomIn: return KeyboardShortcut("+", modifiers: [.command])
         case .zoomOut: return KeyboardShortcut("-", modifiers: [.command])
         case .toggleMute: return KeyboardShortcut("m", modifiers: [.command, .shift])
@@ -435,14 +437,16 @@ enum BrowserCommand: String, CaseIterable {
         case .addEvents: return KeyboardShortcut("/", modifiers: [.command, .option])
         case .forceReload: return KeyboardShortcut("r", modifiers: [.command, .shift])
         case .closeTab: return KeyboardShortcut("w", modifiers: [.command])
+        case .goTo: return KeyboardShortcut("g", modifiers: [.command])
+        case .findInPage: return KeyboardShortcut("f", modifiers: [.command])
         default: return nil
         }
     }
     
     var requiresDividerAfter: Bool {
         switch self {
-        case .palette, .reload, .searchTabs, .reopenLastTab, .downloads, .history, .autocomplete: return true
-        case .toggleFind, .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .savePage: return true
+        case .reload, .searchTabs, .reopenLastTab, .downloads, .history: return true
+        case .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .closeTab, .savePage: return true
         case .zoomOut, .duplicateWindow: return true
         case .summarize, .addEvents, .forceReload, .cite, .shortcut: return true
         default: return false

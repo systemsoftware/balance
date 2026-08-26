@@ -301,7 +301,11 @@ final class WindowManager: ObservableObject {
     }
 
     func isActiveTab(_ tabID: String) -> Bool {
-        browserWindows.contains { $0.activeTabID == tabID }
+        guard let activeWindowID,
+              let activeWindow = browserWindows.first(where: { $0.id == activeWindowID }) else {
+            return false
+        }
+        return activeWindow.activeTabID == tabID
     }
 
     func window(for id: String) -> BrowserWindowModel? {

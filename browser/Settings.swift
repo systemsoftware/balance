@@ -34,13 +34,6 @@ let catAI = CategoryDef(
     description: "Configures AI features including model behavior, prompts, and response settings."
 )
 
-let catToolbar = CategoryDef(
-    id: "toolbar",
-    name: "Toolbar",
-    icon: "menubar.rectangle",
-    color: .orange,
-    description: "Manage which controls appear in the toolbar."
-)
 
 let catPalette = CategoryDef(
     id: "palette",
@@ -90,7 +83,7 @@ let catLearnMore = CategoryDef(
     description: "Learn Balance's features and how to get started."
 )
 let categoryDefs: [CategoryDef] = [
-    catBrowsing, catSidebar, catAI, catToolbar, catPalette, catBookmarks, catProfiles, catPrivacy, catAdvanced, catLearnMore
+    catBrowsing, catSidebar, catAI, catPalette, catBookmarks, catProfiles, catPrivacy, catAdvanced, catLearnMore
 ]
 
 struct Setting: Identifiable {
@@ -196,6 +189,14 @@ var Settings: [Setting] = [
         category: catSidebar,
         type: "toggle",
         appStorageKey: "showSidebar",
+        defaultValueBool: true
+    ),
+    Setting(
+        name: "Right Sidebar Background",
+        icon: "sidebar.right",
+        category: catSidebar,
+        type: "toggle",
+        appStorageKey: "sidebarBackground",
         defaultValueBool: true
     ),
     Setting(
@@ -352,86 +353,6 @@ var Settings: [Setting] = [
         category: catPalette,
         type: "toggle",
         appStorageKey: "paletteShowHistory",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Clock",
-        icon: "clock",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showClockInToolbar",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Share Button",
-        icon: "square.and.arrow.up",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showShareInToolbar",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Home Button",
-        icon: "house",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showHomeInToolbar",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Reload Button",
-        icon: "arrow.clockwise",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showReloadInToolbar",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Address Bar",
-        icon: "link",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showAddrBarInToolbar",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Navigation Buttons",
-        icon: "chevron.left.chevron.right",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showNavInToolbar",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Search Button",
-        icon: "magnifyingglass",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showSearchButtonInToolbar",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Autocomplete Button",
-        icon: "text.cursor",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showAutocompleteInToolbar",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Extensions Button",
-        icon: "puzzlepiece",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showExtInToolbar",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "More Menu",
-        icon: "ellipsis",
-        category: catToolbar,
-        type: "toggle",
-        appStorageKey: "showMoreInToolbar",
         defaultValueBool: true
     ),
     Setting(

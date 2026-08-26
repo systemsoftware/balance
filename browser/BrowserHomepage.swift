@@ -12,11 +12,32 @@ struct NewsItem: Identifiable {
     var pubDate: String
 }
 
+struct HourlyWeatherInfo: Identifiable {
+    let id = UUID()
+
+    var time: String
+    var temperature: String
+    var precip: String
+    var pressure: String
+    var condition: String
+    var icon: String
+    var visibility: String
+    var wind: String
+}
+
 struct WeatherInfo {
     var temperature: String
+    var precip: String
+    var pressure: String
     var condition: String
     var icon: String
     var location: String
+    var visibility: String
+    var wind: String
+    var hourly: [HourlyWeatherInfo]?
+    var moon_phase: String
+    var moon_rise_set: String
+    var sun_rise_set: String
 }
 
 // MARK: - Stores / ViewModels
@@ -52,61 +73,206 @@ class ClockViewModel: ObservableObject {
 }
 
 class WeatherViewModel: ObservableObject {
+
     @Published var weather: WeatherInfo?
     @Published var isLoading = true
 
     func fetch(city: String = "") {
-        let query = city.isEmpty ? "" : city.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+
+        let query = city.isEmpty
+            ? ""
+            : city.addingPercentEncoding(withAllowedCharacters: .urlPathAllowed) ?? ""
+
         let urlString = "https://wttr.in/\(query)?format=j1"
-        guard let url = URL(string: urlString) else { return }
+
+        guard let url = URL(string: urlString) else {
+            isLoading = false
+            return
+        }
 
         URLSession.shared.dataTask(with: url) { data, _, _ in
-            guard let data = data,
-                  let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                  let current = (json["current_condition"] as? [[String: Any]])?.first,
-                  let nearestArea = (json["nearest_area"] as? [[String: Any]])?.first
+
+            guard
+                let data = data,
+                let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+
+                let current = (json["current_condition"] as? [[String: Any]])?.first,
+                let nearestArea = (json["nearest_area"] as? [[String: Any]])?.first
             else {
-                DispatchQueue.main.async { self.isLoading = false }
+                DispatchQueue.main.async {
+                    self.isLoading = false
+                }
                 return
             }
 
-            let tempF = (current["temp_F"] as? [String])?.first
-                       ?? (current["temp_F"] as? String) ?? "?"
-            let desc = ((current["weatherDesc"] as? [[String: Any]])?.first?["value"] as? String) ?? "Unknown"
-            let code = (current["weatherCode"] as? String) ?? "113"
+            // MARK: - Current Weather
 
-            let areaName = ((nearestArea["areaName"] as? [[String: Any]])?.first?["value"] as? String) ?? ""
-            let country  = ((nearestArea["country"] as? [[String: Any]])?.first?["value"] as? String) ?? ""
-            let location = [areaName, country].filter { !$0.isEmpty }.joined(separator: ", ")
+            let tempF = current["temp_F"] as? String ?? "?"
+
+            let desc = (
+                (current["weatherDesc"] as? [[String: Any]])?
+                    .first?["value"] as? String
+            ) ?? "Unknown"
+
+            let code = current["weatherCode"] as? String ?? "113"
+
+            let precip = current["precipInches"] as? String ?? ""
+
+            let pressure = current["pressureInches"] as? String ?? ""
+
+            let visibility = current["visibilityMiles"] as? String ?? ""
+
+            let windDirection = current["winddir16Point"] as? String ?? ""
+
+            let windSpeed = current["windspeedMiles"] as? String ?? ""
+
+            let wind = "\(windDirection) \(windSpeed) mph"
+
+
+            // MARK: - Location
+
+            let areaName = (
+                (nearestArea["areaName"] as? [[String: Any]])?
+                    .first?["value"] as? String
+            ) ?? ""
+
+            let country = (
+                (nearestArea["country"] as? [[String: Any]])?
+                    .first?["value"] as? String
+            ) ?? ""
+
+            let location = [areaName, country]
+                .filter { !$0.isEmpty }
+                .joined(separator: ", ")
+
+
+            // MARK: - Daily Weather / Astronomy
+
+            let today = (json["weather"] as? [[String: Any]])?.first
+
+            let astronomy = (
+                today?["astronomy"] as? [[String: Any]]
+            )?.first
+
+            let moonPhase = astronomy?["moon_phase"] as? String ?? ""
+
+            let moonrise = astronomy?["moonrise"] as? String ?? ""
+            let moonset = astronomy?["moonset"] as? String ?? ""
+
+            let sunrise = astronomy?["sunrise"] as? String ?? ""
+            let sunset = astronomy?["sunset"] as? String ?? ""
+
+            let moonRiseSet = "\(moonrise) – \(moonset)"
+            let sunRiseSet = "\(sunrise) – \(sunset)"
+
+
+            // MARK: - Hourly Forecast
+
+            let hourlyJSON = today?["hourly"] as? [[String: Any]] ?? []
+
+                let hourly: [HourlyWeatherInfo] = hourlyJSON.map { hour in
+                    
+                    let hourTemp = hour["tempF"] as? String ?? "?"
+                    
+                    let hourDesc = (
+                        (hour["weatherDesc"] as? [[String: Any]])?
+                            .first?["value"] as? String
+                    ) ?? "Unknown"
+                    
+                    let hourCode = hour["weatherCode"] as? String ?? "113"
+                    
+                    let hourPrecip = hour["precipInches"] as? String ?? ""
+                    
+                    let hourPressure = hour["pressureInches"] as? String ?? ""
+                    
+                    let hourVisibility = hour["visibilityMiles"] as? String ?? ""
+                    
+                    let hourWindDirection = hour["winddir16Point"] as? String ?? ""
+                    let hourWindSpeed = hour["windspeedMiles"] as? String ?? ""
+                    
+                    let hourWind = "\(hourWindDirection) \(hourWindSpeed) mph"
+                    
+                    return HourlyWeatherInfo(
+                        time: hour["time"] as? String ?? "t",
+                        temperature: "\(hourTemp)°F",
+                        precip: hourPrecip,
+                        pressure: hourPressure,
+                        condition: hourDesc,
+                        icon: Self.icon(for: hourCode),
+                        visibility: hourVisibility,
+                        wind: hourWind
+                    )
+                }
+
+
+            // MARK: - Publish
 
             DispatchQueue.main.async {
+
                 self.weather = WeatherInfo(
                     temperature: "\(tempF)°F",
+                    precip: precip,
+                    pressure: pressure,
                     condition: desc,
                     icon: Self.icon(for: code),
-                    location: location
+                    location: location,
+                    visibility: visibility,
+                    wind: wind,
+                    hourly: hourly,
+                    moon_phase: moonPhase,
+                    moon_rise_set: moonRiseSet,
+                    sun_rise_set: sunRiseSet
                 )
+
                 self.isLoading = false
             }
+
         }.resume()
     }
 
+
     private static func icon(for code: String) -> String {
+
         switch code {
-        case "113": return "sun.max.fill"
-        case "116": return "cloud.sun.fill"
-        case "119", "122": return "cloud.fill"
-        case "143", "248", "260": return "cloud.fog.fill"
+
+        case "113":
+            return "sun.max.fill"
+
+        case "116":
+            return "cloud.sun.fill"
+
+        case "119", "122":
+            return "cloud.fill"
+
+        case "143", "248", "260":
+            return "cloud.fog.fill"
+
         case "176", "185", "293", "296", "299", "302", "305", "308":
             return "cloud.drizzle.fill"
-        case "200", "386", "389", "392", "395": return "cloud.bolt.fill"
-        case "227", "230": return "snow"
-        case "263", "266": return "cloud.drizzle.fill"
-        case "281", "284", "311", "314", "317", "320": return "cloud.sleet.fill"
-        case "323", "326", "329", "332", "335", "338": return "snowflake"
-        case "350", "353", "356", "359": return "cloud.heavyrain.fill"
-        case "362", "365", "368", "371", "374", "377": return "cloud.snow.fill"
-        default: return "cloud.fill"
+
+        case "200", "386", "389", "392", "395":
+            return "cloud.bolt.fill"
+
+        case "227", "230":
+            return "snow"
+
+        case "263", "266":
+            return "cloud.drizzle.fill"
+
+        case "281", "284", "311", "314", "317", "320":
+            return "cloud.sleet.fill"
+
+        case "323", "326", "329", "332", "335", "338":
+            return "snowflake"
+
+        case "350", "353", "356", "359":
+            return "cloud.heavyrain.fill"
+
+        case "362", "365", "368", "371", "374", "377":
+            return "cloud.snow.fill"
+
+        default:
+            return "cloud.fill"
         }
     }
 }
@@ -290,8 +456,10 @@ struct ClockView: View {
 // MARK: - WeatherView
 
 struct WeatherView: View {
-    @StateObject private var vm = WeatherViewModel()
-
+    @StateObject var vm: WeatherViewModel
+    
+    @AppStorage("homepageWeatherCity", store:Config.sharedDefaults) var weatherCity: String = ""
+    
     var body: some View {
         Group {
             if vm.isLoading {
@@ -333,7 +501,7 @@ struct WeatherView: View {
                     .padding(.vertical, 8)
             }
         }
-        .onAppear { vm.fetch() }
+        .onAppear { vm.fetch(city: weatherCity) }
     }
 }
 
@@ -442,7 +610,9 @@ struct BrowserHomepage: View {
     @State private var showingFilePicker = false
     @State private var showingURLPrompt = false
     @State private var urlString = ""
-    
+    @State var showCityChange = false
+
+    @StateObject private var weatherVM = WeatherViewModel()
     
     @AppStorage("profiles", store: Config.sharedDefaults) private var profilesJSON = "[]"
 
@@ -452,7 +622,7 @@ struct BrowserHomepage: View {
     @AppStorage("homepageShowEmail", store:Config.sharedDefaults) var showEmail: Bool = true
     @AppStorage("homepageShowStories", store:Config.sharedDefaults) var showStories: Bool = true
     @AppStorage("homepageShowCalendar", store:Config.sharedDefaults) var showCalendar: Bool = true
-    
+    @AppStorage("homepageWeatherCity") var weatherCity = ""
     
     private var isEmailConfigured: Bool {
         let profiles = (try? JSONDecoder().decode([Profile].self, from: Data(profilesJSON.utf8))) ?? []
@@ -483,7 +653,7 @@ struct BrowserHomepage: View {
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.secondary)
                             
-                            WeatherView()
+                            WeatherView(vm: weatherVM)
                         }
                         .padding(.top, 8)
                         .padding(.horizontal, 40)
@@ -568,6 +738,14 @@ struct BrowserHomepage: View {
                 }
             }
             
+            Divider()
+            
+            Button("Set City for Weather") {
+                showCityChange = true
+            }
+            
+            Divider()
+            
             Menu {
                 Toggle("Clock", isOn: $showClock)
                 Toggle("Weather", isOn: $showWeather)
@@ -585,6 +763,28 @@ struct BrowserHomepage: View {
 
             
          }
+        .sheet(isPresented: $showCityChange) {
+            VStack(alignment: .leading) {
+                Text("Set City for Weather")
+                    .font(.headline)
+                Text("Enter the city name (e.g., 'Los Angeles', 'San Francisco', 'Palm Springs, CA') to fetch the weather for that location.")
+                    .font(.subheadline)
+                    
+                TextField("City", text: $weatherCity)
+                HStack {
+                    Button {
+                     showCityChange = false
+                        weatherVM.fetch(city: weatherCity)
+                    } label: {
+                        Text("Save")
+                            .frame(maxWidth: .infinity)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    
+                }
+            }
+            .padding()
+        }
         .sheet(isPresented: $showingURLPrompt) {
             NavigationStack {
                 Form {

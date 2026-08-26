@@ -56,7 +56,36 @@ class PasswordManager: ObservableObject {
     }
     
     func credentials(for domain: String) -> [SavedCredential] {
-        return savedCredentials.filter { $0.domain.lowercased() == domain.lowercased() }
+        let normalizedDomain = domain.lowercased()
+        guard let domainData = normalizedDomain.data(using: .utf8) else { return [] }
+
+        let query: [String: Any] = [
+            kSecClass as String: kSecClassGenericPassword,
+            kSecAttrService as String: "BalanceBrowser",
+            kSecAttrGeneric as String: domainData,
+            kSecMatchLimit as String: kSecMatchLimitAll,
+            kSecReturnAttributes as String: true
+        ]
+
+        var item: CFTypeRef?
+        guard SecItemCopyMatching(query as CFDictionary, &item) == errSecSuccess else {
+            return []
+        }
+
+        let items: [[String: Any]]
+        if let matchingItems = item as? [[String: Any]] {
+            items = matchingItems
+        } else if let matchingItem = item as? [String: Any] {
+            items = [matchingItem]
+        } else {
+            return []
+        }
+
+        return items.compactMap { attributes in
+            guard let account = attributes[kSecAttrAccount as String] as? String else { return nil }
+            let username = account.components(separatedBy: "::").last ?? account
+            return SavedCredential(domain: normalizedDomain, username: username)
+        }
     }
     
     func fetchCredentialDirectly(for domain: String) -> (username: String, passwordString: String)? {

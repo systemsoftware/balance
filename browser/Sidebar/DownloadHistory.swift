@@ -8,7 +8,6 @@ struct Download: Codable, Identifiable {
     var time: Date
 }
 
-import SwiftUI
 
 // --- UI Components ---
 
@@ -126,7 +125,7 @@ struct DownloadsView: View {
                                 DownloadRow(
                                     Download: mark,
                                     action: {
-                                        NSWorkspace.shared.activateFileViewerSelecting([URL(string:mark.to)!])
+                                        revealDownload(mark)
                                     },
                                     onDelete: { downloadStore.remove(id: mark.id) }
                                 )
@@ -141,6 +140,23 @@ struct DownloadsView: View {
             }
             .background(Color.black.opacity(0.03))
         }
+    }
+
+    private func revealDownload(_ download: Download) {
+        let url: URL
+        if let storedURL = URL(string: download.to), storedURL.isFileURL {
+            url = storedURL
+        } else {
+            // Older download records store a plain POSIX path rather than a file URL.
+            url = URL(fileURLWithPath: download.to)
+        }
+
+        guard FileManager.default.fileExists(atPath: url.path) else {
+            NSSound.beep()
+            return
+        }
+
+        NSWorkspace.shared.activateFileViewerSelecting([url])
     }
 }
 

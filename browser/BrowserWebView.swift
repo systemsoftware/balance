@@ -81,6 +81,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     var restoredScrollY: Int?
     @Published var serverTrust: SecTrust?
     @Published var failedToLoad = false
+    var lastHighlightedQuery: String = ""
 
     
     // MARK: - WKWebExtensionTab
@@ -306,94 +307,144 @@ extension BrowserState {
             clearFind()
             return
         }
-        highlightAll(query)  // add this
+        if query != lastHighlightedQuery {
+            highlightAll(query)
+            lastHighlightedQuery = query
+        }
         let config = WKFindConfiguration()
         config.backwards = !forward
         config.caseSensitive = false
         config.wraps = true
-        webView?.find(query, configuration: config) { _ in }
+        webView?.find(query, configuration: config) { [weak self] result in
+            DispatchQueue.main.async {
+                self?.findMatchCount = result.matchFound ? 1 : 0
+            }
+        }
     }
 
 
     func clearFind() {
-        clearHighlights()  // add this
+        findMatchCount = 0
+        lastHighlightedQuery = ""
+        clearHighlights()
         webView?.find("", configuration: WKFindConfiguration()) { _ in }
     }
     
-        func highlightAll(_ query: String) {
-            guard !query.isEmpty else {
-                clearHighlights()
-                return
-            }
-
-            // JSON-encode the query string to produce a safe JS string literal,
-            // preventing injection when query contains quotes, backslashes, or newlines.
-            guard let queryData = try? JSONEncoder().encode(query),
-                  let queryJSON = String(data: queryData, encoding: .utf8) else { return }
-
-            let js = """
-            (function() {
-                // Clear previous highlights first
-                document.querySelectorAll('mark.__find_highlight').forEach(el => {
-                    el.replaceWith(...el.childNodes);
-                });
-                document.normalize();
-
-                const query = \(queryJSON);
-                if (!query) return 0;
-
-                const walker = document.createTreeWalker(
-                    document.body,
-                    NodeFilter.SHOW_TEXT,
-                    null
-                );
-
-                const ranges = [];
-                let node;
-                while ((node = walker.nextNode())) {
-                    const text = node.nodeValue;
-                    const lower = text.toLowerCase();
-                    const queryLower = query.toLowerCase();
-                    let idx = 0;
-                    while ((idx = lower.indexOf(queryLower, idx)) !== -1) {
-                        const range = document.createRange();
-                        range.setStart(node, idx);
-                        range.setEnd(node, idx + query.length);
-                        ranges.push(range);
-                        idx += query.length;
-                    }
-                }
-
-                ranges.forEach(range => {
-                    const mark = document.createElement('mark');
-                    mark.className = '__find_highlight';
-                    mark.style.cssText = 'background: #FFFF00; color: black;';
-                    range.surroundContents(mark);
-                });
-
-                return ranges.length;
-            })()
-            """
-
-            webView?.evaluateJavaScript(js) { result, _ in
-                if let count = result as? Int {
-                    print("Highlighted \(count) matches")
-                }
-            }
+    func highlightAll(_ query: String) {
+        guard !query.isEmpty else {
+            clearHighlights()
+            return
         }
 
-        func clearHighlights() {
-            let js = """
-            (function() {
-                document.querySelectorAll('mark.__find_highlight').forEach(el => {
-                    el.replaceWith(...el.childNodes);
-                });
-                document.normalize();
-            })()
-            """
-            webView?.evaluateJavaScript(js, completionHandler: nil)
+        // JSON-encode the query string to produce a safe JS string literal,
+        // preventing injection when query contains quotes, backslashes, or newlines.
+        guard let queryData = try? JSONEncoder().encode(query),
+              let queryJSON = String(data: queryData, encoding: .utf8) else { return }
+
+        let js = """
+        (function() {
+            const query = \(queryJSON);
+            if (!query) {
+                if (typeof CSS !== 'undefined' && CSS.highlights) {
+                    CSS.highlights.delete('__find_highlight');
+                }
+                return 0;
+            }
+
+            if (typeof CSS === 'undefined' || !CSS.highlights) {
+                return 0;
+            }
+
+            // Ensure our custom style rule is added to the document
+            const styleId = '__find_highlight_style';
+            let styleEl = document.getElementById(styleId);
+            if (!styleEl) {
+                styleEl = document.createElement('style');
+                styleEl.id = styleId;
+                styleEl.textContent = `
+                    ::highlight(__find_highlight) {
+                        background-color: #FFFFB3 !important;
+                        color: #000000 !important;
+                    }
+                    ::selection {
+                        background-color: #FFFF00 !important;
+                        color: #000000 !important;
+                    }
+                `;
+                (document.head || document.documentElement).appendChild(styleEl);
+            }
+
+            if (!document.body) return 0;
+
+            const walker = document.createTreeWalker(
+                document.body,
+                NodeFilter.SHOW_TEXT,
+                null
+            );
+
+            const ranges = [];
+            let node;
+            const queryLower = query.toLowerCase();
+            const queryLength = query.length;
+            const maxMatches = 5000;
+
+            while ((node = walker.nextNode())) {
+                const parentTagName = node.parentNode ? node.parentNode.tagName : '';
+                if (parentTagName === 'SCRIPT' || parentTagName === 'STYLE' || parentTagName === 'NOSCRIPT') {
+                    continue;
+                }
+
+                const text = node.nodeValue;
+                const lower = text.toLowerCase();
+                let idx = 0;
+                while ((idx = lower.indexOf(queryLower, idx)) !== -1) {
+                    if (ranges.length >= maxMatches) {
+                        break;
+                    }
+                    const range = document.createRange();
+                    range.setStart(node, idx);
+                    range.setEnd(node, idx + queryLength);
+                    ranges.push(range);
+                    idx += queryLength;
+                }
+                if (ranges.length >= maxMatches) {
+                    break;
+                }
+            }
+
+            const highlight = new Highlight(...ranges);
+            CSS.highlights.set('__find_highlight', highlight);
+            return ranges.length;
+        })()
+        """
+
+        webView?.evaluateJavaScript(js) { result, _ in
+            if let count = result as? Int {
+                print("Highlighted \(count) matches")
+            }
         }
     }
+
+    func clearHighlights() {
+        let js = """
+        (function() {
+            if (typeof CSS !== 'undefined' && CSS.highlights) {
+                CSS.highlights.delete('__find_highlight');
+            }
+            const styleEl = document.getElementById('__find_highlight_style');
+            if (styleEl) {
+                styleEl.remove();
+            }
+            // Fallback: Clear any legacy DOM highlights if they existed
+            document.querySelectorAll('mark.__find_highlight').forEach(el => {
+                el.replaceWith(...el.childNodes);
+            });
+            document.normalize();
+        })()
+        """
+        webView?.evaluateJavaScript(js, completionHandler: nil)
+    }
+}
 
 final class BrowserWKWebView: WKWebView {
     
@@ -1543,6 +1594,7 @@ struct BrowserWebView: NSViewRepresentable {
             state.isLoading = true
             state.serverTrust = webView.serverTrust
             state.failedToLoad = false
+            state.lastHighlightedQuery = ""
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

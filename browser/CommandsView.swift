@@ -299,12 +299,19 @@ struct CommandsView: View {
         if (!showData || !filteredHistory.isEmpty) && showHistory {
             Section(header: sectionHeader(title: "History", section: .history)) {
                 if showData {
-                    ForEach(filteredHistory) {
-                        row(
-                            title: $0.title,
-                            image: "arrow.up.circle",
-                            showsChevron: false
-                        )
+                    ForEach(filteredHistory) { historyItem in
+                        Button {
+                            guard let url = URL(string: historyItem.url) else { return }
+                            createNewTab(with: url)
+                            dismiss()
+                        } label: {
+                            row(
+                                title: historyItem.title,
+                                image: "arrow.up.circle",
+                                showsChevron: false
+                            )
+                        }
+                        .buttonStyle(.plain)
                     }
                 }
             }

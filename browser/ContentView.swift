@@ -8,7 +8,8 @@ internal import UniformTypeIdentifiers
 // MARK: - Layout Constants
 enum Layout {
     static let outerPadding: CGFloat = 12
-    static let controlPadding: CGFloat = 10
+    static let controlPadding: CGFloat = 7
+    static let toolbarButtonSize: CGFloat = 35
     static let cornerRadius: CGFloat = 20
     static let sidebarIconSize: CGFloat = 20
     static let sidebarIconPadding: CGFloat = 12
@@ -36,7 +37,8 @@ let builtInSidebar = [
     SidebarItem(icon:"hand.raised", view:"ContentBlockerView"),
     SidebarItem(icon:"map", view:"MapView"),
     SidebarItem(icon:"antenna.radiowaves.left.and.right", view:"RSSView"),
-    SidebarItem(icon:"calendar", view:"CalendarView")
+    SidebarItem(icon:"calendar", view:"CalendarView"),
+    SidebarItem(icon:"cloud", view: "WeatherView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -67,155 +69,8 @@ enum BackgroundType: Int {
 
  }
 
-private struct ReloadButton: View {
-    @ObservedObject var state: BrowserState
-    var action: () -> Void
-    var body: some View {
-        Button(action: action) {
-            Group {
-                if state.isLoading {
-                    ProgressView().scaleEffect(0.6)
-                } else {
-                    Image(systemName: "arrow.clockwise").padding(10)
-                }
-            }
-        }
-        .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
-    }
-}
 
-private struct TrustIndicator: View {
-    let trust: SecTrust?
-    let url: URL?
-    @Binding var isPresented: Bool
-    var body: some View {
-        Group {
-            if let trust {
-                Button(action: { isPresented.toggle() }) {
-                    var error: CFError?
-                    if SecTrustEvaluateWithError(trust, &error) {
-                        Image(systemName: "lock.fill")
-                    } else {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
-                    }
-                }
-                .buttonStyle(.plain)
-            } else if url?.scheme == "http" {
-                Button(action: { isPresented.toggle() }) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
-                }
-                .buttonStyle(.plain)
-            }
-        }
-    }
-}
-
-private struct AddressField: View {
-    @Binding var text: String
-    var focusOnAppear: Bool = false
-    var onSubmit: () -> Void
-
-    var body: some View {
-        NativeAddressField(text: $text, onSubmit: onSubmit, focusOnAppear: focusOnAppear)
-            .padding(Layout.controlPadding)
-    }
-}
-
-/// An NSTextField subclass that severs itself from the key-view loop.
-///
-/// On macOS 26/27 beta the system traverses nextKeyView/previousKeyView when
-/// any text field becomes first responder. That traversal re-enters SwiftUI's
-/// FocusBridge and deadlocks the main thread. Returning nil from every key-view
-/// accessor stops the traversal before it reaches SwiftUI-managed views.
-private final class IsolatedTextField: NSTextField {
-    override var nextKeyView: NSView? {
-        get { nil }
-        set { /* intentionally ignored */ }
-    }
-    override var previousKeyView: NSView? { nil }
-    override var nextValidKeyView: NSView? { nil }
-    override var previousValidKeyView: NSView? { nil }
-}
-
-/// Keeps the address bar out of SwiftUI's FocusBridge, which can deadlock while
-/// resolving the key-view loop on macOS 27 beta when this field is clicked.
-private struct NativeAddressField: NSViewRepresentable {
-    @Binding var text: String
-    let onSubmit: () -> Void
-    var focusOnAppear: Bool = false
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeNSView(context: Context) -> IsolatedTextField {
-        let field = IsolatedTextField()
-        field.delegate = context.coordinator
-        field.placeholderString = "Search or enter website name"
-        field.font = .systemFont(ofSize: NSFont.systemFontSize)
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.usesSingleLineMode = true
-        field.maximumNumberOfLines = 1
-        field.lineBreakMode = .byTruncatingTail
-        field.cell?.wraps = false
-        field.cell?.isScrollable = true
-        field.stringValue = text
-        return field
-    }
-
-    func updateNSView(_ field: IsolatedTextField, context: Context) {
-        context.coordinator.parent = self
-
-        // Never replace text while the user is typing; that discards the
-        // insertion point and composition state. Navigation updates still
-        // refresh the field whenever it is not being edited.
-        if field.currentEditor() == nil, field.stringValue != text {
-            field.stringValue = text
-        }
-        
-        if focusOnAppear && !context.coordinator.didFocus {
-            context.coordinator.didFocus = true
-            DispatchQueue.main.async {
-                field.window?.makeFirstResponder(field)
-            }
-        }
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: NativeAddressField
-        var didFocus = false
-
-        init(parent: NativeAddressField) {
-            self.parent = parent
-        }
-
-        func controlTextDidChange(_ notification: Notification) {
-            guard let field = notification.object as? NSTextField else { return }
-            parent.text = field.stringValue
-        }
-
-        func control(
-            _ control: NSControl,
-            textView: NSTextView,
-            doCommandBy commandSelector: Selector
-        ) -> Bool {
-            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else {
-                return false
-            }
-
-            parent.onSubmit()
-            return true
-        }
-    }
-}
-
-
-private struct AutoFillPopover: View {
+struct AutoFillPopover: View {
     @Binding var searchTerm: String
     var body: some View {
         List {
@@ -240,6 +95,11 @@ struct ContentView: View {
     @ObservedObject private var extensionManager = WebExtensionManager.shared
     @EnvironmentObject private var windowManager: WindowManager
     @State private var urlInput: String = ""
+    
+    
+    @State var showPageShine = false
+    
+    @State var showGoTo = false
 
     @StateObject private var sidebarStore: SidebarStore
     
@@ -300,27 +160,13 @@ struct ContentView: View {
     
     @AppStorage("showSidebar", store:Config.sharedDefaults) var showSidebar = true
     
-    @State private var showFindNavigator = false
     @State private var showTrustInfo = false
     @State private var showBoost = false
     
     @State private var currentUserActivity: NSUserActivity?
     @AppStorage("enableHandoff", store:Config.sharedDefaults) var enableHandoff: Bool = true
-    
-    @AppStorage("showExtInToolbar", store:Config.sharedDefaults) var showExtInToolbar = true
-    @AppStorage("showAutocompleteInToolbar", store:Config.sharedDefaults) var showAutocompleteInToolbar = true
-    @AppStorage("showShareInToolbar", store:Config.sharedDefaults) var showShareInToolbar = true
-    @AppStorage("showSearchButtonInToolbar", store:Config.sharedDefaults) var showSearchButtonInToolbar = true
-    @AppStorage("showNavInToolbar", store:Config.sharedDefaults) var showNavInToolbar = true
-    @AppStorage("showMoreInToolbar", store:Config.sharedDefaults) var showMoreInToolbar = true
-    @AppStorage("showAddrBarInToolbar", store:Config.sharedDefaults) var showAddrBarInToolbar = true
-    @AppStorage("showReloadInToolbar", store:Config.sharedDefaults) var showReloadInToolbar = true
-    @AppStorage("showClockInToolbar", store:Config.sharedDefaults) var showClockInToolbar = false
-    @AppStorage("showHomeInToolbar", store:Config.sharedDefaults) var showHomeInToolbar = false
- 
+  
 
-
-    @Namespace private var backforwardNamespace
     @Namespace private var sidebarNamespace
     @Namespace private var bookmarkBarNamespace
     
@@ -449,14 +295,14 @@ struct ContentView: View {
         }())
     }
     
-    @State var showSuggestions = false
-    @State var showCommands = false
     @State var showTabSearch = false
     @State var showServerTrust = false
     @State private var showReader = false
     @State private var showExtensionsPopover = false
     
     @AppStorage("tabMode", store:Config.sharedDefaults) var leftSidebarMode: Int = 0
+    @AppStorage("sidebarBackground") var sidebarBackground = true
+
     
     @State var commandSearchText = ""
     
@@ -479,518 +325,29 @@ struct ContentView: View {
                     .padding(.horizontal)
             }
             
-            HStack(spacing: 8) {
-                
-                if showClockInToolbar {
-                    ClockView(timeOnly: true, fontSize: 14)
-                        .padding(0)
-                }
-                
-                if location != nil && showNavInToolbar {
-                    GlassEffectContainer {
-                        HStack(spacing: 0) {
-                            if(browserState.canGoBack){
-                                Button(action: {
-                                    browserState.webView?.goBack()
-                                }) {
-                                    Image(systemName: "chevron.backward")
-                                        .padding(Layout.controlPadding)
-                                }
-                                .buttonStyle(.plain)
-                                .glassEffect(.regular.interactive())
-                                .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
-                                .keyboardShortcut(.leftArrow, modifiers: .command)
-                                .contextMenu {
-                                    if let webView = browserState.webView {
-                                        let list = Array(webView.backForwardList.backList.reversed())
-                                        ForEach(list, id: \.self) { item in
-                                                Button(item.url.absoluteString) {
-                                                    location = item.url
-                                                }
-                                        }
-                                    }
-                                }
-                            }
-                            
-                            if browserState.canGoForward {
-                                Button(action: {
-                                    Task {
-                                        browserState.webView?.goForward()
-                                    }
-                                }) {
-                                    Image(systemName: "chevron.forward")
-                                        .padding(Layout.controlPadding)
-                                }
-                                .buttonStyle(.plain)
-                                .glassEffect(.regular.interactive())
-                                .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
-                                .keyboardShortcut(.rightArrow, modifiers: .command)
-                                .contextMenu {
-                                    if let webView = browserState.webView {
-                                        let list = Array(webView.backForwardList.forwardList.reversed())
-                                        ForEach(list, id: \.self) { item in
-                                                Button(item.url.absoluteString) {
-                                                    location = item.url
-                                                }
-                                            }
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-                
-                if showHomeInToolbar && location != nil {
-                    Button {
-                        location = nil
-                        urlInput = ""
-                    } label: {
-                        Image(systemName:"house")
-                            .padding(Layout.controlPadding)
-                    }
-                    .buttonStyle(.plain)
-                    .glassEffect(.regular.interactive(), in: .circle)
-                    .keyboardShortcut("h", modifiers: [.command, .shift])
-                }
-                
-                if let currentLocation = location {
-                    if currentLocation.absoluteString.starts(with: "http") && showShareInToolbar {
-                        ShareLink(item: currentLocation) {
-                            Image(systemName: "square.and.arrow.up")
-                                .padding(Layout.controlPadding)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        .keyboardShortcut("s", modifiers: [.command, .shift])
-                        
-                    }
-                    
-                    if showReloadInToolbar {
-                        ReloadButton(state: browserState) {
-                            if browserState.isLoading  {
-                                browserState.webView?.stopLoading()
-                            } else {
-                                browserState.webView?.reload()
-                            }
-                        }
-                    }
-                }
-                
-                
-                
-                if showAddrBarInToolbar {
-                    
-                    HStack{
-                        if location?.absoluteString.starts(with: "http") == true {
-                            TrustIndicator(trust: browserState.serverTrust, url: location, isPresented: $showTrustInfo)
-                                .popover(isPresented: $showTrustInfo) {
-                                    ServerTrustView(trust: browserState.serverTrust, url: browserState.url, dataStore: browserState.webView?.configuration.websiteDataStore,
-                                                    onAttemptHTTPS: {
-                                        guard let currentLocation = location,
-                                              var components = URLComponents(
-                                                url: currentLocation,
-                                                resolvingAgainstBaseURL: false
-                                              ) else { return }
-                                        components.scheme = "https"
-                                        location = components.url
-                                    }
-                                    )
-                                }
-                                .padding(.leading)
-                        }
-                        
-                        AddressField(text: $urlInput, focusOnAppear: initialURLString == nil, onSubmit: submitURL)
-                        
-                        
-                        Spacer()
-                        
-                        
-                        if priv {
-                            Image(systemName:"eye.slash.fill")
-                                .help("Private Mode")
-                                .padding(.trailing, 10)
-                        }
-                        
-                        
-                        if let pIcon = bProfileIcon, let pName = bProfileName, !pName.isEmpty {
-                            Image(systemName: pIcon)
-                                .help("Profile: \(pName)")
-                                .padding(.trailing, 10)
-                        }
-                    }
-                    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
-                    .popover(isPresented: $showSuggestions) {
-                        AutoFillPopover(searchTerm: $urlInput)
-                    }
-                    .sheet(isPresented: $showCommands) {
-                        VStack(spacing: 0) {
-                            CommandsView(searchText:$commandSearchText, searchQuery: $urlInput)
-                            Button("Close") {
-                                showCommands = false
-                            }
-                            .padding()
-                            .buttonStyle(.borderedProminent)
-                            .tint(.red)
-                        }
-                        .frame(width: 450, height: 600)
-                    }
-                    
-                    .sheet(isPresented: $showTabSearch) {
-                        TabSearchView(isPopover:true)
-                        Button("Close") {
-                            showTabSearch = false
-                        }
-                        .padding()
-                        .buttonStyle(.borderedProminent)
-                        .tint(.red)
-                    }
-                    .sheet(isPresented: $showEventPopup) {
-                        EventListSheet(events: events)
-                    }
-                }
-                
-                
-                if(showFindNavigator) {
-                    FindBarView(state:browserState)
-                }
-                
-                if showSearchButtonInToolbar {
-                    HStack(spacing: 12) {
-                        Button(action: submitURL) {
-                            Image(systemName: "magnifyingglass")
-                                .font(.title2)
-                                .padding(Layout.controlPadding)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                    }
-                }
-                    
-                    if showAutocompleteInToolbar {
-                        Button() {
-                            showSuggestions.toggle()
-                        } label: {
-                            Image(systemName: "character.cursor.ibeam")
-                                .font(.title2)
-                                .padding(Layout.controlPadding)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                    }
-                    
-                    if browserState.url != nil && browserState.url?.isFileURL == false && showExtInToolbar {
-                        Button(action: {
-                            showExtensionsPopover.toggle()
-                        }) {
-                            Image(systemName: "puzzlepiece.extension")
-                                .font(.title2)
-                                .padding(Layout.controlPadding)
-                        }
-                        .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                        .keyboardShortcut("e", modifiers: [.command, .shift])
-                        .popover(isPresented: $showExtensionsPopover, arrowEdge: .bottom) {
-                            ExtensionsPopoverView()
-                        }
-                    }
-                    
-                    
-                    if showMoreInToolbar {
-                        Menu {
-                            
-                            
-                            Button() {
-                                showCommands = true
-                            } label: {
-                                Label("Palette", systemImage: "command.square")
-                            }
-                                                        
-                            Divider()
-                            
-                            if let url = location {
-                                
-                                Button() {
-                                    showFindNavigator = !showFindNavigator
-                                } label: {
-                                    Label(showFindNavigator ? "Hide Find In Page" : "Find In Page", systemImage: "magnifyingglass")
-                                }
-                                Divider()
-                                
-                                Menu() {
-                                    Button() {
-                                        browserState.zoomIn()
-                                    } label: {
-                                        Label("In", systemImage:"plus.magnifyingglass")
-                                    }
-                                    
-                                    Button() {
-                                        browserState.zoomOut()
-                                    } label: {
-                                        Label("Out", systemImage:"minus.magnifyingglass")
-                                    }
-                                    
-                                    Divider()
-                                    
-                                    Button() {
-                                        browserState.resetZoom()
-                                    } label: {
-                                        Label("Reset", systemImage: "arrow.clockwise.circle")
-                                    }
-                                } label: {
-                                    Label("Zoom", systemImage: "arrow.up.left.and.down.right.magnifyingglass")
-                                }
-                                
-                                Divider()
-                                
-                                if !paletteShowTabs {
-                                    Button() {
-                                        showTabSearch = true
-                                    } label: {
-                                        Label("Search Tabs", systemImage: "rectangle.and.text.magnifyingglass")
-                                    }
-                                }
-                                
-                                Divider()
-                                
-                                Button() {
-                                    browserState.toggleMute()
-                                } label: {
-                                    browserState.isAudioMuted ? Label("Unmute Tab", systemImage:"speaker.slash") : Label("Mute Tab", systemImage:"speaker")
-                                }
-                                
-                                Divider()
-                                
-                                Button() {
-                                    showBoost = true
-                                } label: {
-                                    Label("Restyle Page", systemImage:"paintpalette")
-                                }
-                                
-                                Divider()
-                                
-                                Menu {
-                                    
-                                    Button("In This Window", systemImage: "plus.square.on.square") {
-                                        createNewTab(with: url)
-                                    }
-                                    Button("In New Window", systemImage: "macwindow.badge.plus") {
-                                        createNewWindow(with: url)
-                                    }
-                                    
-                                    
-                                    Divider()
-                                    
-                                    Button {
-                                        createFocusWindow(with: url)
-                                    } label: {
-                                        Label("Open in Focus", systemImage: "macwindow")
-                                    }
-                                    
-                                } label: {
-                                    Label("Duplicate", systemImage: "plus.square.on.square")
-                                }
-                                
-                                Divider()
-                                
-                                Button("Copy Page URL", systemImage: "doc.on.doc") {
-                                    NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
-                                }
-                                
-                                Divider()
-                                
-                                Menu() {
-                                    if(splitURL.isEmpty) {
-                                        Button() {
-                                            let alert = NSAlert()
-                                            alert.informativeText = "Enter split view URL:"
-                                            alert.addButton(withTitle: "Go")
-                                            alert.addButton(withTitle: "Cancel")
-                                            
-                                            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                                            input.placeholderString = "https://example.com"
-                                            alert.accessoryView = input
-                                            alert.window.initialFirstResponder = input
-                                            
-                                            if alert.runModal() == .alertFirstButtonReturn {
-                                                
-                                                splitURL = input.stringValue
-                                                
-                                            }
-                                        } label: {
-                                            Label("Open", systemImage: "plus")
-                                        }
-                                    } else {
-                                        
-                                        Button() {
-                                            createNewTab(with:URL(string:splitURL))
-                                        } label: {
-                                            Label("Copy to New Tab", systemImage: "plus.square.on.square")
-                                        }
-                                        
-                                        Divider()
-                                        
-                                        Button() {
-                                            splitURL = ""
-                                            
-                                            let alert = NSAlert()
-                                            alert.informativeText = "Enter split view URL:"
-                                            alert.addButton(withTitle: "Go")
-                                            alert.addButton(withTitle: "Cancel")
-                                            
-                                            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                                            input.placeholderString = "https://example.com"
-                                            alert.accessoryView = input
-                                            alert.window.initialFirstResponder = input
-                                            
-                                            if alert.runModal() == .alertFirstButtonReturn {
-                                                splitURL = input.stringValue
-                                                
-                                            }
-                                            
-                                        } label: {
-                                            Label("Change", systemImage: "link.badge.plus")
-                                        }
-                                        
-                                        Divider()
-                                        
-                                        Button() {
-                                            splitState.toggleMute()
-                                        } label: {
-                                            splitState.isAudioMuted ? Label("Unmute", systemImage:"speaker.slash") : Label("Mute", systemImage:"speaker")
-                                        }
-                                        Divider()
-                                        
-                                        Button() {
-                                            splitURL = ""
-                                        } label: {
-                                            Label("Close", systemImage: "xmark")
-                                        }
-                                    }
-                                } label: {
-                                    Label("Split View", systemImage: "rectangle.split.2x1")
-                                }
-                                
-                                
-                                Divider()
-                                
-                                Menu() {
-                                    
-                                    Button("Bookmarks", systemImage: "star") {
-                                        bookmarkStore.add(Bookmark(
-                                            title: url.host() ?? "Unnamed",
-                                            url: url.absoluteString
-                                        ))
-                                    }
-                                    
-                                    
-                                    Button("Sidebar", systemImage: "sidebar.left") {
-                                        sidebarStore.add(SidebarItem(
-                                            icon: "https://www.google.com/s2/favicons?domain=\(location?.host() ?? "")",
-                                            url: location
-                                        ))
-                                    }
-                                } label: {
-                                    Label("Add Page To", systemImage: "plus")
-                                }
-                                
-                                Divider()
-                                
-                                Button("Print Page", systemImage: "printer") {
-                                    printCurrentPage()
-                                }
-                                
-                                Divider()
-                                
-                                
-                                Button("Reader Mode", systemImage: "eyeglasses") {
-                                    showReader.toggle()
-                                }
-                                
-                                Divider()
-                                
-                                Menu {
-                                    
-                                    Button() {
-                                        let alert = NSAlert()
-                                        alert.informativeText = "Enter new tab name:"
-                                        alert.addButton(withTitle: "Rename")
-                                        alert.addButton(withTitle: "Cancel")
-                                        
-                                        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                                        input.stringValue = browserState.customTitle ?? browserState.title
-                                        input.placeholderString = browserState.webView?.title ?? "Page"
-                                        alert.accessoryView = input
-                                        alert.window.initialFirstResponder = input
-                                        
-                                        if alert.runModal() == .alertFirstButtonReturn {
-                                            let newTitle = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                                            if newTitle.isEmpty {
-                                                browserState.customTitle = nil
-                                                browserState.title = browserState.webView?.title ?? "Page"
-                                            } else {
-                                                browserState.customTitle = newTitle
-                                                browserState.title = newTitle
-                                            }
-                                        }
-                                    } label: {
-                                        Label("Rename Tab", systemImage: "pencil")
-                                    }
-                                    
-                                    
-                                    Divider()
-                                    
-                                    Button {
-                                        
-                                        Task {
-                                            await scanEvents()
-                                        }
-                                        
-                                    } label: {
-                                        Label("Add Events to Calendar", systemImage: "calendar")
-                                    }
-                                    
-                                    Button {
-                                        Task {
-                                            summarizing = true
-                                            await createSummaryWindow(state: browserState)
-                                            summarizing = false
-                                        }
-                                    } label: {
-                                        Label("Summarize", systemImage: "text.line.3.summary")
-                                    }
-                                    
-                                    Button {
-                                        
-                                        Task {
-                                            await cite()
-                                        }
-                                    } label: {
-                                        Label("Cite", systemImage: "doc.text")
-                                    }
-                                    
-                                    
-                                } label: {
-                                    Label("More", systemImage: "ellipsis")
-                                }
-                                
-                            }
-                            
-                        } label: {
-                            Image(systemName: "ellipsis")
-                                .font(.title2)
-                        }
-                        .menuStyle(.borderlessButton)
-                        .menuIndicator(.hidden)
-                        .frame(width: 40, height: 40)
-                        .glassEffect(.regular.interactive(), in: .circle)
-                    }
-                    
-                    
-                
-            }
+            BrowserToolbar(
+                browserState: browserState,
+                sidebarStore: sidebarStore,
+                location: $location,
+                urlInput: $urlInput,
+                showTrustInfo: $showTrustInfo,
+                showTabSearch: $showTabSearch,
+                showEventPopup: $showEventPopup,
+                showGoTo: $showGoTo,
+                showBoost: $showBoost,
+                splitURL: $splitURL,
+                splitState: splitState,
+                focusAddressOnAppear: initialURLString == nil,
+                isPrivate: priv,
+                profileIcon: bProfileIcon,
+                profileName: bProfileName,
+                events: events,
+                submitURL: submitURL,
+                scanEvents: scanEvents,
+                showReader: $showReader
+            )
             .padding(.horizontal, Layout.outerPadding)
-            .padding(.vertical, 8) 
+            .padding(.vertical, 8)
             .frame(maxWidth: .infinity)
             
             if scanningForEvents {
@@ -1190,6 +547,10 @@ struct ContentView: View {
                                 EmailView(profile: bProfile)
                                     .roundedBorderStyle()
                                 
+                            case let str where str.contains("Weather"):
+                                WeatherSidebarView()
+                                    .roundedBorderStyle()
+                                
                             default:
                                 EmptyView()
                             }
@@ -1206,15 +567,11 @@ struct ContentView: View {
                     }
                     if showSidebar {
                         VStack(spacing: Layout.sidebarItemSpacing) {
-                            GlassEffectContainer {
+             //               GlassEffectContainer {
                                 ForEach(sidebarStore.items) { item in
                                     Button(action: {
                                         let targetURL = item.url ?? URL(string: "\(item.view ?? "").view")
-                                        if sidebarURL == targetURL {
-                                            sidebarURL = nil
-                                        } else {
-                                            sidebarURL = targetURL
-                                        }
+                                        toggleSidebar(targetURL)
                                     }) {
                                         if item.icon.starts(with: "https") {
                                             CachedAsyncImage(url: URL(string: item.icon))
@@ -1227,9 +584,9 @@ struct ContentView: View {
                                                 .padding(Layout.sidebarIconPadding)
                                         }
                                     }
-                                    .glassEffect(.regular.interactive())
+                                    .glassEffect(sidebarBackground ? .regular : .identity)
                                     .padding(1)
-                                    .glassEffectUnion(id: "sidebar", namespace: sidebarNamespace)
+                     //           .glassEffectUnion(id: item.id, namespace: sidebarNamespace)
                                     .buttonStyle(.plain)
                                     .onDrag {
                                         draggedSidebarItem = item
@@ -1239,7 +596,10 @@ struct ContentView: View {
                                     .contextMenu {
                                         if sidebarStore.count() > 1 {
                                             Button("Remove", role: .destructive) {
-                                                sidebarStore.remove(id: item.id)
+                                                Task { @MainActor in
+                                                    try? await Task.sleep(for: .milliseconds(200))
+                                                    sidebarStore.remove(id: item.id)
+                                                }
                                             }
                                             Divider()
                                         }
@@ -1256,7 +616,8 @@ struct ContentView: View {
                                             }
                                         }
                                     }
-                                }
+                                    .id(item.id)
+         //                       }
                             }
                         }
                         .alert("Enter URL", isPresented: $showingSidebarAddAlert) {
@@ -1300,7 +661,13 @@ struct ContentView: View {
         }
         .onChange(of: sidebarURL) {
             sidebarPage.customUserAgent = userAgent
-            if(sidebarURL != nil) { sidebarPage.load(sidebarURL!) }
+            guard let sidebarURL,
+                  !sidebarURL.absoluteString.contains(".view"),
+                  let scheme = sidebarURL.scheme?.lowercased(),
+                  ["http", "https", "file"].contains(scheme)
+            else { return }
+
+            sidebarPage.load(sidebarURL)
         }.onChange(of: location) { _, newValue in
             guard newValue != nil else { return }
             if let web = browserState.webView {
@@ -1353,12 +720,18 @@ struct ContentView: View {
         .onChange(of: browserState.scrollY) { _, _ in updateTabState() }
         .onChange(of: splitState.scrollX) { _, _ in updateTabState() }
         .onChange(of: splitState.scrollY) { _, _ in updateTabState() }
-        .focusedSceneValue(\.dispatchBrowserCommand, windowManager.isActiveTab(tabID) ? { command in
+        .focusedSceneValue(\.dispatchBrowserCommand, commandDispatcher)
+    }
+
+    private var commandDispatcher: ((BrowserCommand) -> Void)? {
+        guard windowManager.isActiveTab(tabID) else { return nil }
+        return handleBrowserCommand
+    }
+
+    private func handleBrowserCommand(_ command: BrowserCommand) {
             switch command {
             case .closeTab: WindowManager.shared.closeTab(tabID)
-            case .palette: showCommands = true
             case .searchTabs: showTabSearch = true
-            case .toggleFind: showFindNavigator.toggle()
             case .zoomIn: browserState.zoomIn()
             case .zoomOut: browserState.zoomOut()
             case .resetZoom: browserState.resetZoom()
@@ -1373,6 +746,7 @@ struct ContentView: View {
                 }
             case .printPage: printCurrentPage()
             case .toggleReader: showReader.toggle()
+            case .findInPage: browserState.isFindBarVisible = true
             case .renameTab:
                 let alert = NSAlert()
                 alert.informativeText = "Enter new tab name:"
@@ -1398,18 +772,10 @@ struct ContentView: View {
             case .cite: Task { await cite() }
             case .downloads:
                 let targetURL = URL(string: "DownloadsView.view")!
-                if sidebarURL == targetURL {
-                    sidebarURL = nil
-                } else {
-                    sidebarURL = targetURL
-                }
+                toggleSidebar(targetURL)
             case .history:
                 let targetURL = URL(string: "HistoryView.view")!
-                if sidebarURL == targetURL {
-                    sidebarURL = nil
-                } else {
-                    sidebarURL = targetURL
-                }
+                toggleSidebar(targetURL)
             case .savePage:
                 let panel = NSSavePanel()
                 let accessoryView = NSView(frame: NSRect(x: 0, y: 0, width: 250, height: 44))
@@ -1463,8 +829,6 @@ struct ContentView: View {
                 } else {
                     print("no last tab")
                 }
-            case .autocomplete:
-                showSuggestions.toggle()
             case .showSetup:
                 setupWindow()
             case .reload:
@@ -1505,8 +869,9 @@ struct ContentView: View {
                             }
                         }
                     }
+            case .goTo:
+                showGoTo = true
             }
-        } : nil)
     }
     
     @AppStorage("searchURL", store:Config.sharedDefaults) var searchURL = "https://www.google.com/search?q="
@@ -1579,6 +944,19 @@ struct ContentView: View {
         }
 
         location = url
+    }
+
+    private func toggleSidebar(_ targetURL: URL?) {
+        let nextURL = sidebarURL == targetURL ? nil : targetURL
+
+        // AppKit can crash while removing a focused NSView from its key-view loop.
+        // Resign the sidebar's first responder and let that teardown complete before
+        // SwiftUI replaces the hosted sidebar view.
+        (browserState.webView?.window ?? NSApp.keyWindow)?.makeFirstResponder(nil)
+        Task { @MainActor in
+            await Task.yield()
+            sidebarURL = nextURL
+        }
     }
     
    
@@ -1673,7 +1051,7 @@ struct ContentView: View {
     }
     
     @MainActor
-    private func scanEvents() async {
+    func scanEvents() async {
         
         scanningForEvents = true
         
@@ -1812,7 +1190,6 @@ struct ContentView: View {
     
     @AppStorage("themePreference", store:Config.sharedDefaults) var themePreference = "system"
     
-    @State var showPageShine = false
     
     private func handleTitleChange(to newTitle: String) {
         if priv == true { return }

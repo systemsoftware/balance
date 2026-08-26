@@ -28,7 +28,9 @@ View and interact with two websites simultaneously within a single window.
 
 ![Split View](images/split.png)
 
-
+## Customizable Toolbar
+Customize the top toolbar by adding, removing, and arranging buttons however you like.
+![Toolbar](images/toolbar.png)
 
 ### Focus Mode
 
@@ -171,6 +173,10 @@ Built-in protections include:
 * Optional browsing history
 
 ![Server Trust](images/servertrust.png)
+
+## Weather
+See weather for any city in the Sidebar.
+![Weather](images/weather.png)
 
 ## Design
 

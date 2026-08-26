@@ -1,0 +1,317 @@
+import SwiftUI
+internal import UniformTypeIdentifiers
+
+enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
+    case clock
+    case navigation
+    case home
+    case share
+    case reload
+    case addressBar
+    case search
+    case autocomplete
+    case extensions
+    case saveTo
+    case splitView
+    case commandPalette
+    case findInPage
+    case spacer
+    case ai
+    case restyle
+    case more
+    case reader
+    
+    var name: String {
+        
+        switch self {
+        case .clock:
+            "Clock"
+        case .navigation:
+            "Navigation"
+        case .home:
+            "Home"
+        case .share:
+            "Share"
+        case .reload:
+            "Reload"
+        case .addressBar:
+            "Address Bar"
+        case .search:
+            "Go"
+        case .autocomplete:
+            "Autocomplete"
+        case .extensions:
+            "Extensions"
+        case .saveTo:
+            "Save To"
+        case .splitView:
+            "Split View"
+        case .commandPalette:
+            "Command Palette"
+        case .findInPage:
+            "Find in Page"
+        case .more:
+            "More Menu"
+        case .ai:
+            "AI Tools"
+        case .restyle:
+            "Restyle Page"
+        default:
+            self.rawValue.capitalized
+        }
+        
+    }
+
+    var id: String { rawValue }
+}
+
+
+struct BrowserToolbar: View {
+    
+    @ObservedObject var browserState: BrowserState
+    @ObservedObject var sidebarStore: SidebarStore
+    @StateObject var toolbarStore = ToolbarStore()
+    @Binding var location: URL?
+    @Binding var urlInput: String
+    @Binding var showTrustInfo: Bool
+    @Binding var showTabSearch: Bool
+    @Binding var showEventPopup: Bool
+    @Binding var showGoTo: Bool
+    @Binding var showBoost: Bool
+    @Binding var splitURL: String
+    @ObservedObject var splitState: BrowserState
+    let focusAddressOnAppear: Bool
+    let isPrivate: Bool
+    let profileIcon: String?
+    let profileName: String?
+    let events: [EventExtraction]
+    let submitURL: () -> Void
+    let scanEvents: () async -> Void
+    @Binding var showReader: Bool
+    
+    @State private var showAddRemoveMenu = false
+    
+    @State private var draggedItemIndex: Int?
+
+    
+    var body: some View {
+        
+        HStack {
+            if !toolbarStore.items.isEmpty {
+                ForEach(Array(toolbarStore.items.enumerated()), id: \.offset) { index, item in
+                    
+                    BrowserToolbarItem(
+                        item: item,
+                        browserState: browserState,
+                        sidebarStore: sidebarStore,
+                        location: $location,
+                        urlInput: $urlInput,
+                        showTrustInfo: $showTrustInfo,
+                        showTabSearch: $showTabSearch,
+                        showEventPopup: $showEventPopup,
+                        showGoTo: $showGoTo,
+                        showBoost: $showBoost,
+                        splitURL: $splitURL,
+                        splitState: splitState,
+                        focusAddressOnAppear: focusAddressOnAppear,
+                        isPrivate: isPrivate,
+                        profileIcon: profileIcon,
+                        profileName: profileName,
+                        events: events,
+                        showReader: $showReader,
+                        submitURL: submitURL,
+                        scanEvents: scanEvents
+                    )
+                    
+                    .padding(Layout.controlPadding)
+                    .onDrag {
+                        draggedItemIndex = index
+                        let provider = NSItemProvider()
+                        provider.registerDataRepresentation(
+                            forTypeIdentifier: UTType.data.identifier,
+                            visibility: .ownProcess
+                        ) { completion in
+                            completion(item.id.data(using: .utf8), nil)
+                            return nil
+                        }
+                        return provider
+                    }
+                    .onDrop(
+                        of: [.data],
+                        delegate: ToolbarDropDelegate(
+                            targetIndex: index,
+                            store: toolbarStore,
+                            draggedItemIndex: $draggedItemIndex
+                        )
+                    )
+                        .contextMenu {
+                            
+                            Menu("Remove") {
+                                ForEach(Array(toolbarStore.items.enumerated()), id: \.offset) { removeIndex, removeItem in
+                                    Button(removeItem.name) {
+                                        if toolbarStore.items.count > 1 {
+                                            toolbarStore.remove(at: removeIndex)
+                                        }
+                                    }
+                                }
+                            }
+                            
+                            Menu("Add") {
+                                ForEach(ToolbarItemType.allCases) { newItem in
+                                    if newItem == .spacer || !toolbarStore.items.contains(where: { $0 == newItem }) {
+                                        Button(newItem.name) {
+                                            toolbarStore.add(newItem)
+                                        }
+                                    }
+                                }
+                                
+                            }
+                            
+                        }
+                }
+            } else {
+                EmptyView()
+                    .contextMenu {
+                        
+                    }
+            }
+
+            // Keep Cmd-F usable even when the optional find button is not part of
+            // the user's customized toolbar.
+            if browserState.isFindBarVisible && !toolbarStore.items.contains(.findInPage) {
+                FindBarView(state: browserState)
+                    .padding(Layout.controlPadding)
+            }
+        }
+    }
+    
+    struct BrowserToolbarItem: View {
+        
+        var item: ToolbarItemType
+        
+        @ObservedObject var browserState: BrowserState
+        @ObservedObject var sidebarStore: SidebarStore
+        
+        @Binding var location: URL?
+        @Binding var urlInput: String
+        @Binding var showTrustInfo: Bool
+        @Binding var showTabSearch: Bool
+        @Binding var showEventPopup: Bool
+        @Binding var showGoTo: Bool
+        @Binding var showBoost: Bool
+        @Binding var splitURL: String
+        @ObservedObject var splitState: BrowserState
+        let focusAddressOnAppear: Bool
+        let isPrivate: Bool
+        let profileIcon: String?
+        let profileName: String?
+        let events: [EventExtraction]
+        @Binding var showReader: Bool
+        
+        let submitURL: () -> Void
+        let scanEvents: () async -> Void
+        
+        @State var showSuggestions = false
+        
+        var body: some View {
+            switch item {
+            case .clock:
+                ClockView(timeOnly: true, fontSize: 14)
+                
+            case .navigation:
+                NavigationButtons(location: $location, browserState: browserState)
+                
+            case .home:
+                HomeToolbarButton(location: $location, urlInput: $urlInput)
+                
+            case .share:
+                ShareToolbarButton(location: $location)
+                
+            case .reload:
+                ReloadToolbarButton(browserState: browserState)
+                
+            case .addressBar:
+                AddressBar(
+                    browserState: browserState,
+                    location: $location,
+                    urlInput: $urlInput,
+                    showTrustInfo: $showTrustInfo,
+                    showTabSearch: $showTabSearch,
+                    showEventPopup: $showEventPopup,
+                    showGoTo: $showGoTo,
+                    focusOnAppear: focusAddressOnAppear,
+                    isPrivate: isPrivate,
+                    profileIcon: profileIcon,
+                    profileName: profileName,
+                    events: events,
+                    submitURL: submitURL
+                )
+                
+            case .search:
+                SearchToolbarButton(location: $location, submitURL: submitURL)
+                
+            case .autocomplete:
+                Button {
+                    showSuggestions.toggle()
+                } label: {
+                    Image(systemName: "character.cursor.ibeam")
+                        .font(.title2)
+                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                }
+                .glassEffect(.regular.interactive(), in:.circle)
+                .buttonStyle(.plain)
+                .popover(isPresented: $showSuggestions) {
+                    AutoFillPopover(searchTerm: $urlInput)
+                }
+                
+            case .extensions:
+                ExtensionsToolbarButton(browserState: browserState, location: $location)
+                
+            case .saveTo:
+                SaveToToolbarButton(location: $location, sidebarStore: sidebarStore)
+                
+            case .splitView:
+                SplitViewToolbarButton(splitURL: $splitURL, splitState: splitState)
+                    .disabled(location == nil)
+                
+            case .reader:
+                Button {
+                    showReader.toggle()
+                } label: {
+                    Image(systemName: "eyeglasses")
+                        .font(.title2)
+                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                }
+                .glassEffect(.regular.interactive(), in:.circle)
+                .buttonStyle(.plain)
+                .disabled(location == nil)
+                
+            case .spacer:
+                Color.clear
+                    .frame(
+                        minWidth: Layout.toolbarButtonSize,
+                        maxWidth: .infinity
+                    )
+                    .frame(height: Layout.toolbarButtonSize)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("Toolbar Spacer")
+                
+            case .more:
+                MoreMenuToolbar(browserState: browserState, location: $location, showBoost: $showBoost)
+            case .commandPalette:
+                CommandPaletteToolbarButton(urlInput: $urlInput)
+                
+            case .findInPage:
+                FindInPageToolbarButton(browserState: browserState)
+                
+            case .ai:
+                AIMenuToolbar(browserState: browserState, location: $location, scanEvents: scanEvents)
+            case .restyle:
+                RestyleToolbarButton(showBoost: $showBoost)
+                    .disabled(location == nil)
+            }
+        }
+        
+        
+    }
+}

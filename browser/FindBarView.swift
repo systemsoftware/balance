@@ -4,11 +4,6 @@ struct FindBarView: View {
     @ObservedObject var state: BrowserState
     
     @Namespace private var glassNamespace
-
-    
-    init(state: BrowserState) {
-        self.state = state
-    }
     
     var body: some View {
         HStack(spacing: 6) {
@@ -23,6 +18,12 @@ struct FindBarView: View {
             }
             .padding(Layout.controlPadding)
 
+            if !state.findQuery.isEmpty && state.findMatchCount == 0 {
+                Text("No results")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+
             Button(action: { state.find(state.findQuery, forward: false) }) {
                 Image(systemName: "chevron.up")
             }
@@ -36,9 +37,7 @@ struct FindBarView: View {
             .disabled(state.findQuery.isEmpty)
 
             Button(action: {
-                state.findQuery = ""
-                state.clearFind()
-                state.isFindBarVisible = false
+                dismissFindBar()
             }) {
                 Image(systemName: "xmark")
             }
@@ -48,5 +47,17 @@ struct FindBarView: View {
         .padding(.vertical, 4)
         .glassEffect()
         .glassEffectUnion(id: "find", namespace: glassNamespace)
+    }
+
+    private func dismissFindBar() {
+        // The native search field may still be AppKit's first responder. Removing
+        // its hosting view synchronously can corrupt the key-view loop.
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        Task { @MainActor in
+            await Task.yield()
+            state.findQuery = ""
+            state.clearFind()
+            state.isFindBarVisible = false
+        }
     }
 }

@@ -90,6 +90,8 @@ struct SearchInputView: View {
     @Binding var text: String
     var config: SearchInputVisualConfig = SearchInputVisualConfig()
     @State private var isFocused: Bool = false
+    
+    var placeholder: String?
 
     var body: some View {
         HStack(spacing: 4) {
@@ -100,7 +102,7 @@ struct SearchInputView: View {
 
             NativeSearchField(
                 text: $text,
-                placeholder: config.placeholderText,
+                placeholder: placeholder ?? config.placeholderText,
                 onFocusChange: { focused in
                     withAnimation(config.animation) { isFocused = focused }
                 }

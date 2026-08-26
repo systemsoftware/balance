@@ -36,6 +36,9 @@ final class SidebarStore: ObservableObject {
     }
 
     func add(_ item: SidebarItem) {
+        guard !items.contains(where: { existing in
+            existing.view == item.view && existing.url == item.url
+        }) else { return }
         items.append(item)
         save()
     }

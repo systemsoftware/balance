@@ -24,7 +24,19 @@ class HistoryManager {
     static let sharedContainer: ModelContainer = {
         let schema = Schema([HistoryItem.self])
         let configuration = ModelConfiguration(schema: schema)
-        return try! ModelContainer(for: schema, configurations: [configuration])
+        do {
+            return try ModelContainer(for: schema, configurations: [configuration])
+        } catch {
+            // A corrupt or incompatible on-disk store should not prevent the browser
+            // from launching. Keep history available for this session in memory.
+            print("❌ Unable to open history store; using an in-memory store: \(error)")
+            let fallback = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            do {
+                return try ModelContainer(for: schema, configurations: [fallback])
+            } catch {
+                fatalError("Unable to create the fallback history store: \(error)")
+            }
+        }
     }()
     
     static func addToHistory(title: String, url: String, profile: String = "", context: ModelContext?) {
