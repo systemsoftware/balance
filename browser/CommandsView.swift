@@ -1,6 +1,7 @@
 import SwiftUI
 import WebKit
 import SwiftData
+import AppKit
 internal import UniformTypeIdentifiers
 
 enum CommandSection: String, CaseIterable, Identifiable, Codable {
@@ -218,7 +219,7 @@ struct CommandsView: View {
                     ForEach(filteredTabs, id: \.tabID) { state in
                         Button(action: {
                             switchToTab(tabID: state.tabID)
-                            dismiss()
+                            dismissAfterFocusResigns()
                         }) {
                             row(
                                 title: state.title.isEmpty ? "Untitled Tab" : state.title,
@@ -241,7 +242,7 @@ struct CommandsView: View {
                     ForEach(filteredBookmarks) { mark in
                         Button {
                             createNewTab(with: URL(string:mark.url))
-                            dismiss()
+                            dismissAfterFocusResigns()
                         } label: {
                             row(
                                 title: mark.title,
@@ -303,7 +304,7 @@ struct CommandsView: View {
                         Button {
                             guard let url = URL(string: historyItem.url) else { return }
                             createNewTab(with: url)
-                            dismiss()
+                            dismissAfterFocusResigns()
                         } label: {
                             row(
                                 title: historyItem.title,
@@ -341,7 +342,7 @@ struct CommandsView: View {
             Button("Cancel") {
                 urlString = ""
                 showNewProfile = false
-                screen = .commands
+                transition(to: .commands)
             }
             .padding(.trailing, 3)
             
@@ -368,7 +369,7 @@ struct CommandsView: View {
                 
                 Button("Cancel") {
                     urlString = ""
-                    screen = .commands
+                    transition(to: .commands)
                 }
                 
                 Button("Open") {
@@ -376,7 +377,7 @@ struct CommandsView: View {
                         with: URL(string: urlString),
                         pvt: privateMode
                     )
-                    dismiss()
+                    dismissAfterFocusResigns()
                 }
                 .disabled(urlString.isEmpty)
             }
@@ -404,7 +405,7 @@ struct CommandsView: View {
                 ToolbarItem(placement: .navigation) {
                     Button {
                         searchText = ""
-                        screen = .commands
+                        transition(to: .commands)
                     } label: {
                         Label("Back", systemImage: "chevron.left")
                     }
@@ -431,33 +432,49 @@ struct CommandsView: View {
         switch action {
         case .newTab:
             createNewTab()
-            dismiss()
+            dismissAfterFocusResigns()
             
         case .newWindow:
             createNewWindow()
-            dismiss()
+            dismissAfterFocusResigns()
             
         case .newPrivateWindow:
             createNewWindow(pvt: true)
-            dismiss()
+            dismissAfterFocusResigns()
             
         case .newWindowAt:
             searchText = ""
-            screen = .enterURL(privateMode: false)
+            transition(to: .enterURL(privateMode: false))
             
         case .newPrivateWindowAt:
             searchText = ""
-            screen = .enterURL(privateMode: true)
+            transition(to: .enterURL(privateMode: true))
             
         case .newWindowWithProfile:
             searchText = ""
-            screen = .profiles
             showNewProfile = false
             hideProfileList = false
+            transition(to: .profiles)
         case .newProfile:
-            screen = .profiles
             showNewProfile = true
             hideProfileList = true
+            transition(to: .profiles)
+        }
+    }
+
+    private func dismissAfterFocusResigns() {
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        Task { @MainActor in
+            await Task.yield()
+            dismiss()
+        }
+    }
+
+    private func transition(to newScreen: Screen) {
+        NSApp.keyWindow?.makeFirstResponder(nil)
+        Task { @MainActor in
+            await Task.yield()
+            screen = newScreen
         }
     }
 

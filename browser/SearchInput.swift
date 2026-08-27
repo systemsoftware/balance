@@ -39,6 +39,7 @@ struct NativeSearchField: NSViewRepresentable {
     @Binding var text: String
     var placeholder: String
     var onFocusChange: (Bool) -> Void
+    var onSubmit: () -> Void = {}
 
     func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
 
@@ -62,6 +63,18 @@ struct NativeSearchField: NSViewRepresentable {
         }
     }
 
+    static func dismantleNSView(_ field: IsolatedSearchField, coordinator: Coordinator) {
+        // NSTextField delegates editing to a window-owned field editor. Detach
+        // that editor before SwiftUI releases this view; otherwise AppKit can
+        // discover the dying field while rebuilding/removing the key-view loop.
+        if let window = field.window,
+           window.firstResponder === field || field.currentEditor() != nil {
+            window.makeFirstResponder(nil)
+            field.abortEditing()
+        }
+        field.delegate = nil
+    }
+
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: NativeSearchField
 
@@ -80,6 +93,16 @@ struct NativeSearchField: NSViewRepresentable {
 
         func controlTextDidEndEditing(_ notification: Notification) {
             parent.onFocusChange(false)
+        }
+
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy commandSelector: Selector
+        ) -> Bool {
+            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
+            parent.onSubmit()
+            return true
         }
     }
 }

@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import AppKit
 internal import Combine
 
 final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
@@ -383,6 +384,11 @@ struct BrowserWindowHost: View {
                     }
             }
         }
+            .background(
+                WindowCloseObserver {
+                    windowManager.closeWindow(windowID)
+                }
+            )
             .onAppear {
                 windowManager.registerOpenWindow { id in
                     openWindow(value: id)
@@ -394,20 +400,73 @@ struct BrowserWindowHost: View {
                     dismiss()
                 }
             }
-            .onDisappear {
-                // Guard against SwiftUI calling onDisappear during view re-renders or
-                // background transitions. Only close if the window still exists in the
-                // model — if it was already removed (e.g., via the .onChange above when
-                // `dismiss()` fired), calling closeWindow again would be a no-op, but
-                // this guard also prevents false closures from transient SwiftUI teardowns.
-                guard windowManager.window(for: windowID) != nil else { return }
-                windowManager.closeWindow(windowID)
-            }
             .onChange(of: controlActiveState) { _, newState in
                 if newState == .key {
                     windowManager.activeWindowID = windowID
                 }
             }
+    }
+}
+
+
+private struct WindowCloseObserver: NSViewRepresentable {
+    let onClose: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(onClose: onClose)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let view = NSView(frame: .zero)
+        context.coordinator.attach(to: view)
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {
+        context.coordinator.onClose = onClose
+        context.coordinator.attach(to: nsView)
+    }
+
+    static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
+        coordinator.stopObserving()
+    }
+
+    final class Coordinator {
+        var onClose: () -> Void
+        private weak var observedWindow: NSWindow?
+        private var closeObserver: NSObjectProtocol?
+
+        init(onClose: @escaping () -> Void) {
+            self.onClose = onClose
+        }
+
+        func attach(to view: NSView) {
+            DispatchQueue.main.async { [weak self, weak view] in
+                guard let self, let window = view?.window,
+                      window !== self.observedWindow else { return }
+                self.stopObserving()
+                self.observedWindow = window
+                self.closeObserver = NotificationCenter.default.addObserver(
+                    forName: NSWindow.willCloseNotification,
+                    object: window,
+                    queue: .main
+                ) { [weak self] _ in
+                    self?.onClose()
+                }
+            }
+        }
+
+        func stopObserving() {
+            if let closeObserver {
+                NotificationCenter.default.removeObserver(closeObserver)
+            }
+            closeObserver = nil
+            observedWindow = nil
+        }
+
+        deinit {
+            stopObserving()
+        }
     }
 }
 

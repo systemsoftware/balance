@@ -12,6 +12,7 @@ struct FindBarView: View {
                 placeholder: "Find in page",
                 onFocusChange: { _ in }
             )
+            .padding(5)
             .frame(width: 200)
             .onChange(of: state.findQuery) { old, query in
                 state.find(query)

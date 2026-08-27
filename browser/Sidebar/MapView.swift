@@ -39,8 +39,6 @@ struct MapView: View {
     @State private var extractedPlaces: [PlaceItem] = []
     @State private var selectedResult: PlaceItem?
     
-    @FocusState private var isSearchFocused: Bool
-    
     @StateObject private var completerManager = SearchCompleterManager()
     
     @StateObject private var placeStore = PlaceStore()
@@ -142,16 +140,17 @@ struct MapView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
                         .font(.system(size: 14, weight: .medium))
-                    TextField("Search places...", text: $searchText)
-                        .textFieldStyle(.plain)
-                        .font(.system(size: 14))
-                        .focused($isSearchFocused)
-                        .onChange(of: searchText) { old, new in
-                            completerManager.updateSearch(query: new)
-                        }
-                        .onSubmit {
+                    NativeSearchField(
+                        text: $searchText,
+                        placeholder: "Search places...",
+                        onFocusChange: { _ in },
+                        onSubmit: {
                             search(for: searchText)
                             completerManager.completerResults = []
+                        }
+                    )
+                        .onChange(of: searchText) { old, new in
+                            completerManager.updateSearch(query: new)
                         }
                     if !searchText.isEmpty {
                         Button(action: {
@@ -243,12 +242,8 @@ struct MapView: View {
             .shadow(color: Color.black.opacity(0.05), radius: 10, x: 0, y: 5)
             .padding()
         }
-        .simultaneousGesture(TapGesture().onEnded {
-            isSearchFocused = false
-            completerManager.completerResults = []
-        })
         .onChange(of: selectedResult) { old, new in
-            isSearchFocused = false
+            NSApp.keyWindow?.makeFirstResponder(nil)
             completerManager.completerResults = []
             
             if let selected = new {

@@ -176,6 +176,15 @@ private struct NativeAddressField: NSViewRepresentable {
         }
     }
 
+    static func dismantleNSView(_ field: IsolatedTextField, coordinator: Coordinator) {
+        if let window = field.window,
+           window.firstResponder === field || field.currentEditor() != nil {
+            window.makeFirstResponder(nil)
+            field.abortEditing()
+        }
+        field.delegate = nil
+    }
+
     final class Coordinator: NSObject, NSTextFieldDelegate {
         var parent: NativeAddressField
         var didFocus = false

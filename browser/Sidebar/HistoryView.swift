@@ -27,8 +27,6 @@ class HistoryManager {
         do {
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
-            // A corrupt or incompatible on-disk store should not prevent the browser
-            // from launching. Keep history available for this session in memory.
             print("❌ Unable to open history store; using an in-memory store: \(error)")
             let fallback = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
             do {

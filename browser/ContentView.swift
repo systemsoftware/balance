@@ -38,7 +38,8 @@ let builtInSidebar = [
     SidebarItem(icon:"map", view:"MapView"),
     SidebarItem(icon:"antenna.radiowaves.left.and.right", view:"RSSView"),
     SidebarItem(icon:"calendar", view:"CalendarView"),
-    SidebarItem(icon:"cloud", view: "WeatherView")
+    SidebarItem(icon:"cloud.sun", view: "WeatherView"),
+    SidebarItem(icon: "bag", view: "InventoryView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -549,6 +550,11 @@ struct ContentView: View {
                                 
                             case let str where str.contains("Weather"):
                                 WeatherSidebarView()
+                                    .roundedBorderStyle()
+                                
+                                
+                            case let str where str.contains("Inventory"):
+                                InventorySidebar()
                                     .roundedBorderStyle()
                                 
                             default:

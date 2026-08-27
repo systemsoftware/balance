@@ -14,23 +14,29 @@ class RSSParser: NSObject, XMLParserDelegate {
     private var currentElement = ""
     
     // Properties to build the currently parsed item
-    private var currentTitle: String = "" { didSet { currentTitle = currentTitle.trimmingCharacters(in: .whitespacesAndNewlines) } }
-    private var currentLink: String = "" { didSet { currentLink = currentLink.trimmingCharacters(in: .whitespacesAndNewlines) } }
-    private var currentDescription: String = "" { didSet { currentDescription = currentDescription.trimmingCharacters(in: .whitespacesAndNewlines) } }
-    private var currentPubDate: String = "" { didSet { currentPubDate = currentPubDate.trimmingCharacters(in: .whitespacesAndNewlines) } }
+    private var currentTitle: String = ""
+    private var currentLink: String = ""
+    private var currentDescription: String = ""
+    private var currentPubDate: String = ""
     
     // Track whether the parser is inside an <item> block
     private var isInsideItem = false
     
     func parseFeed(from url: URL) async -> [RSSItem] {
-        guard let (data, _) = try? await URLSession.shared.data(from: url) else { return [] }
+        guard let (data, response) = try? await URLSession.shared.data(from: url),
+              (response as? HTTPURLResponse).map({ 200..<300 ~= $0.statusCode }) ?? true
+        else { return [] }
+
+        rssItems.removeAll(keepingCapacity: true)
+        isInsideItem = false
+        currentElement = ""
         
         let parser = XMLParser(data: data)
         parser.delegate = self
         
         // This blocks the thread synchronously during execution, 
         // which is why it runs inside an async context.
-        parser.parse() 
+        guard parser.parse() else { return [] }
         
         return rssItems
     }
@@ -67,10 +73,10 @@ class RSSParser: NSObject, XMLParserDelegate {
     func parser(_ parser: XMLParser, didEndElement elementName: String, namespaceURI: String?, qualifiedName qName: String?) {
         if elementName == "item" {
             let item = RSSItem(
-                title: currentTitle,
-                link: currentLink,
-                description: currentDescription,
-                pubDate: currentPubDate
+                title: currentTitle.trimmingCharacters(in: .whitespacesAndNewlines),
+                link: currentLink.trimmingCharacters(in: .whitespacesAndNewlines),
+                description: currentDescription.trimmingCharacters(in: .whitespacesAndNewlines),
+                pubDate: currentPubDate.trimmingCharacters(in: .whitespacesAndNewlines)
             )
             rssItems.append(item)
             isInsideItem = false
