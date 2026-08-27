@@ -168,7 +168,7 @@ struct browserApp: App {
         
         SwiftUI.Settings {
             SettingsView(isStandalone: true)
-                .frame(minWidth: 400, minHeight: 360)
+                .frame(minWidth: 400, minHeight: 400)
         }
     }
 }

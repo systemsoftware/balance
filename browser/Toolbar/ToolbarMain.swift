@@ -91,17 +91,17 @@ struct BrowserToolbar: View {
     
     @State private var showAddRemoveMenu = false
     
-    @State private var draggedItemIndex: Int?
+    @State private var draggedItemID: UUID?
 
     
     var body: some View {
         
         HStack {
             if !toolbarStore.items.isEmpty {
-                ForEach(Array(toolbarStore.items.enumerated()), id: \.offset) { index, item in
+                ForEach(toolbarStore.items) { entry in
                     
                     BrowserToolbarItem(
-                        item: item,
+                        item: entry.item,
                         browserState: browserState,
                         sidebarStore: sidebarStore,
                         location: $location,
@@ -125,13 +125,13 @@ struct BrowserToolbar: View {
                     
                     .padding(Layout.controlPadding)
                     .onDrag {
-                        draggedItemIndex = index
+                        draggedItemID = entry.id
                         let provider = NSItemProvider()
                         provider.registerDataRepresentation(
                             forTypeIdentifier: UTType.data.identifier,
                             visibility: .ownProcess
                         ) { completion in
-                            completion(item.id.data(using: .utf8), nil)
+                            completion(entry.id.uuidString.data(using: .utf8), nil)
                             return nil
                         }
                         return provider
@@ -139,26 +139,24 @@ struct BrowserToolbar: View {
                     .onDrop(
                         of: [.data],
                         delegate: ToolbarDropDelegate(
-                            targetIndex: index,
+                            targetID: entry.id,
                             store: toolbarStore,
-                            draggedItemIndex: $draggedItemIndex
+                            draggedItemID: $draggedItemID
                         )
                     )
                         .contextMenu {
                             
                             Menu("Remove") {
-                                ForEach(Array(toolbarStore.items.enumerated()), id: \.offset) { removeIndex, removeItem in
-                                    Button(removeItem.name) {
-                                        if toolbarStore.items.count > 1 {
-                                            toolbarStore.remove(at: removeIndex)
-                                        }
+                                ForEach(toolbarStore.items) { removeEntry in
+                                    Button(removeEntry.item.name) {
+                                        toolbarStore.remove(id: removeEntry.id)
                                     }
                                 }
                             }
                             
                             Menu("Add") {
                                 ForEach(ToolbarItemType.allCases) { newItem in
-                                    if newItem == .spacer || !toolbarStore.items.contains(where: { $0 == newItem }) {
+                                    if newItem == .spacer || !toolbarStore.contains(newItem) {
                                         Button(newItem.name) {
                                             toolbarStore.add(newItem)
                                         }
@@ -178,7 +176,7 @@ struct BrowserToolbar: View {
 
             // Keep Cmd-F usable even when the optional find button is not part of
             // the user's customized toolbar.
-            if browserState.isFindBarVisible && !toolbarStore.items.contains(.findInPage) {
+            if browserState.isFindBarVisible && !toolbarStore.contains(.findInPage) {
                 FindBarView(state: browserState)
                     .padding(Layout.controlPadding)
             }

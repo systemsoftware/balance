@@ -13,9 +13,19 @@ let builtinToolbar: [ToolbarItemType] = [
     .more
 ]
 
+struct ToolbarEntry: Codable, Identifiable, Equatable {
+    let id: UUID
+    let item: ToolbarItemType
+
+    init(id: UUID = UUID(), item: ToolbarItemType) {
+        self.id = id
+        self.item = item
+    }
+}
+
 final class ToolbarStore: ObservableObject {
     
-    @Published var items: [ToolbarItemType] = []
+    @Published private(set) var items: [ToolbarEntry] = []
 
     private let defaults = Config.defaults
     private let profile: String
@@ -30,14 +40,20 @@ final class ToolbarStore: ObservableObject {
 
     func load() {
         guard
-            let data = defaults.data(forKey: storageKey),
-            let decoded = try? JSONDecoder().decode([ToolbarItemType].self, from: data)
+            let data = defaults.data(forKey: storageKey)
         else {
-            items = Array(builtinToolbar.prefix(5))
+            items = Array(builtinToolbar.prefix(5)).map { ToolbarEntry(item: $0) }
             return
         }
 
-        items = decoded
+        if let decoded = try? JSONDecoder().decode([ToolbarEntry].self, from: data) {
+            items = decoded
+        } else if let legacyItems = try? JSONDecoder().decode([ToolbarItemType].self, from: data) {
+            items = legacyItems.map { ToolbarEntry(item: $0) }
+            save()
+        } else {
+            items = Array(builtinToolbar.prefix(5)).map { ToolbarEntry(item: $0) }
+        }
     }
 
     func save() {
@@ -46,19 +62,29 @@ final class ToolbarStore: ObservableObject {
     }
 
     func add(_ item: ToolbarItemType) {
-        items.append(item)
+        items.append(ToolbarEntry(item: item))
         save()
     }
 
-    func remove(id: String) {
-        items.removeAll { $0.id == id }
-        save()
-    }
-
-    func remove(at index: Int) {
-        guard items.indices.contains(index) else { return }
+    func remove(id: UUID) {
+        guard items.count > 1, let index = items.firstIndex(where: { $0.id == id }) else { return }
         items.remove(at: index)
         save()
+    }
+
+    func contains(_ item: ToolbarItemType) -> Bool {
+        items.contains { $0.item == item }
+    }
+
+    func move(_ draggedID: UUID, before targetID: UUID) {
+        guard draggedID != targetID,
+              let from = items.firstIndex(where: { $0.id == draggedID }),
+              let target = items.firstIndex(where: { $0.id == targetID }) else { return }
+
+        items.move(
+            fromOffsets: IndexSet(integer: from),
+            toOffset: target > from ? target + 1 : target
+        )
     }
     
     func count() -> Int {
@@ -67,28 +93,21 @@ final class ToolbarStore: ObservableObject {
 }
 
 struct ToolbarDropDelegate: DropDelegate {
-    let targetIndex: Int
+    let targetID: UUID
     let store: ToolbarStore
-    @Binding var draggedItemIndex: Int?
+    @Binding var draggedItemID: UUID?
     
     func performDrop(info: DropInfo) -> Bool {
-        draggedItemIndex = nil
+        draggedItemID = nil
         store.save()
         return true
     }
     
     func dropEntered(info: DropInfo) {
-        guard let from = draggedItemIndex,
-              store.items.indices.contains(from),
-              store.items.indices.contains(targetIndex),
-              from != targetIndex else { return }
+        guard let draggedItemID, draggedItemID != targetID else { return }
         
         withAnimation(.default) {
-            store.items.move(
-                fromOffsets: IndexSet(integer: from),
-                toOffset: targetIndex > from ? targetIndex + 1 : targetIndex
-            )
-            draggedItemIndex = targetIndex
+            store.move(draggedItemID, before: targetID)
         }
     }
 }

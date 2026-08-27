@@ -1206,7 +1206,7 @@ struct SettingsView: View {
             // Right content panel
             VStack(spacing: 0) {
                 // Search bar
-                HStack {
+                HStack(spacing: 8) {
                     Image(systemName: "magnifyingglass")
                         .foregroundStyle(.secondary)
                         .font(.system(size: 13))
@@ -1219,8 +1219,9 @@ struct SettingsView: View {
                     RoundedRectangle(cornerRadius: 8)
                         .fill(Color(NSColor.controlBackgroundColor).opacity(0.7))
                 )
-                .padding(.horizontal, 16)
-                .padding(.vertical, 12)
+                .padding(.horizontal, 8)
+                .padding(.top, 25)
+                .padding(.bottom, 8)
 
                 Divider()
 
