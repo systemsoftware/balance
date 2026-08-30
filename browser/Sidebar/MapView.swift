@@ -420,7 +420,7 @@ struct MapView: View {
                 
                 let text = await withCheckedContinuation { continuation in
                     DispatchQueue.main.async {
-                        webView.getCleanText { result in
+                        webView.getTextForAI(maxCharacters: 12_000) { result in
                             continuation.resume(returning: result ?? "")
                         }
                     }
@@ -478,7 +478,7 @@ struct MapView: View {
         Task {
             let text = await withCheckedContinuation { continuation in
                 DispatchQueue.main.async {
-                    webView.getCleanText { result in
+                    webView.getTextForAI(maxCharacters: 12_000) { result in
                         continuation.resume(returning: result ?? "")
                     }
                 }

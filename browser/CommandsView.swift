@@ -495,10 +495,9 @@ struct ProfileView: View {
                                        from: Data(profilesJSON.utf8))) ?? []
         }
         set {
-            profilesJSON = String(
-                data: try! JSONEncoder().encode(newValue),
-                encoding: .utf8
-            )!
+            guard let data = try? JSONEncoder().encode(newValue),
+                  let encoded = String(data: data, encoding: .utf8) else { return }
+            profilesJSON = encoded
         }
     }
     
@@ -684,10 +683,9 @@ struct ProfileView: View {
         let newProfile = Profile(name: name, icon: icon, imapHost: imapHost, imapPort: imapPort)
         current.append(newProfile)
         
-        profilesJSON = String(
-            data: try! JSONEncoder().encode(current),
-            encoding: .utf8
-        )!
+        guard let data = try? JSONEncoder().encode(current),
+              let encoded = String(data: data, encoding: .utf8) else { return }
+        profilesJSON = encoded
         
         if let email = imapEmail, let password = imapPassword {
             PasswordManager.shared.savePassword(
@@ -709,10 +707,9 @@ struct ProfileView: View {
         
         current.removeAll { $0.id == profile.id }
         
-        profilesJSON = String(
-            data: try! JSONEncoder().encode(current),
-            encoding: .utf8
-        )!
+        guard let data = try? JSONEncoder().encode(current),
+              let encoded = String(data: data, encoding: .utf8) else { return }
+        profilesJSON = encoded
         
         if #available(macOS 14.0, *) {
             WKWebsiteDataStore.remove(forIdentifier: profile.id) { error in

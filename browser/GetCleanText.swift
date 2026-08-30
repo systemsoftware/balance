@@ -3,6 +3,59 @@ import WebKit
 
 extension WKWebView {
 
+    /// Extracts a bounded amount of visible page text for an AI prompt without
+    /// cloning the document or running Readability over the entire DOM.
+    func getTextForAI(maxCharacters: Int, completion: @escaping (String?) -> Void) {
+        let limit = min(max(maxCharacters, 1), 50_000)
+        let script = """
+        (function(limit) {
+            try {
+                const ignored = new Set(['SCRIPT', 'STYLE', 'NOSCRIPT', 'IFRAME', 'SVG', 'CANVAS']);
+                const root = document.body;
+                if (!root) return null;
+
+                const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT, {
+                    acceptNode(node) {
+                        const parent = node.parentElement;
+                        if (!parent || ignored.has(parent.tagName) || parent.closest('[aria-hidden="true"]')) {
+                            return NodeFilter.FILTER_REJECT;
+                        }
+                        const value = node.nodeValue && node.nodeValue.trim();
+                        return value ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+                    }
+                });
+
+                const parts = [];
+                let count = 0;
+                let node;
+                while (count < limit && (node = walker.nextNode())) {
+                    const value = node.nodeValue.trim().replace(/\\s+/g, ' ');
+                    if (!value) continue;
+                    const remaining = limit - count;
+                    parts.push(value.slice(0, remaining));
+                    count += Math.min(value.length, remaining) + 1;
+                }
+
+                const title = (document.title || '').trim();
+                const text = parts.join('\\n').trim();
+                return (title ? title + '\\n\\n' : '') + text;
+            } catch (_) {
+                return null;
+            }
+        })(\(limit));
+        """
+
+        evaluateJavaScript(script) { result, error in
+            guard error == nil,
+                  let text = result as? String,
+                  !text.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                completion(nil)
+                return
+            }
+            completion(String(text.prefix(limit)))
+        }
+    }
+
     private static let readabilityJS: String = {
         guard let url = Bundle.main.url(forResource: "Readability", withExtension: "js"),
               let source = try? String(contentsOf: url, encoding: .utf8) else {

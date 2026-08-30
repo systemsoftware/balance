@@ -45,11 +45,10 @@ class IMAPClient: ObservableObject {
     }
     
     func fetchUnread(host: String, port: UInt16, email: String, pass: String) {
-        Task { @MainActor in
-            self.isConnecting = true
-            self.error = nil
-            self.unreadEmails = []
-        }
+        guard !isConnecting else { return }
+        isConnecting = true
+        error = nil
+        unreadEmails = []
         
         Task {
             do {
@@ -101,13 +100,15 @@ class IMAPClient: ObservableObject {
                 var c: CheckedContinuation<Void, Error>?
                 let lock = NSLock()
                 init(_ c: CheckedContinuation<Void, Error>) { self.c = c }
-                func resume() {
+                @discardableResult func resume() -> Bool {
                     lock.lock(); defer { lock.unlock() }
-                    c?.resume(); c = nil
+                    guard let c else { return false }
+                    self.c = nil; c.resume(); return true
                 }
-                func resume(throwing error: Error) {
+                @discardableResult func resume(throwing error: Error) -> Bool {
                     lock.lock(); defer { lock.unlock() }
-                    c?.resume(throwing: error); c = nil
+                    guard let c else { return false }
+                    self.c = nil; c.resume(throwing: error); return true
                 }
             }
             let wrapper = ContinuationWrapper(continuation)
@@ -134,6 +135,11 @@ class IMAPClient: ObservableObject {
                 }
             }
             conn.start(queue: queue)
+            queue.asyncAfter(deadline: .now() + 15) {
+                if wrapper.resume(throwing: IMAPError.timeout) {
+                    conn.cancel()
+                }
+            }
         }
     }
     
@@ -153,13 +159,25 @@ class IMAPClient: ObservableObject {
         }
         
         try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
-            conn.send(content: fullCommand.data(using: .utf8), completion: .contentProcessed({ error in
-                if let error = error {
-                    continuation.resume(throwing: error)
-                } else {
-                    continuation.resume()
+            final class SendWrapper: @unchecked Sendable {
+                var continuation: CheckedContinuation<Void, Error>?
+                let lock = NSLock()
+                init(_ continuation: CheckedContinuation<Void, Error>) { self.continuation = continuation }
+                @discardableResult func resume(_ error: Error? = nil) -> Bool {
+                    lock.lock(); defer { lock.unlock() }
+                    guard let continuation else { return false }
+                    self.continuation = nil
+                    if let error { continuation.resume(throwing: error) } else { continuation.resume() }
+                    return true
                 }
+            }
+            let wrapper = SendWrapper(continuation)
+            conn.send(content: fullCommand.data(using: .utf8), completion: .contentProcessed({ error in
+                wrapper.resume(error)
             }))
+            queue.asyncAfter(deadline: .now() + 15) {
+                if wrapper.resume(IMAPError.timeout) { conn.cancel() }
+            }
         }
         
         let response = try await receiveUntilTag(tag: tag)
@@ -188,19 +206,35 @@ class IMAPClient: ObservableObject {
         
         while true {
             let result: String? = try await withCheckedThrowingContinuation { continuation in
+                final class ReceiveWrapper: @unchecked Sendable {
+                    var continuation: CheckedContinuation<String?, Error>?
+                    let lock = NSLock()
+                    init(_ continuation: CheckedContinuation<String?, Error>) { self.continuation = continuation }
+                    @discardableResult func resume(returning value: String? = nil, throwing error: Error? = nil) -> Bool {
+                        lock.lock(); defer { lock.unlock() }
+                        guard let continuation else { return false }
+                        self.continuation = nil
+                        if let error { continuation.resume(throwing: error) } else { continuation.resume(returning: value) }
+                        return true
+                    }
+                }
+                let wrapper = ReceiveWrapper(continuation)
                 conn.receive(minimumIncompleteLength: 1, maximumLength: 65536) { data, _, isComplete, error in
                     if let error = error {
-                        continuation.resume(throwing: error)
+                        wrapper.resume(throwing: error)
                         return
                     }
                     if let data = data {
                         let str = String(data: data, encoding: .utf8) ?? ""
-                        continuation.resume(returning: str)
+                        wrapper.resume(returning: str)
                     } else if isComplete {
-                        continuation.resume(throwing: IMAPError.disconnected)
+                        wrapper.resume(throwing: IMAPError.disconnected)
                     } else {
-                        continuation.resume(returning: nil)
+                        wrapper.resume()
                     }
+                }
+                queue.asyncAfter(deadline: .now() + 15) {
+                    if wrapper.resume(throwing: IMAPError.timeout) { conn.cancel() }
                 }
             }
             if let result = result {

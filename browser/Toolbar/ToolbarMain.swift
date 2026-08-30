@@ -70,6 +70,7 @@ struct BrowserToolbar: View {
     
     @ObservedObject var browserState: BrowserState
     @ObservedObject var sidebarStore: SidebarStore
+    @ObservedObject var bookmarkStore: BookmarkStore
     @StateObject var toolbarStore = ToolbarStore()
     @Binding var location: URL?
     @Binding var urlInput: String
@@ -104,6 +105,7 @@ struct BrowserToolbar: View {
                         item: entry.item,
                         browserState: browserState,
                         sidebarStore: sidebarStore,
+                        bookmarkStore: bookmarkStore,
                         location: $location,
                         urlInput: $urlInput,
                         showTrustInfo: $showTrustInfo,
@@ -189,6 +191,7 @@ struct BrowserToolbar: View {
         
         @ObservedObject var browserState: BrowserState
         @ObservedObject var sidebarStore: SidebarStore
+        @ObservedObject var bookmarkStore: BookmarkStore
         
         @Binding var location: URL?
         @Binding var urlInput: String
@@ -266,7 +269,7 @@ struct BrowserToolbar: View {
                 ExtensionsToolbarButton(browserState: browserState, location: $location)
                 
             case .saveTo:
-                SaveToToolbarButton(location: $location, sidebarStore: sidebarStore)
+                SaveToToolbarButton(location: $location, sidebarStore: sidebarStore, bookmarkStore: bookmarkStore)
                 
             case .splitView:
                 SplitViewToolbarButton(splitURL: $splitURL, splitState: splitState)

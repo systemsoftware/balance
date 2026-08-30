@@ -4,8 +4,7 @@ struct SaveToToolbarButton: View {
     
     @Binding var location: URL?
     @ObservedObject var sidebarStore: SidebarStore
-    
-    @ObservedObject private var bookmarkStore = BookmarkStore()
+    @ObservedObject var bookmarkStore: BookmarkStore
     
     var body: some View {
         

@@ -16,10 +16,9 @@ struct RSSView: View {
                                        from: Data(rssFeedsStr.utf8))) ?? []
         }
         set {
-            rssFeedsStr = String(
-                data: try! JSONEncoder().encode(newValue),
-                encoding: .utf8
-            )!
+            guard let data = try? JSONEncoder().encode(newValue),
+                  let encoded = String(data: data, encoding: .utf8) else { return }
+            rssFeedsStr = encoded
         }
     }
     
@@ -117,10 +116,9 @@ struct RSSView: View {
     }
 
     private func saveFeeds(_ feeds: [String]) {
-        rssFeedsStr = String(
-            data: try! JSONEncoder().encode(feeds),
-            encoding: .utf8
-        )!
+        guard let data = try? JSONEncoder().encode(feeds),
+              let encoded = String(data: data, encoding: .utf8) else { return }
+        rssFeedsStr = encoded
     }
     
     }

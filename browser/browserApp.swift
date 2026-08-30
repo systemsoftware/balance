@@ -357,7 +357,7 @@ enum BrowserCommand: String, CaseIterable {
     // Page
     case reload, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow, openInFocus
-    case copyURL, printPage, toggleReader, renameTab, savePage
+    case copyURL, addToBookmarks, addToSidebar, printPage, toggleReader, renameTab, savePage
     case findInPage
     case forceReload
     case summarize, addEvents, cite
@@ -380,6 +380,8 @@ enum BrowserCommand: String, CaseIterable {
         case .duplicateWindow: return "In New Window"
         case .openInFocus: return "Open in Focus"
         case .copyURL: return "Copy URL"
+        case .addToBookmarks: return "Add to Bookmarks"
+        case .addToSidebar: return "Add to Sidebar"
         case .printPage: return "Print"
         case .toggleReader: return "Reader"
         case .renameTab: return "Rename Tab"
@@ -428,6 +430,7 @@ enum BrowserCommand: String, CaseIterable {
         case .zoomOut: return KeyboardShortcut("-", modifiers: [.command])
         case .toggleMute: return KeyboardShortcut("m", modifiers: [.command, .shift])
         case .copyURL: return KeyboardShortcut("c", modifiers: [.command, .control])
+        case .addToBookmarks: return KeyboardShortcut("d", modifiers: [.command])
         case .printPage: return KeyboardShortcut("p", modifiers: [.command])
         case .savePage: return KeyboardShortcut("s", modifiers: [.command,  .option])
         case .toggleReader: return KeyboardShortcut("r", modifiers: [.command, .option])
@@ -446,7 +449,7 @@ enum BrowserCommand: String, CaseIterable {
     var requiresDividerAfter: Bool {
         switch self {
         case .reload, .searchTabs, .reopenLastTab, .downloads, .history: return true
-        case .resetZoom, .toggleMute, .openInFocus, .copyURL, .printPage, .toggleReader, .renameTab, .closeTab, .savePage: return true
+        case .resetZoom, .toggleMute, .openInFocus, .copyURL, .addToSidebar, .printPage, .toggleReader, .renameTab, .closeTab, .savePage: return true
         case .zoomOut, .duplicateWindow: return true
         case .summarize, .addEvents, .forceReload, .cite, .shortcut: return true
         default: return false
@@ -576,12 +579,12 @@ func getItemsAndGroups(from commands: [BrowserCommand]) -> [any MenuElement] {
 
 
 func cleanTemporaryDirectory() {
+    // Only remove temporary files created under Balance's own namespace.
     let tmpDir = FileManager.default.temporaryDirectory
+        .appendingPathComponent("Balance", isDirectory: true)
+    guard FileManager.default.fileExists(atPath: tmpDir.path) else { return }
     do {
-        let tmpFiles = try FileManager.default.contentsOfDirectory(at: tmpDir, includingPropertiesForKeys: nil)
-        for file in tmpFiles {
-            try FileManager.default.removeItem(at: file)
-        }
+        try FileManager.default.removeItem(at: tmpDir)
     } catch {
         print("Failed to clear tmp: \(error)")
     }

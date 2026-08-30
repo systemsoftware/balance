@@ -218,7 +218,8 @@ struct BoostView: View {
             css += customCSS + "\n"
         }
         
-        guard let jsCSSString = String(data: try! JSONEncoder().encode(css), encoding: .utf8) else { return }
+        guard let data = try? JSONEncoder().encode(css),
+              let jsCSSString = String(data: data, encoding: .utf8) else { return }
         
         let jsCode = """
         (function() {

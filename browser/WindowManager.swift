@@ -129,7 +129,7 @@ final class WindowManager: ObservableObject {
         
         if let names = session.spaceNames, !names.isEmpty {
             self.spaceNames = names
-            self.currentSpaceIndex = session.currentSpaceIndex ?? 0
+            self.currentSpaceIndex = min(max(session.currentSpaceIndex ?? 0, 0), names.count - 1)
         }
 
         let restoredWindows = session.windows.compactMap { windowState -> BrowserWindowModel? in
@@ -142,7 +142,7 @@ final class WindowManager: ObservableObject {
                     isPrivate: tabState.isPrivate,
                     profile: tabState.profile,
                     restoredState: tabState,
-                    spaceIndex: tabState.spaceIndex ?? currentSpaceIndex
+                    spaceIndex: min(max(tabState.spaceIndex ?? currentSpaceIndex, 0), spaceNames.count - 1)
                 )
             }
             guard !tabs.isEmpty else { return nil }

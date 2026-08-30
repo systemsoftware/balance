@@ -9,7 +9,7 @@ func createSummaryWindow(state: BrowserState) async {
             continuation.resume(returning: "")
             return
         }
-        webView.getCleanText { result in
+        webView.getTextForAI(maxCharacters: 3_000) { result in
             continuation.resume(returning: result ?? "")
         }
     }
@@ -23,7 +23,7 @@ func createSummaryWindow(state: BrowserState) async {
         return
     }
 
-    let prompt = String("Summarize this page: \(cleanedText)".prefix(3000))
+    let prompt = "Summarize this page: \(cleanedText)"
     
     do {
         

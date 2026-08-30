@@ -206,10 +206,9 @@ struct ContentView: View {
                                        from: Data(profilesJSON.utf8))) ?? []
         }
         set {
-            profilesJSON = String(
-                data: try! JSONEncoder().encode(newValue),
-                encoding: .utf8
-            )!
+            guard let data = try? JSONEncoder().encode(newValue),
+                  let encoded = String(data: data, encoding: .utf8) else { return }
+            profilesJSON = encoded
         }
     }
 
@@ -329,6 +328,7 @@ struct ContentView: View {
             BrowserToolbar(
                 browserState: browserState,
                 sidebarStore: sidebarStore,
+                bookmarkStore: bookmarkStore,
                 location: $location,
                 urlInput: $urlInput,
                 showTrustInfo: $showTrustInfo,
@@ -497,7 +497,7 @@ struct ContentView: View {
                             
                             switch sidebarURL.absoluteString {
                             case let str where str.contains("Chat"):
-                                ChatView(contentV: self)
+                                ChatView(browserState: browserState)
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("Bookmark"):
@@ -751,6 +751,22 @@ struct ContentView: View {
                 if let url = location {
                     NSPasteboard.general.clearContents()
                     NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                }
+            case .addToBookmarks:
+                if let url = location,
+                   ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                    bookmarkStore.add(Bookmark(
+                        title: browserState.title.isEmpty ? (url.host() ?? "Unnamed") : browserState.title,
+                        url: url.absoluteString
+                    ))
+                }
+            case .addToSidebar:
+                if let url = location,
+                   ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                    sidebarStore.add(SidebarItem(
+                        icon: "https://www.google.com/s2/favicons?domain=\(url.host() ?? "")",
+                        url: url
+                    ))
                 }
             case .printPage: printCurrentPage()
             case .toggleReader: showReader.toggle()
@@ -1011,11 +1027,10 @@ struct ContentView: View {
         
         guard let citationStyle = style else { return }
         
+        guard let webView = browserState.webView else { return }
         let text = await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                browserState.webView?.getCleanText { result in
-                    continuation.resume(returning: result ?? "")
-                }
+            webView.getTextForAI(maxCharacters: 2_000) { result in
+                continuation.resume(returning: result ?? "")
             }
         }
 
@@ -1062,16 +1077,16 @@ struct ContentView: View {
     func scanEvents() async {
         
         scanningForEvents = true
+        defer { scanningForEvents = false }
         
         let calendar = Calendar.current
         let currentYear = calendar.component(.year, from: Date())
         let currentDateString = ISO8601DateFormatter().string(from: Date())
         
+        guard let webView = browserState.webView else { return }
         let text = await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                browserState.webView?.getCleanText { result in
-                    continuation.resume(returning: result ?? "")
-                }
+            webView.getTextForAI(maxCharacters: 2_500) { result in
+                continuation.resume(returning: result ?? "")
             }
         }
         
@@ -1123,8 +1138,6 @@ struct ContentView: View {
 
             guard !decoded.events.isEmpty else { return }
             
-            scanningForEvents = false
-            
             let calManager = MacCalendarManager()
 
             if decoded.events.count == 1 {
@@ -1143,7 +1156,6 @@ struct ContentView: View {
             
         } catch {
             print(error)
-            scanningForEvents = false
         }
         
     }

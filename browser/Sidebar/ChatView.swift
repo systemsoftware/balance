@@ -31,7 +31,8 @@ struct ChatView: View {
     @State var selectedSessionId: ChatSession.ID? = nil
     
     @State private var query: String = ""
-    @State var session: LanguageModelSession? = LanguageModelSession()
+    @State private var modelSessions: [ChatSession.ID: LanguageModelSession] = [:]
+    @State private var respondingSessionIDs: Set<ChatSession.ID> = []
    
     private var currentSessionIndex: Int {
         if let selectedSessionId,
@@ -53,15 +54,13 @@ struct ChatView: View {
         )
     }
     
-    @State var hasSession = false
-    
     @State var showRename = false
     @State var sessionRename = ""
     
-    var contentView: ContentView
+    @ObservedObject var browserState: BrowserState
     
-    init(contentV:ContentView) {
-        self.contentView = contentV
+    init(browserState: BrowserState) {
+        self.browserState = browserState
         
         let store = ChatStore()
         self.chatStore = store
@@ -94,6 +93,13 @@ struct ChatView: View {
             inputBar
         }
         .background(Color.black.opacity(0.1))
+        .onChange(of: browserState.url) { _, _ in
+            // Page context is only valid for the document it was extracted from.
+            // Invalidate any late WebKit callback from the previous navigation.
+            pageExtractionID = nil
+            isAddingCurrentPage = false
+            CurrentPage = ""
+        }
     }
     
     private var chatTabs: some View {
@@ -120,8 +126,8 @@ struct ChatView: View {
                                         selectedSessionId = sessions.first?.id
                                         chatStore.items = sessions
                                         chatStore.save()
-                                        hasSession = false
-                                        self.session = nil
+                                        modelSessions.removeValue(forKey: session.id)
+                                        respondingSessionIDs.remove(session.id)
                                     }
                                 }
                                 Divider()
@@ -247,6 +253,8 @@ struct ChatView: View {
     }
     
     @State var CurrentPage: String = ""
+    @State private var isAddingCurrentPage = false
+    @State private var pageExtractionID: UUID?
 
     // Bottom Input Bar
     private var inputBar: some View {
@@ -257,19 +265,39 @@ struct ChatView: View {
                         CurrentPage = ""
                         return
                     }
-                    if let webView = contentView.browserState.webView {
-                        webView.getCleanText { cleanedText in
+                    guard !isAddingCurrentPage,
+                          let webView = browserState.webView else { return }
+
+                    isAddingCurrentPage = true
+                    let extractionID = UUID()
+                    let sourceURL = webView.url
+                    pageExtractionID = extractionID
+                    let characterLimit = min(max(pageCutoff, 1), 50_000)
+                    webView.getTextForAI(maxCharacters: characterLimit) { [weak webView] cleanedText in
+                        DispatchQueue.main.async {
+                            guard pageExtractionID == extractionID,
+                                  let webView,
+                                  webView === browserState.webView,
+                                  webView.url == sourceURL else { return }
                             if let content = cleanedText {
                                 self.CurrentPage = content
                             }
+                            self.pageExtractionID = nil
+                            self.isAddingCurrentPage = false
                         }
                     }
                 }) {
-                    Image(systemName: CurrentPage.count == 0 ? "doc.text" : "doc.text.fill")
-                        .font(.system(size: 20))
-                        .foregroundColor(CurrentPage.count == 0 ? .secondary : .accentColor)
+                    if isAddingCurrentPage {
+                        ProgressView()
+                            .controlSize(.small)
+                    } else {
+                        Image(systemName: CurrentPage.count == 0 ? "doc.text" : "doc.text.fill")
+                            .font(.system(size: 20))
+                            .foregroundColor(CurrentPage.count == 0 ? .secondary : .accentColor)
+                    }
                 }
                 .buttonStyle(.plain)
+                .disabled(isAddingCurrentPage)
                 .help(CurrentPage.count == 0 ? "Add Current Page" : "Remove Current Page")
                 
                 TextField("Ask anything...", text: $query, axis: .vertical)
@@ -285,7 +313,7 @@ struct ChatView: View {
                         .foregroundColor(query.trimmingCharacters(in: .whitespaces).isEmpty ? .secondary : .accentColor)
                 }
                 .buttonStyle(.plain)
-                .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty)
+                .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || respondingSessionIDs.contains(sessions[currentSessionIndex].id))
             }
             .padding(.horizontal, 16)
             .padding(.vertical, 12)
@@ -309,10 +337,16 @@ struct ChatView: View {
 
     // Logic Functions
     private func sendMessage() {
-        guard !query.isEmpty else { return }
+        let submittedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !submittedQuery.isEmpty else { return }
+        let currentSessionID = sessions[currentSessionIndex].id
+        guard !respondingSessionIDs.contains(currentSessionID) else { return }
         
-        let cappedPage = String(CurrentPage.prefix(12000))
-        let currentQuery = "\(cappedPage) \(query)"
+        let characterLimit = min(max(pageCutoff, 1), 50_000)
+        let cappedPage = String(CurrentPage.prefix(characterLimit))
+        let currentQuery = cappedPage.isEmpty
+            ? submittedQuery
+            : "Page context:\n\(cappedPage)\n\nUser question:\n\(submittedQuery)"
         
         if sessions[currentSessionIndex].items.isEmpty {
             let titleQuery = currentQuery
@@ -333,19 +367,30 @@ struct ChatView: View {
         
         query = ""
         
-        let newItem = ChatItem(query: currentQuery, response: "")
+        // Page context belongs in the model prompt, not the rendered or persisted
+        // chat item. Keeping it here caused large pages to be copied repeatedly.
+        let newItem = ChatItem(query: submittedQuery, response: "")
         let itemID = newItem.id
-        let currentSessionID = sessions[currentSessionIndex].id
         sessions[currentSessionIndex].items.append(newItem)
+        respondingSessionIDs.insert(currentSessionID)
         
         chatStore.items = sessions
         chatStore.save()
         
         Task {
+            defer {
+                Task { @MainActor in
+                    respondingSessionIDs.remove(currentSessionID)
+                }
+            }
             do {
-                if !hasSession {
-                    session = LanguageModelSession(instructions: inst)
-                    hasSession = true
+                let activeModelSession: LanguageModelSession
+                if let existing = modelSessions[currentSessionID] {
+                    activeModelSession = existing
+                } else {
+                    let created = LanguageModelSession(instructions: inst)
+                    modelSessions[currentSessionID] = created
+                    activeModelSession = created
                 }
                 
                 let options = GenerationOptions(
@@ -353,7 +398,6 @@ struct ChatView: View {
                     maximumResponseTokens: maxTokens
                 )
                 
-                guard let activeModelSession = session else { return }
                 let stream = activeModelSession.streamResponse(
                     to: currentQuery,
                     options: options
@@ -384,9 +428,10 @@ struct ChatView: View {
     }
 
     private func resetSession() {
-        hasSession = false
+        let sessionID = sessions[currentSessionIndex].id
         sessions[currentSessionIndex].items.removeAll()
-        session = nil
+        modelSessions.removeValue(forKey: sessionID)
+        respondingSessionIDs.remove(sessionID)
         chatStore.items = sessions
         chatStore.save()
     }

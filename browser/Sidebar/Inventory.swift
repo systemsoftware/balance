@@ -34,14 +34,17 @@ final class InventoryItem: Identifiable, Hashable {
 
 struct InventorySidebar: View {
 
-    static let sharedContainer: ModelContainer = {
+    static let sharedContainer: ModelContainer? = {
         let schema = Schema([InventoryItem.self])
         do {
             guard let appSupport = FileManager.default.urls(
                 for: .applicationSupportDirectory,
                 in: .userDomainMask
             ).first else {
-                fatalError("Unable to locate Application Support")
+                return try? ModelContainer(
+                    for: schema,
+                    configurations: [ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)]
+                )
             }
             let directory = appSupport.appendingPathComponent("Inventory", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -49,7 +52,9 @@ struct InventorySidebar: View {
             let configuration = ModelConfiguration("Inventory", schema: schema, url: storeURL)
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
-            fatalError("Unable to open inventory store: \(error)")
+            print("Unable to open inventory store; using memory-only storage: \(error)")
+            let fallback = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+            return try? ModelContainer(for: schema, configurations: [fallback])
         }
     }()
 
@@ -103,8 +108,9 @@ struct InventorySidebar: View {
             return true
         }
         .task {
+            guard let context = InventorySidebar.sharedContainer?.mainContext else { return }
             do {
-                self.items = try InventorySidebar.sharedContainer.mainContext.fetch(FetchDescriptor<InventoryItem>())
+                self.items = try context.fetch(FetchDescriptor<InventoryItem>())
             } catch {
                 print(error)
             }
@@ -224,7 +230,7 @@ struct InventorySidebar: View {
     }
 
     private func delete(_ item: InventoryItem) {
-        let context = InventorySidebar.sharedContainer.mainContext
+        guard let context = InventorySidebar.sharedContainer?.mainContext else { return }
         do {
             context.delete(item)
             try context.save()
@@ -345,7 +351,7 @@ struct InventorySidebar: View {
         let appSupport = fileManager.urls(
             for: .applicationSupportDirectory,
             in: .userDomainMask
-        ).first!
+        ).first ?? fileManager.temporaryDirectory
 
         let directory = appSupport
             .appendingPathComponent("Inventory", isDirectory: true)
@@ -461,7 +467,10 @@ struct InventorySidebar: View {
 
     @MainActor
     private func addInventoryItem(_ url: URL) {
-        let context = InventorySidebar.sharedContainer.mainContext
+        guard let context = InventorySidebar.sharedContainer?.mainContext else {
+            try? FileManager.default.removeItem(at: url)
+            return
+        }
         let item = InventoryItem(
             name: url.lastPathComponent,
             url: url,
@@ -482,7 +491,7 @@ struct InventorySidebar: View {
     @MainActor
     private func addLinkItem(_ url: URL) {
         guard url.isFileURL || url.scheme != nil else { return }
-        let context = InventorySidebar.sharedContainer.mainContext
+        guard let context = InventorySidebar.sharedContainer?.mainContext else { return }
         do {
             let displayName: String = {
                 let lastComponent = url.lastPathComponent
