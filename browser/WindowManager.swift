@@ -81,6 +81,7 @@ final class WindowManager: ObservableObject {
     var openWindow: ((String) -> Void)?
     private var queuedWindowIDs: [String] = []
     private var didRestoreSavedSession = false
+    private var pendingTabCleanup: [String: BrowserTabModel] = [:]
 
     var initialWindowID: String {
         ensureInitialWindow()
@@ -217,10 +218,8 @@ final class WindowManager: ObservableObject {
         window.activeTabID = tabID
         let wasNotActive = activeWindowID != window.id
         activeWindowID = window.id
-        if let tab = window.activeTab {
-            tab.browserState.isSleeping = false
-            WebExtensionManager.shared.activeTab = tab.browserState
-        }
+        window.activeTab?.browserState.isSleeping = false
+        syncExtensionActiveTab()
         if wasNotActive {
             openBrowserWindow(window.id)
         }
@@ -231,6 +230,14 @@ final class WindowManager: ObservableObject {
         guard let windowIndex = browserWindows.firstIndex(where: { $0.tabs.contains(where: { $0.id == tabID }) }) else { return }
         let window = browserWindows[windowIndex]
         guard let tabIndex = window.tabs.firstIndex(where: { $0.id == tabID }) else { return }
+
+        // Resign any address/search/sidebar field while its full view hierarchy
+        // still exists. AppKit can then repair the key-view loop before SwiftUI
+        // removes the active tab's hosting views.
+        if window.activeTabID == tabID {
+            tabWindow(for: window)?.makeFirstResponder(nil)
+        }
+
         // Determine next active tab BEFORE removing the current one to prevent SwiftUI from rendering a gray window
         if window.activeTabID == tabID && window.tabs.count > 1 {
             let nextActiveIndex = (tabIndex == window.tabs.count - 1) ? tabIndex - 1 : tabIndex + 1
@@ -246,15 +253,16 @@ final class WindowManager: ObservableObject {
             Config.sharedDefaults?.removeObject(forKey: "note_\(tabID)")
         }
 
-        cleanup(tabID: tab.id)
-        tab.browserState.cleanup()
-        TabRegistry.shared.states.removeValue(forKey: tabID)
+        scheduleCleanup(for: tab)
 
         if window.tabs.isEmpty {
             closeWindow(window.id)
             return
         }
         rebuildTabProjection()
+        if activeWindowID == window.id {
+            syncExtensionActiveTab()
+        }
         objectWillChange.send()
     }
 
@@ -274,14 +282,13 @@ final class WindowManager: ObservableObject {
 
     func closeWindow(_ windowID: String) {
         guard let index = browserWindows.firstIndex(where: { $0.id == windowID }) else { return }
+        tabWindow(for: browserWindows[index])?.makeFirstResponder(nil)
         let window = browserWindows.remove(at: index)
         for tab in window.tabs {
             if let state = TabRegistry.shared.states[tab.id] {
                 SessionManager.shared.lastClosedURL = state.url
             }
-            cleanup(tabID: tab.id)
-            tab.browserState.cleanup()
-            TabRegistry.shared.states.removeValue(forKey: tab.id)
+            scheduleCleanup(for: tab)
         }
 
         if browserWindows.isEmpty {
@@ -292,6 +299,27 @@ final class WindowManager: ObservableObject {
             activeWindowID = browserWindows.first?.id
         }
         rebuildTabProjection()
+        syncExtensionActiveTab()
+    }
+
+    func renameSpace(at index: Int, to proposedName: String) {
+        guard spaceNames.indices.contains(index) else { return }
+        spaceNames[index] = proposedName.isEmpty ? "Space \(index + 1)" : proposedName
+    }
+
+    func removeSpace(at index: Int) {
+        guard spaceNames.count > 1, spaceNames.indices.contains(index) else { return }
+
+        let closingIDs = windows.filter { $0.spaceIndex == index }.map(\.tabID)
+        for tabID in closingIDs {
+            closeTab(tabID)
+        }
+        for tab in windows where tab.spaceIndex > index {
+            tab.spaceIndex -= 1
+        }
+
+        spaceNames.remove(at: index)
+        currentSpaceIndex = min(currentSpaceIndex, spaceNames.count - 1)
     }
 
     func tabs(inSameWindowAs tabID: String) -> [BrowserState] {
@@ -354,14 +382,46 @@ final class WindowManager: ObservableObject {
         }
     }
 
-    private func cleanup(tabID: String) {
-        let closingIDs = [tabID, tabID + "_split"]
-        DispatchQueue.main.asyncAfter(deadline: .now() + 0.5) {
-            let closingStates = WebExtensionManager.shared.allTabs.filter { closingIDs.contains($0.tabID) }
-            for state in closingStates {
-                state.cleanup()
+    private func syncExtensionActiveTab() {
+        guard let activeWindowID,
+              let window = browserWindows.first(where: { $0.id == activeWindowID }) else {
+            WebExtensionManager.shared.activeTab = nil
+            return
+        }
+        WebExtensionManager.shared.activeTab = window.activeTab?.browserState
+    }
+
+    private func tabWindow(for window: BrowserWindowModel) -> NSWindow? {
+        for tab in window.tabs {
+            if let nsWindow = tab.browserState.webView?.window {
+                return nsWindow
             }
         }
+        return NSApp.keyWindow
+    }
+
+    private func scheduleCleanup(for tab: BrowserTabModel) {
+        pendingTabCleanup[tab.id] = tab
+
+        // onDisappear normally drives teardown. Keep a fallback for tabs whose
+        // window is destroyed before SwiftUI can deliver the lifecycle callback.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 2) { [weak self] in
+            self?.finishCleanup(tabID: tab.id)
+        }
+    }
+
+    func finishCleanup(tabID: String) {
+        guard let tab = pendingTabCleanup.removeValue(forKey: tabID) else { return }
+        let closingIDs = [tabID, tabID + "_split"]
+
+        tab.browserState.cleanup()
+        let lingeringStates = WebExtensionManager.shared.allTabs.filter {
+            closingIDs.contains($0.tabID)
+        }
+        for state in lingeringStates {
+            state.cleanup()
+        }
+        TabRegistry.shared.states.removeValue(forKey: tabID)
     }
 }
 
@@ -556,6 +616,9 @@ private struct BrowserWindowTabContainer: View {
             if newActiveID == tab.id {
                 hasAppearedActive = true
             }
+        }
+        .onDisappear {
+            windowManager.finishCleanup(tabID: tab.id)
         }
     }
 }

@@ -128,13 +128,9 @@ private struct AddressField: View {
 }
 
 private final class IsolatedTextField: NSTextField {
-    override var nextKeyView: NSView? {
-        get { nil }
-        set { }
-    }
-    override var previousKeyView: NSView? { nil }
-    override var nextValidKeyView: NSView? { nil }
-    override var previousValidKeyView: NSView? { nil }
+    // Exclude this field from automatic traversal, but leave AppKit's key-view
+    // links intact so it can safely unlink the field during tab teardown.
+    override var canBecomeKeyView: Bool { false }
 }
 
 private struct NativeAddressField: NSViewRepresentable {

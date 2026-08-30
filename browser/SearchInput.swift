@@ -23,16 +23,11 @@ struct SearchInputVisualConfig {
 // SwiftUI's FocusBridge deadlocks while resolving the key-view loop on
 // macOS 26/27 beta whenever a TextField backed by @FocusState is clicked.
 // Using NSViewRepresentable keeps the text field out of that path entirely.
-// The IsolatedSearchField subclass also severs the key-view chain so the
-// system cannot traverse into SwiftUI-managed views when focus is set.
+// Keep the field out of automatic keyboard traversal without overriding
+// AppKit's next/previous key-view storage. AppKit must be allowed to maintain
+// and clear those links when a SwiftUI hosting view is dismantled.
 final class IsolatedSearchField: NSTextField {
-    override var nextKeyView: NSView? {
-        get { nil }
-        set { /* intentionally ignored */ }
-    }
-    override var previousKeyView: NSView? { nil }
-    override var nextValidKeyView: NSView? { nil }
-    override var previousValidKeyView: NSView? { nil }
+    override var canBecomeKeyView: Bool { false }
 }
 
 struct NativeSearchField: NSViewRepresentable {

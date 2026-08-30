@@ -179,7 +179,7 @@ struct Tabs: View {
                     VStack(spacing: 8) {
                         Divider().opacity(0.3)
                         HStack(spacing: 12) {
-                            ForEach(0..<windowManager.spaceNames.count, id: \.self) { index in
+                            ForEach(Array(windowManager.spaceNames.enumerated()), id: \.offset) { index, spaceName in
                                 Circle()
                                     .fill(windowManager.currentSpaceIndex == index ? Color.primary : Color.secondary.opacity(0.3))
                                     .frame(width: 8, height: 8)
@@ -196,37 +196,24 @@ struct Tabs: View {
                                             alert.addButton(withTitle: "Cancel")
                                             
                                             let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-                                            input.stringValue = windowManager.spaceNames[index]
+                                            input.stringValue = spaceName
                                             alert.accessoryView = input
                                             alert.window.initialFirstResponder = input
                                             
                                             if alert.runModal() == .alertFirstButtonReturn {
-                                                windowManager.spaceNames[index] = input.stringValue.isEmpty ? "Space \(index + 1)" : input.stringValue
+                                                windowManager.renameSpace(at: index, to: input.stringValue)
                                             }
                                         }
                                         if windowManager.spaceNames.count > 1 {
                                             Button("Remove Space", role: .destructive) {
-                                                // Close tabs in this space and reassign remaining
-                                                let closingIDs = windowManager.windows.filter { $0.spaceIndex == index }.map(\.tabID)
-                                                for tabID in closingIDs {
-                                                    windowManager.closeTab(tabID)
-                                                }
-                                                for tab in windowManager.windows {
-                                                    if tab.spaceIndex > index {
-                                                        tab.spaceIndex -= 1
-                                                    }
-                                                }
-                                                windowManager.spaceNames.remove(at: index)
-                                                if windowManager.currentSpaceIndex >= windowManager.spaceNames.count {
-                                                    windowManager.currentSpaceIndex = windowManager.spaceNames.count - 1
-                                                }
+                                                windowManager.removeSpace(at: index)
                                             }
                                         }
                                         
                                         Toggle("Show Spaces", isOn: $showSpaces)
 
                                     }
-                                    .help(windowManager.spaceNames[index])
+                                    .help(spaceName)
                                 
                             }
                             
@@ -252,14 +239,14 @@ struct Tabs: View {
                     if showSpaces {
                         
                         Menu {
-                            ForEach(0..<windowManager.spaceNames.count, id: \.self) { index in
+                            ForEach(Array(windowManager.spaceNames.enumerated()), id: \.offset) { index, spaceName in
                                 Button {
                                     withAnimation { windowManager.currentSpaceIndex = index }
                                 } label: {
                                     if windowManager.currentSpaceIndex == index {
-                                        Label(windowManager.spaceNames[index], systemImage: "checkmark")
+                                        Label(spaceName, systemImage: "checkmark")
                                     } else {
-                                        Text(windowManager.spaceNames[index])
+                                        Text(spaceName)
                                     }
                                 }
                             }
@@ -285,31 +272,20 @@ struct Tabs: View {
                                 alert.addButton(withTitle: "Cancel")
                                 
                                 let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
+                                guard windowManager.spaceNames.indices.contains(index) else { return }
                                 input.stringValue = windowManager.spaceNames[index]
                                 alert.accessoryView = input
                                 alert.window.initialFirstResponder = input
                                 
                                 if alert.runModal() == .alertFirstButtonReturn {
-                                    windowManager.spaceNames[index] = input.stringValue.isEmpty ? "Space \(index + 1)" : input.stringValue
+                                    windowManager.renameSpace(at: index, to: input.stringValue)
                                 }
                             }
                             
                             if windowManager.spaceNames.count > 1 {
                                 Button("Remove Space", role: .destructive) {
                                     let index = windowManager.currentSpaceIndex
-                                    let closingIDs = windowManager.windows.filter { $0.spaceIndex == index }.map(\.tabID)
-                                    for tabID in closingIDs {
-                                        windowManager.closeTab(tabID)
-                                    }
-                                    for tab in windowManager.windows {
-                                        if tab.spaceIndex > index {
-                                            tab.spaceIndex -= 1
-                                        }
-                                    }
-                                    windowManager.spaceNames.remove(at: index)
-                                    if windowManager.currentSpaceIndex >= windowManager.spaceNames.count {
-                                        windowManager.currentSpaceIndex = windowManager.spaceNames.count - 1
-                                    }
+                                    windowManager.removeSpace(at: index)
                                 }
                             }
                             
@@ -602,9 +578,9 @@ private struct TabRow: View {
             Divider()
             
             Menu("Move to Space") {
-                ForEach(0..<windowManager.spaceNames.count, id: \.self) { index in
+                ForEach(Array(windowManager.spaceNames.enumerated()), id: \.offset) { index, spaceName in
                     if index != state.spaceIndex {
-                        Button(windowManager.spaceNames[index]) {
+                        Button(spaceName) {
                             withAnimation {
                                 state.spaceIndex = index
                             }
