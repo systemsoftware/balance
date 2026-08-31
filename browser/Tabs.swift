@@ -36,8 +36,6 @@ struct Tabs: View {
         }
     }
     
-    @State private var isHorizAnimatingIn = false
-
     var body: some View {
         VStack(spacing: 0) {
             if tabMode != 0 {
@@ -155,7 +153,8 @@ struct Tabs: View {
                                         state: tab,
                                         isActive: tab === browserState,
                                         isHovered: hoveredID == ObjectIdentifier(tab),
-                                        pinStore: store
+                                        pinStore: store,
+                                        animateInsertion: tab.shouldAnimateTabInsertion
                                     )
                                     .padding(.horizontal, 8)
                                     .onHover { over in
@@ -298,17 +297,12 @@ struct Tabs: View {
                             isActive: tab === browserState,
                             isHovered: hoveredID == ObjectIdentifier(tab),
                             pinStore: store,
-                            showURL:false
+                            showURL:false,
+                            animateInsertion: tab.shouldAnimateTabInsertion
                         )
                         .onHover { over in
                             withAnimation(.easeInOut(duration: 0.12)) {
                                 hoveredID = over ? ObjectIdentifier(tab) : nil
-                            }
-                        }
-                        .offset(x: isHorizAnimatingIn ? 0 : 400)
-                        .onAppear {
-                            withAnimation(.easeInOut(duration: 0.3)) {
-                                isHorizAnimatingIn = true
                             }
                         }
                         .onDrag {
@@ -446,9 +440,28 @@ private struct TabRow: View {
     let isHovered: Bool
     var pinStore: PinStore
     var showURL = true
+    let animateInsertion: Bool
     @EnvironmentObject var windowManager: WindowManager
+    @State private var insertionFinished: Bool
     
     @AppStorage("tabMode", store:Config.sharedDefaults) var tabMode = 0
+
+    init(
+        state: BrowserState,
+        isActive: Bool,
+        isHovered: Bool,
+        pinStore: PinStore,
+        showURL: Bool = true,
+        animateInsertion: Bool = false
+    ) {
+        self.state = state
+        self.isActive = isActive
+        self.isHovered = isHovered
+        self.pinStore = pinStore
+        self.showURL = showURL
+        self.animateInsertion = animateInsertion
+        self._insertionFinished = State(initialValue: !animateInsertion)
+    }
 
     var body: some View {
         HStack(spacing: 8) {
@@ -535,6 +548,14 @@ private struct TabRow: View {
             }
         }
         .contentShape(RoundedRectangle(cornerRadius: 9))
+        .offset(x: insertionFinished ? 0 : 400)
+        .onAppear {
+            guard animateInsertion, !insertionFinished else { return }
+            state.shouldAnimateTabInsertion = false
+            withAnimation(.easeInOut(duration: 0.3)) {
+                insertionFinished = true
+            }
+        }
         .onTapGesture {
             switchToTab(tabID: state.tabID)
         }

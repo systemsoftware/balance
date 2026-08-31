@@ -11,6 +11,7 @@ final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
     let profileIcon: String
     let restoredState: TabSessionState?
     let browserState: BrowserState
+    var shouldDeferFirstPresentation = false
 
     init(
         id: String = UUID().uuidString,
@@ -59,6 +60,7 @@ final class BrowserWindowModel: ObservableObject, Identifiable {
         self.tabs = tabs
         self.activeTabID = activeTabID ?? tabs.first?.id ?? UUID().uuidString
         self.frameString = frameString
+        self.tabs.first(where: { $0.id == self.activeTabID })?.shouldDeferFirstPresentation = true
     }
 
     var activeTab: BrowserTabModel? {
@@ -221,6 +223,7 @@ final class WindowManager: ObservableObject {
             browserState: providedState,
             spaceIndex: currentSpaceIndex
         )
+        tab.browserState.shouldAnimateTabInsertion = true
 
         // A focused control in the old tab remains first responder even after
         // its SwiftUI hierarchy becomes transparent. Resign it before changing
@@ -608,11 +611,10 @@ private struct BrowserWindowTabContainer: View {
         self.tab = tab
         self.state = tab.browserState
         self.activeTabID = activeTabID
-        // Start with a non-focusable placeholder. The initial SwiftUI window
-        // must be ordered before the browser's large control hierarchy is
-        // installed, otherwise macOS 27 can stall in FocusBridge while it
-        // builds the key-view loop.
-        self._hasAppearedActive = State(initialValue: false)
+        // Only the window's initial tab needs to wait for ordering. Once the
+        // window is established, new and revisited tabs can attach immediately
+        // because inactive control trees are no longer kept mounted.
+        self._hasAppearedActive = State(initialValue: !tab.shouldDeferFirstPresentation)
     }
 
     var body: some View {
@@ -664,6 +666,7 @@ private struct BrowserWindowTabContainer: View {
         DispatchQueue.main.async {
             isActivationScheduled = false
             guard activeTabID == tab.id else { return }
+            tab.shouldDeferFirstPresentation = false
             hasAppearedActive = true
         }
     }

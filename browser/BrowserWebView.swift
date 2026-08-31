@@ -74,6 +74,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var isAudioMuted: Bool = false
     @Published var isSleeping: Bool = false
     var isPrivateBrowsing: Bool = false
+    var shouldAnimateTabInsertion: Bool = false
 
     @Published var scrollX: Int = 0
     @Published var scrollY: Int = 0

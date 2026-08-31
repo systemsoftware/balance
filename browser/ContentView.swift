@@ -414,7 +414,6 @@ struct ContentView: View {
                             ZStack {
                                 BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
                                     .roundedBorderStyleNoFrame(enabled: showPageShine)
-                                    .transition(.opacity)
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                                     .onChange(of: browserState.url) { oldValue, newValue in
                                         handleURLChange(from: oldValue, to: newValue)
@@ -435,13 +434,11 @@ struct ContentView: View {
                             if !splitURL.isEmpty {
                                 BrowserWebView(request:URLRequest(url:URL(string:splitURL) ?? URL(string: "about:blank")!), state: splitState, priv:priv, profile:bProfile, userAgent: userAgent)
                                     .roundedBorderStyleNoFrame()
-                                    .transition(.opacity)
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                             }
                         }
                     } else {
                         BrowserHomepage(profile: bProfile)
-                            .transition(.opacity)
                             .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                             .task {
                                 browserState.title = "Balance"
