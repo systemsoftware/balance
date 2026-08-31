@@ -30,6 +30,7 @@ final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
         self.restoredState = restoredState
         self.browserState = browserState ?? BrowserState()
         self.browserState.tabID = id
+        self.browserState.isPrivateBrowsing = self.isPrivate
         self.browserState.spaceIndex = spaceIndex
         if let restoredState {
             self.browserState.restoredScrollX = restoredState.scrollX
@@ -195,15 +196,23 @@ final class WindowManager: ObservableObject {
             return createWindow(initialURL: initialURL)
         }
 
-        let currentState = window.activeTab.flatMap { TabRegistry.shared.states[$0.id] }
+        let sourceTab = window.activeTab
         let openInBackground = inBackground && (Config.sharedDefaults?.bool(forKey: "openLinksInBackground") ?? false)
         let tab = BrowserTabModel(
             initialURL: initialURL,
-            isPrivate: currentState?.isPrivate ?? false,
-            profile: currentState?.profile ?? "",
+            isPrivate: sourceTab?.isPrivate ?? false,
+            profile: sourceTab?.profile ?? "",
+            profileIcon: sourceTab?.profileIcon ?? "person.fill",
             browserState: providedState,
             spaceIndex: currentSpaceIndex
         )
+
+        // A focused control in the old tab remains first responder even after
+        // its SwiftUI hierarchy becomes transparent. Resign it before changing
+        // the active tab so keyboard input cannot be trapped in a hidden field.
+        if !openInBackground {
+            tabWindow(for: window)?.makeFirstResponder(nil)
+        }
         window.tabs.append(tab)
         if !openInBackground {
             window.activeTabID = tab.id
@@ -215,6 +224,8 @@ final class WindowManager: ObservableObject {
 
     func selectTab(_ tabID: String) {
         guard let window = browserWindows.first(where: { $0.tabs.contains(where: { $0.id == tabID }) }) else { return }
+        guard window.activeTabID != tabID || activeWindowID != window.id else { return }
+        tabWindow(for: window)?.makeFirstResponder(nil)
         window.activeTabID = tabID
         let wasNotActive = activeWindowID != window.id
         activeWindowID = window.id
@@ -246,10 +257,10 @@ final class WindowManager: ObservableObject {
 
         let tab = window.tabs.remove(at: tabIndex)
 
-        if let state = TabRegistry.shared.states[tabID] {
+        if !tab.isPrivate, let state = TabRegistry.shared.states[tabID] {
             SessionManager.shared.lastClosedURL = state.url
         }
-        if Config.sharedDefaults?.bool(forKey: "preserveOnClose") != true {
+        if tab.isPrivate || Config.sharedDefaults?.bool(forKey: "preserveOnClose") != true {
             Config.sharedDefaults?.removeObject(forKey: "note_\(tabID)")
         }
 
@@ -285,8 +296,11 @@ final class WindowManager: ObservableObject {
         tabWindow(for: browserWindows[index])?.makeFirstResponder(nil)
         let window = browserWindows.remove(at: index)
         for tab in window.tabs {
-            if let state = TabRegistry.shared.states[tab.id] {
+            if !tab.isPrivate, let state = TabRegistry.shared.states[tab.id] {
                 SessionManager.shared.lastClosedURL = state.url
+            }
+            if tab.isPrivate || Config.sharedDefaults?.bool(forKey: "preserveOnClose") != true {
+                Config.sharedDefaults?.removeObject(forKey: "note_\(tab.id)")
             }
             scheduleCleanup(for: tab)
         }
@@ -388,7 +402,8 @@ final class WindowManager: ObservableObject {
             WebExtensionManager.shared.activeTab = nil
             return
         }
-        WebExtensionManager.shared.activeTab = window.activeTab?.browserState
+        let activeState = window.activeTab?.browserState
+        WebExtensionManager.shared.activeTab = activeState?.isPrivateBrowsing == true ? nil : activeState
     }
 
     private func tabWindow(for window: BrowserWindowModel) -> NSWindow? {
@@ -568,6 +583,7 @@ private struct BrowserWindowTabContainer: View {
     /// preventing FocusBridge.updateDefaultKeyViewLoop() from hanging on
     /// launch when many tabs are restored from a session.
     @State private var hasAppearedActive: Bool
+    @State private var isActivationScheduled = false
 
     init(tab: BrowserTabModel, activeTabID: String) {
         self.tab = tab
@@ -604,21 +620,32 @@ private struct BrowserWindowTabContainer: View {
             }
         }
         .onAppear {
-            guard activeTabID == tab.id, !hasAppearedActive else { return }
-            // Run after AppKit completes makeKeyAndOrderFront. Setting this
-            // synchronously would put ContentView back into the launch-time
-            // key-view-loop calculation and reproduce the hang.
-            DispatchQueue.main.async {
-                hasAppearedActive = true
-            }
+            guard activeTabID == tab.id else { return }
+            scheduleFirstActivation()
         }
         .onChange(of: activeTabID) { _, newActiveID in
             if newActiveID == tab.id {
-                hasAppearedActive = true
+                scheduleFirstActivation()
             }
         }
         .onDisappear {
             windowManager.finishCleanup(tabID: tab.id)
+        }
+    }
+
+    private func scheduleFirstActivation() {
+        guard !hasAppearedActive, !isActivationScheduled else { return }
+        isActivationScheduled = true
+
+        // Creating a foreground tab changes activeTabID while SwiftUI is
+        // already reconciling the window. Installing ContentView in that same
+        // pass can make AppKit synchronously rebuild a very large key-view loop
+        // and occasionally hang in FocusBridge. Always defer the first full
+        // render, not just the window's initial tab.
+        DispatchQueue.main.async {
+            isActivationScheduled = false
+            guard activeTabID == tab.id else { return }
+            hasAppearedActive = true
         }
     }
 }

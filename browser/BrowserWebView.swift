@@ -73,6 +73,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var findMatchCount: Int = 0
     @Published var isAudioMuted: Bool = false
     @Published var isSleeping: Bool = false
+    var isPrivateBrowsing: Bool = false
 
     @Published var scrollX: Int = 0
     @Published var scrollY: Int = 0
@@ -267,7 +268,7 @@ func applyZoom() {
 
 final class BrowserWindow: NSObject, WKWebExtensionWindow {
     func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] {
-        Array(WebExtensionManager.shared.allTabs)
+        WebExtensionManager.shared.allTabs.filter { !$0.isPrivateBrowsing }
     }
     
     func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? {
@@ -455,8 +456,9 @@ final class BrowserWKWebView: WKWebView {
         let result = super.becomeFirstResponder()
         if let state = state, result {
             let manager = WebExtensionManager.shared
-            manager.activeTab = state
-            if let extController = self.configuration.webExtensionController {
+            manager.activeTab = state.isPrivateBrowsing ? nil : state
+            if !state.isPrivateBrowsing,
+               let extController = self.configuration.webExtensionController {
                 extController.didActivateTab(state)
             }
         }
@@ -753,7 +755,7 @@ struct BrowserWebView: NSViewRepresentable {
     var userAgent: String = ""
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(state: state, profile: profile)
+        Coordinator(state: state, profile: profile, isPrivate: priv)
     }
 
     func makeNSView(context: Context) -> WKWebView {
@@ -804,15 +806,14 @@ struct BrowserWebView: NSViewRepresentable {
                 }
             ]
             
-            let manager = WebExtensionManager.shared
-            manager.allTabs.insert(state)
-            if let extController = preloaded.configuration.webExtensionController {
-                if !manager.hasOpenedWindow {
-                    extController.didOpenWindow(manager.window)
-                    manager.hasOpenedWindow = true
+            if !state.isPrivateBrowsing {
+                let manager = WebExtensionManager.shared
+                manager.allTabs.insert(state)
+                if let extController = preloaded.configuration.webExtensionController {
+                    manager.openWindowIfNeeded(for: extController)
+                    extController.didOpenTab(state)
+                    extController.didActivateTab(state)
                 }
-                extController.didOpenTab(state)
-                extController.didActivateTab(state)
             }
             
             context.coordinator.lastLoadedRequestURL = request.url
@@ -882,7 +883,7 @@ struct BrowserWebView: NSViewRepresentable {
             window.Notification = MockNotification;
         })();
         """
-        let notifScript = WKUserScript(source: notificationsJS, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        let notifScript = WKUserScript(source: notificationsJS, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         config.userContentController.addUserScript(notifScript)
         config.userContentController.add(context.coordinator, name: "notificationRequestPermission")
         config.userContentController.add(context.coordinator, name: "notificationShow")
@@ -997,7 +998,7 @@ struct BrowserWebView: NSViewRepresentable {
             }, 1000);
         })();
         """
-        let script = WKUserScript(source: cwsScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        let script = WKUserScript(source: cwsScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         config.userContentController.addUserScript(script)
         
         let scrollObserverScript = """
@@ -1076,7 +1077,7 @@ struct BrowserWebView: NSViewRepresentable {
             };
         })();
         """
-        let locScript = WKUserScript(source: locationScript, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        let locScript = WKUserScript(source: locationScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
         config.userContentController.addUserScript(locScript)
         config.userContentController.add(context.coordinator, name: "balanceLocation")
         
@@ -1174,21 +1175,20 @@ struct BrowserWebView: NSViewRepresentable {
             return null;
         };
         """
-        let afScript = WKUserScript(source: autofillScript, injectionTime: .atDocumentEnd, forMainFrameOnly: false)
+        let afScript = WKUserScript(source: autofillScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
         config.userContentController.addUserScript(afScript)
         config.userContentController.add(context.coordinator, name: "autofillRequest")
         
         WebExtensionManager.shared.loadAllFromDisk()
-        WebExtensionManager.shared.activeTab = state
+        if !priv {
+            WebExtensionManager.shared.activeTab = state
+        }
         
         var profileContext = ""
         
         if priv {
             profileContext = "priv"
-        }
-
-        
-        if !profile.isEmpty {
+        } else if !profile.isEmpty {
             profileContext = "profile"
         }
 
@@ -1209,9 +1209,12 @@ struct BrowserWebView: NSViewRepresentable {
             config.websiteDataStore = .default()
         }
         
-        let controller = WebExtensionManager.shared.controller(for: profileContext)
-        config.webExtensionController = controller
-        config.webExtensionController?.delegate = WebExtensionManager.shared
+        let extensionControllerKey = profile
+        if !priv {
+            let controller = WebExtensionManager.shared.controller(for: extensionControllerKey)
+            config.webExtensionController = controller
+            config.webExtensionController?.delegate = WebExtensionManager.shared
+        }
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
         webView.downloadStore = DownloadStore(profile: profile)
@@ -1232,16 +1235,15 @@ struct BrowserWebView: NSViewRepresentable {
             state.attach(webView)
         }
         
-        let manager = WebExtensionManager.shared
-        let extController = manager.controller(for: profileContext)
-        if !manager.hasOpenedWindow {
-            extController.didOpenWindow(manager.window)
-            manager.hasOpenedWindow = true
+        if !priv {
+            let manager = WebExtensionManager.shared
+            let extController = manager.controller(for: extensionControllerKey)
+            manager.openWindowIfNeeded(for: extController)
+            manager.allTabs.insert(state)
+            extController.didOpenTab(state)
+            extController.didActivateTab(state)
+            manager.activeTab = state
         }
-        manager.allTabs.insert(state)
-        extController.didOpenTab(state)
-        extController.didActivateTab(state)
-        manager.activeTab = state
 
         context.coordinator.observers = [
             webView.observe(\.estimatedProgress, options: .new) { [weak state] webView, _ in
@@ -1284,14 +1286,14 @@ struct BrowserWebView: NSViewRepresentable {
             )
 
             let fileManager = FileManager.default
-            let dir = base!.appendingPathComponent("ContentBlockers", isDirectory: true)
+            let dir = base?.appendingPathComponent("ContentBlockers", isDirectory: true)
         
             let userContentController = webView.configuration.userContentController
 
             userContentController.removeAllContentRuleLists()
 
             let blockersEnabled = SitePermissionStore.shared.toggleState(for: host, type: "contentblockers", defaultState: .enabled) == .enabled
-            if blockersEnabled {
+            if blockersEnabled, let dir {
                 do {
                     let items = try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
     
@@ -1408,14 +1410,16 @@ struct BrowserWebView: NSViewRepresentable {
         var locationManager: CLLocationManager?
 
         let state: BrowserState
+        let isPrivate: Bool
         var downloads: Set<WKDownload> = []
         var lastLoadedRequestURL: URL?
         var lastFailedURL: URL?
         let profile: String
 
-        init(state: BrowserState, profile: String) {
+        init(state: BrowserState, profile: String, isPrivate: Bool) {
             self.state = state
             self.profile = profile
+            self.isPrivate = isPrivate
             self.downloadStore = DownloadStore(profile: profile)
             super.init()
         }
@@ -1457,6 +1461,11 @@ struct BrowserWebView: NSViewRepresentable {
         
         func userContentController(_ userContentController: WKUserContentController, didReceive message: WKScriptMessage) {
             if message.name == "installExtension", let extId = message.body as? String {
+                guard message.frameInfo.isMainFrame,
+                      message.frameInfo.securityOrigin.host == "chromewebstore.google.com",
+                      extId.range(of: #"^[a-p]{32}$"#, options: .regularExpression) != nil else {
+                    return
+                }
                 #if arch(arm64)
                 let arch = "arm64"
                 #else
@@ -1468,13 +1477,15 @@ struct BrowserWebView: NSViewRepresentable {
                     CRXInstaller.install(fromRemote: url)
                 }
             } else if message.name == "autofillRequest", let dict = message.body as? [String: Any] {
+                guard message.frameInfo.isMainFrame else { return }
                 guard let x = dict["x"] as? Double,
                       let y = dict["y"] as? Double,
                       let width = dict["width"] as? Double,
                       let height = dict["height"] as? Double else { return }
                 
                 DispatchQueue.main.async {
-                    if let webView = self.state.webView, let url = webView.url, let host = url.host {
+                    let host = message.frameInfo.securityOrigin.host.lowercased()
+                    if let webView = self.state.webView, !host.isEmpty {
                         let rect = NSRect(x: x, y: y, width: width, height: height)
                         let credentials = PasswordManager.shared.credentials(for: host)
                         
@@ -1508,6 +1519,7 @@ struct BrowserWebView: NSViewRepresentable {
                     }
                 }
             } else if message.name == "scrollObserver", let dict = message.body as? [String: Any] {
+                guard message.frameInfo.isMainFrame else { return }
                 if let x = dict["x"] as? NSNumber, let y = dict["y"] as? NSNumber {
                     DispatchQueue.main.async {
                         self.state.scrollX = x.intValue
@@ -1515,6 +1527,7 @@ struct BrowserWebView: NSViewRepresentable {
                     }
                 }
             } else if message.name == "balanceLocation", let dict = message.body as? [String: Any] {
+                guard message.frameInfo.isMainFrame else { return }
                 guard let type = dict["type"] as? String, let id = dict["id"] as? Int else { return }
                 
                 DispatchQueue.main.async {
@@ -1540,6 +1553,7 @@ struct BrowserWebView: NSViewRepresentable {
                     }
                 }
             } else if message.name == "notificationRequestPermission", let dict = message.body as? [String: Any], let id = dict["id"] as? String {
+                guard message.frameInfo.isMainFrame else { return }
                 DispatchQueue.main.async {
                     if let webView = self.state.webView, let host = webView.url?.host {
                         let handleResult: (PermissionState) -> Void = { newState in
@@ -1562,6 +1576,7 @@ struct BrowserWebView: NSViewRepresentable {
                     }
                 }
             } else if message.name == "notificationShow", let dict = message.body as? [String: Any], let title = dict["title"] as? String {
+                guard message.frameInfo.isMainFrame else { return }
                 DispatchQueue.main.async {
                     if let webView = self.state.webView, let host = webView.url?.host {
                         let currentState = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
@@ -1861,9 +1876,13 @@ struct BrowserWebView: NSViewRepresentable {
 
                     do {
                         if FileManager.default.fileExists(atPath: destinationURL.path) {
-                            try FileManager.default.removeItem(at: destinationURL)
+                            _ = try FileManager.default.replaceItemAt(
+                                destinationURL,
+                                withItemAt: temporaryURL
+                            )
+                        } else {
+                            try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
                         }
-                        try FileManager.default.moveItem(at: temporaryURL, to: destinationURL)
                     } catch {
                         print("Failed to finalize download: \(error.localizedDescription)")
                         try? FileManager.default.removeItem(at: temporaryURL)
@@ -1871,12 +1890,14 @@ struct BrowserWebView: NSViewRepresentable {
                         return
                     }
                     
-                    downloadStore.add(Download(
-                        title: title,
-                        from:url,
-                        to:to,
-                        time:Date()
-                    ))
+                    if !isPrivate {
+                        downloadStore.add(Download(
+                            title: title,
+                            from:url,
+                            to:to,
+                            time:Date()
+                        ))
+                    }
                     finishTracking(download)
                 }
 
@@ -2136,11 +2157,17 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
     var allTabs: Set<BrowserState> = []
     let window = BrowserWindow()
     
-    var hasOpenedWindow = false
+    private var openedControllers: Set<ObjectIdentifier> = []
     private var hasLoaded = false
     
     private override init() {
         super.init()
+    }
+
+    func openWindowIfNeeded(for controller: WKWebExtensionController) {
+        let controllerID = ObjectIdentifier(controller)
+        guard openedControllers.insert(controllerID).inserted else { return }
+        controller.didOpenWindow(window)
     }
     
     // MARK: - WKWebExtensionControllerDelegate
@@ -2163,15 +2190,49 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissions permissions: Set<WKWebExtension.Permission>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
-        completionHandler(permissions, nil)
+        let granted = confirmPermissionRequest(
+            permissions.map { String(describing: $0) },
+            for: extensionContext
+        ) ? permissions : []
+        completionHandler(granted, nil)
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionMatchPatterns matchPatterns: Set<WKWebExtension.MatchPattern>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void) {
-        completionHandler(matchPatterns, nil)
+        let granted = confirmPermissionRequest(
+            matchPatterns.map { String(describing: $0) },
+            for: extensionContext
+        ) ? matchPatterns : []
+        completionHandler(granted, nil)
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<URL>, Date?) -> Void) {
-        completionHandler(urls, nil)
+        let granted = confirmPermissionRequest(
+            urls.map(\.absoluteString),
+            for: extensionContext
+        ) ? urls : []
+        completionHandler(granted, nil)
+    }
+
+    private func confirmPermissionRequest(
+        _ requestedItems: [String],
+        for extensionContext: WKWebExtensionContext
+    ) -> Bool {
+        guard !requestedItems.isEmpty else { return true }
+
+        let extensionName = extensionContext.webExtension.manifest["name"] as? String
+            ?? "This extension"
+        let visibleItems = requestedItems.sorted().prefix(8)
+        var details = visibleItems.map { "• \($0)" }.joined(separator: "\n")
+        if requestedItems.count > visibleItems.count {
+            details += "\n• …and \(requestedItems.count - visibleItems.count) more"
+        }
+
+        let alert = NSAlert()
+        alert.messageText = "Allow \"\(extensionName)\" additional access?"
+        alert.informativeText = details
+        alert.addButton(withTitle: "Allow")
+        alert.addButton(withTitle: "Deny")
+        return alert.runModal() == .alertFirstButtonReturn
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
@@ -2249,11 +2310,6 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
                 // Grant all requested match patterns from manifest
                 for pattern in ext.requestedPermissionMatchPatterns {
                     context.setPermissionStatus(.grantedExplicitly, for: pattern, expirationDate: nil)
-                }
-                
-                // Grant access to all URLs so content scripts can inject as a fallback
-                if let allURLs = try? WKWebExtension.MatchPattern(string: "<all_urls>") {
-                    context.setPermissionStatus(.grantedExplicitly, for: allURLs, expirationDate: nil)
                 }
                 
                 for (key, controller) in controllers {
@@ -2389,7 +2445,7 @@ enum CRXInstaller {
             let afterId = original[range.upperBound...]
             if let endRange = afterId.range(of: "%26") {
                 let extracted = String(afterId[..<endRange.lowerBound])
-                if extracted.count == 32 {
+                if extracted.range(of: #"^[a-p]{32}$"#, options: .regularExpression) != nil {
                     extID = extracted
                 }
             }
@@ -2465,19 +2521,50 @@ func extractCRX(at url: URL, to destination: URL) throws {
     if isZip {
         zipData = data
     } else {
-        let version = data.withUnsafeBytes { $0.load(fromByteOffset: 4, as: UInt32.self) }
+        func readUInt32(at offset: Int) -> UInt32? {
+            guard offset >= 0, data.count >= offset + MemoryLayout<UInt32>.size else {
+                return nil
+            }
+            return UInt32(data[offset])
+                | (UInt32(data[offset + 1]) << 8)
+                | (UInt32(data[offset + 2]) << 16)
+                | (UInt32(data[offset + 3]) << 24)
+        }
+
+        guard let version = readUInt32(at: 4) else {
+            throw NSError(domain: "CRX", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Truncated CRX header"
+            ])
+        }
         let zipStart: Int
         
         if version == 2 {
-            let pubKeyLen = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self) }
-            let sigLen = data.withUnsafeBytes { $0.load(fromByteOffset: 12, as: UInt32.self) }
+            guard let pubKeyLen = readUInt32(at: 8),
+                  let sigLen = readUInt32(at: 12) else {
+                throw NSError(domain: "CRX", code: 3, userInfo: [
+                    NSLocalizedDescriptionKey: "Truncated CRX2 header"
+                ])
+            }
             zipStart = 16 + Int(pubKeyLen) + Int(sigLen)
         } else if version == 3 {
-            let headerLen = data.withUnsafeBytes { $0.load(fromByteOffset: 8, as: UInt32.self) }
+            guard let headerLen = readUInt32(at: 8) else {
+                throw NSError(domain: "CRX", code: 3, userInfo: [
+                    NSLocalizedDescriptionKey: "Truncated CRX3 header"
+                ])
+            }
             zipStart = 12 + Int(headerLen)
         } else {
             throw NSError(domain: "CRX", code: 2, userInfo: [
                 NSLocalizedDescriptionKey: "Unsupported CRX version"
+            ])
+        }
+
+        guard zipStart >= 0,
+              zipStart <= data.count - 2,
+              data[zipStart] == 0x50,
+              data[zipStart + 1] == 0x4B else {
+            throw NSError(domain: "CRX", code: 3, userInfo: [
+                NSLocalizedDescriptionKey: "Invalid or truncated CRX payload"
             ])
         }
         zipData = data.subdata(in: zipStart..<data.count)

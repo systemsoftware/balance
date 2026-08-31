@@ -1182,7 +1182,7 @@ struct ContentView: View {
         urlInput = newURL.absoluteString
         updateTabState()
         
-        if enableHandoff, let scheme = newURL.scheme?.lowercased(), scheme == "http" || scheme == "https" {
+        if !priv, enableHandoff, let scheme = newURL.scheme?.lowercased(), scheme == "http" || scheme == "https" {
             if currentUserActivity == nil {
                 currentUserActivity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
             }
