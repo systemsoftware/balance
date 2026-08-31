@@ -191,9 +191,24 @@ final class WindowManager: ObservableObject {
 
     @discardableResult
     func createTab(initialURL: URL? = nil, inBackground: Bool = false, providedState: BrowserState? = nil) -> String {
-        let windowID = activeWindowID ?? ensureInitialWindow()
-        guard let window = browserWindows.first(where: { $0.id == windowID }) else {
-            return createWindow(initialURL: initialURL)
+        // The app deliberately stays running after its last window closes. In
+        // that state a new tab must also create and present a window; merely
+        // calling ensureInitialWindow() would leave the new tab in an invisible
+        // window model and make the command appear to have hung.
+        guard let windowID = activeWindowID,
+              let window = browserWindows.first(where: { $0.id == windowID }) else {
+            let state = providedState ?? BrowserState()
+            let tab = BrowserTabModel(
+                initialURL: initialURL,
+                browserState: state,
+                spaceIndex: currentSpaceIndex
+            )
+            let window = BrowserWindowModel(tabs: [tab])
+            browserWindows.append(window)
+            activeWindowID = window.id
+            rebuildTabProjection()
+            openBrowserWindow(window.id)
+            return tab.id
         }
 
         let sourceTab = window.activeTab
@@ -550,11 +565,15 @@ private struct BrowserWindowContent: View {
 
     var body: some View {
         ZStack {
-            ForEach(window.tabs) { tab in
-                BrowserWindowTabContainer(tab: tab, activeTabID: window.activeTabID)
-                    .zIndex(window.activeTabID == tab.id ? 1 : 0)
-            }
             if let activeTab = window.activeTab {
+                // Only mount the active tab's SwiftUI hierarchy. Keeping every
+                // previously visited tab mounted at zero opacity makes
+                // FocusBridge traverse all of their controls whenever a tab is
+                // added, which eventually wedges the main thread. BrowserWebView
+                // parks its WKWebView during this transition so page state is
+                // preserved when the tab is selected again.
+                BrowserWindowTabContainer(tab: activeTab, activeTabID: window.activeTabID)
+                    .id(activeTab.id)
                 ActiveTabTitleObserver(state: activeTab.browserState)
             }
         }

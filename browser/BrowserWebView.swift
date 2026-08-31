@@ -759,7 +759,11 @@ struct BrowserWebView: NSViewRepresentable {
     }
 
     func makeNSView(context: Context) -> WKWebView {
-        if let preloaded = state.preloadedWebView as? BrowserWKWebView {
+        // A tab that is not visible parks its WKWebView in BrowserState. Reuse
+        // it when the tab becomes active again so removing the inactive SwiftUI
+        // control tree does not reload or discard the page.
+        if let preloaded = (state.webView as? BrowserWKWebView)
+            ?? (state.preloadedWebView as? BrowserWKWebView) {
             let host = request.url?.host ?? "default"
             preloaded.downloadStore = DownloadStore(profile: profile)
             if !userAgent.isEmpty {
@@ -770,6 +774,12 @@ struct BrowserWebView: NSViewRepresentable {
             preloaded.state = state
             preloaded.navigationDelegate = context.coordinator
             preloaded.uiDelegate = context.coordinator
+
+            let userContentController = preloaded.configuration.userContentController
+            for name in Self.scriptMessageHandlerNames {
+                userContentController.removeScriptMessageHandler(forName: name)
+                userContentController.add(context.coordinator, name: name)
+            }
             
             DispatchQueue.main.async {
                 state.attach(preloaded)
@@ -808,10 +818,12 @@ struct BrowserWebView: NSViewRepresentable {
             
             if !state.isPrivateBrowsing {
                 let manager = WebExtensionManager.shared
-                manager.allTabs.insert(state)
+                let wasNewTab = manager.allTabs.insert(state).inserted
                 if let extController = preloaded.configuration.webExtensionController {
                     manager.openWindowIfNeeded(for: extController)
-                    extController.didOpenTab(state)
+                    if wasNewTab {
+                        extController.didOpenTab(state)
+                    }
                     extController.didActivateTab(state)
                 }
             }
@@ -1400,8 +1412,37 @@ struct BrowserWebView: NSViewRepresentable {
     }
 
     static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
-        coordinator.state.cleanup()
+        let state = coordinator.state
+        guard !state.hasCleanedUp else { return }
+
+        // Tab switches remove the inactive ContentView to keep it out of
+        // SwiftUI's focus graph. Detach per-mount observers and delegates, but
+        // retain the WKWebView through BrowserState for the next activation.
+        coordinator.observers.removeAll()
+        coordinator.locationManager?.stopUpdatingLocation()
+        coordinator.locationManager?.delegate = nil
+        coordinator.locationManager = nil
+
+        let userContentController = nsView.configuration.userContentController
+        for name in Self.scriptMessageHandlerNames {
+            userContentController.removeScriptMessageHandler(forName: name)
+        }
+        nsView.navigationDelegate = nil
+        nsView.uiDelegate = nil
+        nsView.removeFromSuperview()
+        if state.webView !== nsView {
+            state.webView = nsView
+        }
     }
+
+    private static let scriptMessageHandlerNames = [
+        "notificationRequestPermission",
+        "notificationShow",
+        "installExtension",
+        "scrollObserver",
+        "balanceLocation",
+        "autofillRequest"
+    ]
 
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, CLLocationManagerDelegate {
         
