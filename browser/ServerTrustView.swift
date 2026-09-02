@@ -6,6 +6,7 @@ import SwiftData
 struct ServerTrustView: View {
     let trust: SecTrust?
     let url: URL?
+    let webView: WKWebView?
     let dataStore: WKWebsiteDataStore?
     @StateObject private var store = SitePermissionStore.shared
     @State private var isTrusted: Bool = false
@@ -152,8 +153,10 @@ struct ServerTrustView: View {
     
     private func evaluateTrust() {
         guard let trust = trust else {
-            isTrusted = false
-            errorMessage = "This connection is not encrypted."
+            // WebKit can publish a committed HTTPS URL just before serverTrust.
+            // Match the address-bar indicator during that short transition.
+            isTrusted = url?.scheme?.lowercased() == "https"
+            errorMessage = isTrusted ? nil : "This connection is not encrypted."
             return
         }
         var error: CFError?
@@ -208,7 +211,14 @@ struct ServerTrustView: View {
             } else {
                 Picker("", selection: Binding(
                     get: { store.setting(for: host, type: type, defaultState: defaultState) },
-                    set: { store.setSetting(for: host, type: type, state: $0) }
+                    set: {
+                        store.setSetting(for: host, type: type, state: $0)
+                        // JavaScript policy is chosen for each navigation, so
+                        // reload the current document to apply a changed value.
+                        if type == "javascript" {
+                            webView?.reload()
+                        }
+                    }
                 )) {
                     ForEach(SettingState.allCases, id: \.self) { state in
                         Text(state.rawValue).tag(state)

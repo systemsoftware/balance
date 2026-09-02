@@ -872,6 +872,10 @@ struct BrowserWebView: NSViewRepresentable {
             Object.defineProperty(MockNotification, 'permission', {
                 get: function() { return currentPermission; }
             });
+
+            window.__balanceSetNotificationPermission = function(permission) {
+                currentPermission = permission;
+            };
             
             MockNotification.requestPermission = function(callback) {
                 return new Promise((resolve) => {
@@ -1298,51 +1302,11 @@ struct BrowserWebView: NSViewRepresentable {
                 create: true
             )
 
-            let fileManager = FileManager.default
             let dir = base?.appendingPathComponent("ContentBlockers", isDirectory: true)
         
-            let userContentController = webView.configuration.userContentController
-
-            userContentController.removeAllContentRuleLists()
-
             let blockersEnabled = SitePermissionStore.shared.toggleState(for: host, type: "contentblockers", defaultState: .enabled) == .enabled
-            if blockersEnabled, let dir {
-                do {
-                    let items = try fileManager.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
-    
-                    for item in items {
-                        // Load JSON rules from file
-                        let jsonStr = try String(contentsOf: item, encoding: .utf8)
-    
-                        let identifier = "dynamicRules-\(UUID().uuidString)"
-    
-                        guard let data = jsonStr.data(using: .utf8),
-                              (try? JSONSerialization.jsonObject(with: data)) != nil else {
-                            print("addToContentBlocker — invalid JSON rules at: \(item.lastPathComponent)")
-                            continue
-                        }
-    
-                        WKContentRuleListStore.default().compileContentRuleList(
-                            forIdentifier: identifier,
-                            encodedContentRuleList: jsonStr
-                        ) { ruleList, error in
-                            if let error {
-                                print("Failed to compile content blocker rules: \(error.localizedDescription)")
-                                return
-                            }
-    
-                            guard let ruleList else {
-                                print("Failed to compile content blocker rules: no rule list returned")
-                                return
-                            }
-    
-                            userContentController.add(ruleList)
-                        }
-                    }
-                } catch {
-                    print("Error reading directory: \(error.localizedDescription)")
-                }
-            }
+            context.coordinator.contentBlockersEnabled = blockersEnabled
+            Self.configureContentBlockers(on: webView, enabled: blockersEnabled, directory: dir, reloadWhenReady: false, coordinator: context.coordinator)
         
         context.coordinator.lastLoadedRequestURL = request.url
         if let url = request.url, url.isFileURL {
@@ -1386,6 +1350,21 @@ struct BrowserWebView: NSViewRepresentable {
         nsView.configuration.mediaTypesRequiringUserActionForPlayback = (autoplaySetting == .allow) ? [] : .all
         if autoplaySetting == .block {
             nsView.evaluateJavaScript("document.querySelectorAll('video, audio').forEach(function(v) { if (!v.paused) v.pause(); });", completionHandler: nil)
+        }
+
+        context.coordinator.syncNotificationPermission(in: nsView)
+
+        let blockersEnabled = SitePermissionStore.shared.toggleState(for: host, type: "contentblockers", defaultState: .enabled) == .enabled
+        if context.coordinator.contentBlockersEnabled != blockersEnabled {
+            context.coordinator.contentBlockersEnabled = blockersEnabled
+            let base = try? FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let directory = base?.appendingPathComponent("ContentBlockers", isDirectory: true)
+            Self.configureContentBlockers(on: nsView, enabled: blockersEnabled, directory: directory, reloadWhenReady: true, coordinator: context.coordinator)
         }
 
         if context.coordinator.lastLoadedRequestURL != request.url {
@@ -1445,6 +1424,63 @@ struct BrowserWebView: NSViewRepresentable {
         "autofillRequest"
     ]
 
+    private static func configureContentBlockers(
+        on webView: WKWebView,
+        enabled: Bool,
+        directory: URL?,
+        reloadWhenReady: Bool,
+        coordinator: Coordinator
+    ) {
+        let controller = webView.configuration.userContentController
+        controller.removeAllContentRuleLists()
+
+        guard enabled, let directory else {
+            if reloadWhenReady { webView.reload() }
+            return
+        }
+
+        let items: [URL]
+        do {
+            items = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                .filter { $0.pathExtension.lowercased() == "json" }
+        } catch {
+            print("Error reading content blocker directory: \(error.localizedDescription)")
+            if reloadWhenReady { webView.reload() }
+            return
+        }
+
+        let group = DispatchGroup()
+        for item in items {
+            guard let json = try? String(contentsOf: item, encoding: .utf8),
+                  let data = json.data(using: .utf8),
+                  (try? JSONSerialization.jsonObject(with: data)) != nil else {
+                print("Content blocker contains invalid JSON: \(item.lastPathComponent)")
+                continue
+            }
+
+            group.enter()
+            let identifier = "dynamicRules-\(item.lastPathComponent)"
+            WKContentRuleListStore.default().compileContentRuleList(
+                forIdentifier: identifier,
+                encodedContentRuleList: json
+            ) { ruleList, error in
+                defer { group.leave() }
+                if let ruleList, coordinator.contentBlockersEnabled == true {
+                    controller.add(ruleList)
+                } else if let error {
+                    print("Failed to compile \(item.lastPathComponent): \(error.localizedDescription)")
+                }
+            }
+        }
+
+        if reloadWhenReady {
+            group.notify(queue: .main) { [weak webView, weak coordinator] in
+                guard coordinator?.contentBlockersEnabled == enabled else { return }
+                webView?.reload()
+            }
+        }
+    }
+
     final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, CLLocationManagerDelegate {
         
         var observers: [NSKeyValueObservation] = []
@@ -1456,7 +1492,15 @@ struct BrowserWebView: NSViewRepresentable {
         var downloads: Set<WKDownload> = []
         var lastLoadedRequestURL: URL?
         var lastFailedURL: URL?
+        var contentBlockersEnabled: Bool?
         let profile: String
+
+        func syncNotificationPermission(in webView: WKWebView) {
+            guard let host = webView.url?.host else { return }
+            let state = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
+            let value = state == .allow ? "granted" : (state == .deny ? "denied" : "default")
+            webView.evaluateJavaScript("window.__balanceSetNotificationPermission?.('\(value)')", completionHandler: nil)
+        }
 
         init(state: BrowserState, profile: String, isPrivate: Bool) {
             self.state = state
@@ -1688,6 +1732,7 @@ struct BrowserWebView: NSViewRepresentable {
             state.isLoading = false
             state.url = webView.url
             state.serverTrust = webView.serverTrust
+            syncNotificationPermission(in: webView)
             if state.customTitle == nil {
                 state.title = webView.title ?? "Page"
             }
@@ -1752,6 +1797,7 @@ struct BrowserWebView: NSViewRepresentable {
         func webView(_ webView: WKWebView, didCommit navigation: WKNavigation!) {
             state.url = webView.url
             state.serverTrust = webView.serverTrust
+            syncNotificationPermission(in: webView)
         }
 
         func webView(_ webView: WKWebView,
@@ -1969,7 +2015,7 @@ struct BrowserWebView: NSViewRepresentable {
             
             if !isLinkActivated {
                 if let host = webView.url?.host {
-                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .allow)
+                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .block)
                     if popupSetting == .block {
                         if let url = navigationAction.request.url {
                             print("Blocked popup to \(url)")

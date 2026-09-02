@@ -19,18 +19,20 @@ struct AddressBar: View {
 
     var body: some View {
         HStack {
-                if location?.absoluteString.starts(with: "http") == true {
-                    TrustIndicator(trust: browserState.serverTrust, url: location, isPresented: $showTrustInfo)
-                        .popover(isPresented: $showTrustInfo) {
-                            ServerTrustView(
-                                trust: browserState.serverTrust,
-                                url: browserState.url,
-                                dataStore: browserState.webView?.configuration.websiteDataStore,
-                                onAttemptHTTPS: attemptHTTPS
-                            )
-                        }
-                        .padding(.leading)
-                }
+                // Keep this view in the hierarchy even while WebKit is updating
+                // serverTrust. Removing a sibling of the native text field while
+                // AppKit is establishing its field editor can corrupt the key-view
+                // loop and crash when the address field is clicked.
+                TrustIndicator(trust: browserState.serverTrust, url: location, isPresented: $showTrustInfo)
+                    .popover(isPresented: $showTrustInfo) {
+                        ServerTrustView(
+                            trust: browserState.serverTrust,
+                            url: location,
+                            webView: browserState.webView,
+                            dataStore: browserState.webView?.configuration.websiteDataStore,
+                            onAttemptHTTPS: attemptHTTPS
+                        )
+                    }
 
                 AddressField(text: $urlInput, focusOnAppear: focusOnAppear, onSubmit: submitURL)
                 Spacer()
@@ -92,25 +94,37 @@ private struct TrustIndicator: View {
     let url: URL?
     @Binding var isPresented: Bool
 
+    private var isWebURL: Bool {
+        url?.scheme == "http" || url?.scheme == "https"
+    }
+
+    private var isSecure: Bool {
+        guard url?.scheme == "https" else { return false }
+
+        // WebKit publishes the URL before it publishes serverTrust. A committed
+        // HTTPS URL is a safe interim state; replace it with the evaluated result
+        // as soon as the trust object arrives.
+        guard let trust else { return true }
+        return SecTrustEvaluateWithError(trust, nil)
+    }
+
     var body: some View {
-        Group {
-            if let trust {
-                Button(action: { isPresented.toggle() }) {
-                    var error: CFError?
-                    if SecTrustEvaluateWithError(trust, &error) {
-                        Image(systemName: "lock.fill")
-                    } else {
-                        Image(systemName: "exclamationmark.triangle.fill")
-                            .foregroundColor(.red)
-                    }
-                }
-                .buttonStyle(.plain)
-            } else if url?.scheme == "http" {
-                Button(action: { isPresented.toggle() }) {
-                    Image(systemName: "exclamationmark.triangle.fill")
-                        .foregroundColor(.red)
-                }
-                .buttonStyle(.plain)
+        Button(action: { isPresented.toggle() }) {
+            Image(systemName: isSecure ? "lock.fill" : "exclamationmark.triangle.fill")
+                .foregroundColor(isSecure ? .primary : .red)
+                .frame(width: 16, height: 16)
+        }
+        .buttonStyle(.plain)
+        .help(isSecure ? "Connection is secure" : "Connection is not secure")
+        .frame(width: isWebURL ? 16 : 0)
+        .padding(.leading, isWebURL ? 16 : 0)
+        .clipped()
+        .opacity(isWebURL ? 1 : 0)
+        .allowsHitTesting(isWebURL)
+        .accessibilityHidden(!isWebURL)
+        .onChange(of: isWebURL) { _, isWebURL in
+            if !isWebURL {
+                isPresented = false
             }
         }
     }
