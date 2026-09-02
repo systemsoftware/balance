@@ -16,6 +16,7 @@ struct CommandPaletteToolbarButton: View {
                 .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
         }
         .buttonStyle(.plain)
+        .frame(width: 40, height: 40)
         .glassEffect(.regular.interactive(), in:.circle)
         .keyboardShortcut("k", modifiers: .command)
         .sheet(isPresented: $showCommands) {

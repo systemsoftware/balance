@@ -20,6 +20,10 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     case restyle
     case more
     case reader
+    case mute
+    case duplicate
+    case zoom
+    case rename
     
     var name: String {
         
@@ -63,6 +67,33 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     }
 
     var id: String { rawValue }
+
+    var systemImage: String {
+        switch self {
+        case .clock: "clock"
+        case .navigation: "chevron.left.forwardslash.chevron.right"
+        case .home: "house"
+        case .share: "square.and.arrow.up"
+        case .reload: "arrow.clockwise"
+        case .addressBar: "link"
+        case .search: "arrow.turn.down.right"
+        case .autocomplete: "character.cursor.ibeam"
+        case .extensions: "puzzlepiece.extension"
+        case .saveTo: "star"
+        case .splitView: "rectangle.split.2x1"
+        case .commandPalette: "command"
+        case .findInPage: "doc.text.magnifyingglass"
+        case .spacer: "space"
+        case .ai: "sparkles"
+        case .restyle: "paintpalette"
+        case .more: "ellipsis"
+        case .reader: "eyeglasses"
+        case .mute: "speaker"
+        case .duplicate: "plus.square.on.square"
+        case .zoom: "plus.magnifyingglass"
+        case .rename: "pencil"
+        }
+    }
 }
 
 
@@ -103,6 +134,7 @@ struct BrowserToolbar: View {
                     
                     BrowserToolbarItem(
                         item: entry.item,
+                        inactiveItems: inactiveToolbarItems,
                         browserState: browserState,
                         sidebarStore: sidebarStore,
                         bookmarkStore: bookmarkStore,
@@ -184,10 +216,18 @@ struct BrowserToolbar: View {
             }
         }
     }
+
+    private var inactiveToolbarItems: [ToolbarItemType] {
+        let activeItems = Set(toolbarStore.items.map(\.item))
+        return ToolbarItemType.allCases.filter {
+            $0 != .clock && !activeItems.contains($0)
+        }
+    }
     
     struct BrowserToolbarItem: View {
         
         var item: ToolbarItemType
+        var inactiveItems: [ToolbarItemType]
         
         @ObservedObject var browserState: BrowserState
         @ObservedObject var sidebarStore: SidebarStore
@@ -298,7 +338,34 @@ struct BrowserToolbar: View {
                     .accessibilityLabel("Toolbar Spacer")
                 
             case .more:
-                MoreMenuToolbar(browserState: browserState, location: $location, showBoost: $showBoost)
+                MoreMenuToolbar(items: inactiveItems) { inactiveItem in
+                    AnyView(
+                        BrowserToolbarItem(
+                            item: inactiveItem,
+                            inactiveItems: [],
+                            browserState: browserState,
+                            sidebarStore: sidebarStore,
+                            bookmarkStore: bookmarkStore,
+                            location: $location,
+                            urlInput: $urlInput,
+                            showTrustInfo: $showTrustInfo,
+                            showTabSearch: $showTabSearch,
+                            showEventPopup: $showEventPopup,
+                            showGoTo: $showGoTo,
+                            showBoost: $showBoost,
+                            splitURL: $splitURL,
+                            splitState: splitState,
+                            focusAddressOnAppear: focusAddressOnAppear,
+                            isPrivate: isPrivate,
+                            profileIcon: profileIcon,
+                            profileName: profileName,
+                            events: events,
+                            showReader: $showReader,
+                            submitURL: submitURL,
+                            scanEvents: scanEvents
+                        )
+                    )
+                }
             case .commandPalette:
                 CommandPaletteToolbarButton(urlInput: $urlInput)
                 
@@ -310,6 +377,14 @@ struct BrowserToolbar: View {
             case .restyle:
                 RestyleToolbarButton(showBoost: $showBoost)
                     .disabled(location == nil)
+            case .mute:
+                MuteToolbar(location: $location, browserState: browserState)
+            case .duplicate:
+                DuplicateToolbarButton(location: $location)
+            case .rename:
+                RenameToolbar(location: $location, browserState: browserState)
+            case .zoom:
+                ZoomToolbar(location: $location, browserState: browserState)
             }
         }
         

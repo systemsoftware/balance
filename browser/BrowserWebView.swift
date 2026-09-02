@@ -116,7 +116,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     func size(for context: WKWebExtensionContext) -> CGSize {
         (webView ?? underlyingWebView)?.frame.size ?? .zero
     }
-    func zoomFactor(for context: WKWebExtensionContext) -> Double { 1.0 }
+    func zoomFactor(for context: WKWebExtensionContext) -> Double { Double(zoomLevel) }
     
     func toggleMute() {
         isAudioMuted.toggle()
@@ -127,15 +127,22 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var zoomLevel: CGFloat = 1.0
     
     
-func applyZoom() {
-    let js = "document.body.style.zoom = '\(zoomLevel)';"
-    
-    webView?.evaluateJavaScript(js, completionHandler: { result, error in
-        if let error = error {
-            print("Failed to apply zoom script: \(error.localizedDescription)")
+    func applyZoom() {
+        let zoom = min(2.0, max(0.5, zoomLevel))
+        zoomLevel = zoom
+
+        // Use WebKit's native zoom so the whole page (including fixed elements)
+        // is scaled. The old body.style.zoom implementation was immediately
+        // overwritten by BrowserWebView's per-site zoom synchronization.
+        (webView ?? underlyingWebView)?.pageZoom = zoom
+
+        if let host = (webView ?? underlyingWebView)?.url?.host ?? url?.host ?? pendingURL?.host {
+            SitePermissionStore.shared.setZoomLevel(
+                for: host,
+                value: Int((zoom * 100).rounded())
+            )
         }
-    })
-}
+    }
 
     func applyTranslations(_ translations: [String]) async {
         guard let data = try? JSONSerialization.data(
@@ -192,12 +199,12 @@ func applyZoom() {
     }
     
     public func zoomIn() {
-        zoomLevel = min(2.0, zoomLevel + 0.1)
+        zoomLevel = min(2.0, (zoomLevel * 10).rounded() / 10 + 0.1)
         applyZoom()
     }
 
     public func zoomOut() {
-        zoomLevel = max(0.5, zoomLevel - 0.1)
+        zoomLevel = max(0.5, (zoomLevel * 10).rounded() / 10 - 0.1)
         applyZoom()
     }
 
@@ -1342,7 +1349,6 @@ struct BrowserWebView: NSViewRepresentable {
         if context.coordinator.state.zoomLevel != targetZoom {
             DispatchQueue.main.async {
                 context.coordinator.state.zoomLevel = targetZoom
-                context.coordinator.state.applyZoom()
             }
         }
         
@@ -1752,7 +1758,6 @@ struct BrowserWebView: NSViewRepresentable {
             }
             if state.zoomLevel != targetZoom {
                 state.zoomLevel = targetZoom
-                state.applyZoom()
             }
             let settingsKey = "boost_\(p)_\(host)"
             

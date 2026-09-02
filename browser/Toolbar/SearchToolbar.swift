@@ -15,6 +15,7 @@ struct SearchToolbarButton: View {
                         .font(.title2)
                         .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
                 }
+                .frame(width: 40, height: 40)
                 .buttonStyle(.plain)
                 .glassEffect(.regular.interactive(), in: .circle)
             }
