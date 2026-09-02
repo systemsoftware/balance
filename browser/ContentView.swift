@@ -215,7 +215,7 @@ struct ContentView: View {
     var tabID: String
     var restoredState: TabSessionState?
 
-    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "", tabID: String = UUID().uuidString, restoredState: TabSessionState? = nil, providedState: BrowserState? = nil) {
+    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "", tabID: String = UUID().uuidString, restoredState: TabSessionState? = nil, providedState: BrowserState? = nil, providedSplitState: BrowserState? = nil) {
         self.tabID = tabID
         let latestState = TabRegistry.shared.states[tabID] ?? restoredState
         self.restoredState = latestState
@@ -278,16 +278,16 @@ struct ContentView: View {
             initialBrowserState = newState
         }
         
-        if let state = restoredState {
+        if initialBrowserState.webView == nil, let state = restoredState {
             initialBrowserState.restoredScrollX = state.scrollX
             initialBrowserState.restoredScrollY = state.scrollY
         }
         self._browserState = StateObject(wrappedValue: initialBrowserState)
         
         self._splitState = StateObject(wrappedValue: {
-            let split = BrowserState()
+            let split = providedSplitState ?? BrowserState()
             split.tabID = tabID + "_split"
-            if let state = restoredState {
+            if split.webView == nil, let state = restoredState {
                 split.restoredScrollX = state.splitScrollX
                 split.restoredScrollY = state.splitScrollY
             }

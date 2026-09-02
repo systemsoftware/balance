@@ -36,6 +36,7 @@ struct AutoFillView: View {
     @State private var cache: [String: [String]] = [:]
     
     var updateOther: Binding<String?>?
+    var onSelection: (() -> Void)?
     
     var suggestions: [String] {
         result?.suggestions ?? []
@@ -75,7 +76,11 @@ struct AutoFillView: View {
                         } else {
                             searchTerm = suggestion
                         }
-                        dismiss()
+                        if let onSelection {
+                            onSelection()
+                        } else {
+                            dismiss()
+                        }
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")

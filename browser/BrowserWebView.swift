@@ -224,12 +224,11 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
         let manager = WebExtensionManager.shared
         manager.allTabs.remove(self)
         
-        // self.webView is weak — it may already be nil if SwiftUI tore down the view
-        // before this runs.
-        let webView: WKWebView? = self.webView
+        let webView = self.webView ?? self.preloadedWebView ?? self.underlyingWebView
         
         if let webView {
             if let coordinator = webView.navigationDelegate as? BrowserWebView.Coordinator {
+                coordinator.observers.removeAll()
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "installExtension")
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "scrollObserver")
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "balanceLocation")
@@ -268,6 +267,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
         }
         
         self.webView = nil
+        self.preloadedWebView = nil
         self.underlyingWebView = nil
     }
 }
@@ -763,10 +763,22 @@ struct BrowserWebView: NSViewRepresentable {
     var userAgent: String = ""
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(state: state, profile: profile, isPrivate: priv)
+        // The coordinator belongs to the live page, not its SwiftUI mount.
+        // Keep navigation, script callbacks and content-blocker state intact.
+        if let coordinator = state.webView?.navigationDelegate as? Coordinator {
+            return coordinator
+        }
+        return Coordinator(state: state, profile: profile, isPrivate: priv)
     }
 
     func makeNSView(context: Context) -> WKWebView {
+        if let webView = state.webView,
+           webView.navigationDelegate === context.coordinator {
+            // ContentView seeds its request from the current page URL on
+            // remount. That is a new baseline, not a navigation request.
+            context.coordinator.lastLoadedRequestURL = request.url
+            return webView
+        }
         // A tab that is not visible parks its WKWebView in BrowserState. Reuse
         // it when the tab becomes active again so removing the inactive SwiftUI
         // control tree does not reload or discard the page.
@@ -1401,20 +1413,9 @@ struct BrowserWebView: NSViewRepresentable {
         let state = coordinator.state
         guard !state.hasCleanedUp else { return }
 
-        // Tab switches remove the inactive ContentView to keep it out of
-        // SwiftUI's focus graph. Detach per-mount observers and delegates, but
-        // retain the WKWebView through BrowserState for the next activation.
-        coordinator.observers.removeAll()
-        coordinator.locationManager?.stopUpdatingLocation()
-        coordinator.locationManager?.delegate = nil
-        coordinator.locationManager = nil
-
-        let userContentController = nsView.configuration.userContentController
-        for name in Self.scriptMessageHandlerNames {
-            userContentController.removeScriptMessageHandler(forName: name)
-        }
-        nsView.navigationDelegate = nil
-        nsView.uiDelegate = nil
+        // Only detach the native view from the inactive SwiftUI hierarchy.
+        // Script handlers retain the coordinator so background redirects and
+        // login callbacks continue working. cleanup() releases them on close.
         nsView.removeFromSuperview()
         if state.webView !== nsView {
             state.webView = nsView

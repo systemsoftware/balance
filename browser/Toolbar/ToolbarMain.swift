@@ -125,6 +125,8 @@ struct BrowserToolbar: View {
     
     @State private var draggedItemID: UUID?
 
+    @AppStorage("showToolbarDragHandle") private var showDrag = false
+
     
     var body: some View {
         
@@ -158,18 +160,7 @@ struct BrowserToolbar: View {
                     )
                     
                     .padding(Layout.controlPadding)
-                    .onDrag {
-                        draggedItemID = entry.id
-                        let provider = NSItemProvider()
-                        provider.registerDataRepresentation(
-                            forTypeIdentifier: UTType.data.identifier,
-                            visibility: .ownProcess
-                        ) { completion in
-                            completion(entry.id.uuidString.data(using: .utf8), nil)
-                            return nil
-                        }
-                        return provider
-                    }
+                    .modifier(ToolbarDragSource(entry: entry, draggedItemID: $draggedItemID))
                     .onDrop(
                         of: [.data],
                         delegate: ToolbarDropDelegate(
@@ -187,7 +178,7 @@ struct BrowserToolbar: View {
                                     }
                                 }
                             }
-                            
+                                                
                             Menu("Add") {
                                 ForEach(ToolbarItemType.allCases) { newItem in
                                     if newItem == .spacer || !toolbarStore.contains(newItem) {
@@ -199,7 +190,15 @@ struct BrowserToolbar: View {
                                 
                             }
                             
+                            Menu("Options") {
+                                Toggle(isOn: $showDrag) {
+                                    Text("Show Address Bar Drag Handle")
+                                }
+                            }
+                            
                         }
+                    
+                    
                 }
             } else {
                 EmptyView()
@@ -299,6 +298,7 @@ struct BrowserToolbar: View {
                         .font(.title2)
                         .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
                 }
+                .frame(width: 40, height: 40)
                 .glassEffect(.regular.interactive(), in:.circle)
                 .buttonStyle(.plain)
                 .popover(isPresented: $showSuggestions) {
@@ -389,5 +389,43 @@ struct BrowserToolbar: View {
         }
         
         
+    }
+}
+
+private struct ToolbarDragSource: ViewModifier {
+    let entry: ToolbarEntry
+    @Binding var draggedItemID: UUID?
+    
+    @AppStorage("showToolbarDragHandle") private var showDrag = true
+
+    func body(content: Content) -> some View {
+        if entry.item == .addressBar && showDrag {
+            HStack(spacing: 4) {
+                content
+                Image(systemName: "line.3.horizontal")
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(4)
+                    .contentShape(Rectangle())
+                    .help("Drag to move the address bar")
+                    .accessibilityLabel("Move Address Bar")
+                    .onDrag { dragProvider() }
+            }
+        } else {
+            content.onDrag { dragProvider() }
+        }
+    }
+
+    private func dragProvider() -> NSItemProvider {
+        draggedItemID = entry.id
+        let provider = NSItemProvider()
+        provider.registerDataRepresentation(
+            forTypeIdentifier: UTType.data.identifier,
+            visibility: .ownProcess
+        ) { completion in
+            completion(entry.id.uuidString.data(using: .utf8), nil)
+            return nil
+        }
+        return provider
     }
 }

@@ -11,6 +11,7 @@ final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
     let profileIcon: String
     let restoredState: TabSessionState?
     let browserState: BrowserState
+    let splitState: BrowserState
     var shouldDeferFirstPresentation = false
 
     init(
@@ -30,6 +31,9 @@ final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
         self.profileIcon = profileIcon
         self.restoredState = restoredState
         self.browserState = browserState ?? BrowserState()
+        self.splitState = BrowserState()
+        self.splitState.tabID = id + "_split"
+        self.splitState.isPrivateBrowsing = self.isPrivate
         self.browserState.tabID = id
         self.browserState.isPrivateBrowsing = self.isPrivate
         self.browserState.spaceIndex = spaceIndex
@@ -448,6 +452,7 @@ final class WindowManager: ObservableObject {
         let closingIDs = [tabID, tabID + "_split"]
 
         tab.browserState.cleanup()
+        tab.splitState.cleanup()
         let lingeringStates = WebExtensionManager.shared.allTabs.filter {
             closingIDs.contains($0.tabID)
         }
@@ -629,7 +634,8 @@ private struct BrowserWindowTabContainer: View {
                     profileIcon: tab.profileIcon,
                     tabID: tab.id,
                     restoredState: tab.restoredState,
-                    providedState: tab.browserState
+                    providedState: tab.browserState,
+                    providedSplitState: tab.splitState
                 )
                 .environmentObject(windowManager)
                 .opacity(isActive ? 1 : 0)

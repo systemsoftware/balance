@@ -133,7 +133,8 @@ var Settings: [Setting] = [
             "https://duckduckgo.com/?q=": "DuckDuckGo",
             "https://www.perplexity.ai/search/new?q=": "Perplexity",
             "https://en.wikipedia.org/wiki/": "Wikipedia",
-            "https://search.yahoo.com/search?p=": "Yahoo"
+            "https://search.yahoo.com/search?p=": "Yahoo",
+            "https://chatgpt.com/?q=":"ChatGPT"
         ])
     ),
     Setting(
@@ -147,6 +148,14 @@ var Settings: [Setting] = [
             "https://ac.duckduckgo.com/ac/?type=list&q=": "DuckDuckGo",
             "https://suggestqueries.google.com/complete/search?client=firefox&hl=en&q=": "Google"
         ])
+    ),
+    Setting(
+        name: "Show Autocomplete When Typing",
+        icon: "text.cursor",
+        category: catBrowsing,
+        type: "toggle",
+        appStorageKey: "showAddressBarAutofill",
+        defaultValueBool: true
     ),
     Setting(
         name: "Homepage",
