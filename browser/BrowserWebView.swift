@@ -238,6 +238,9 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "scrollObserver")
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "balanceLocation")
                 webView.configuration.userContentController.removeScriptMessageHandler(forName: "autofillRequest")
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: "printPage")
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: "webShare")
+                webView.configuration.userContentController.removeScriptMessageHandler(forName: "balancePermissionsQuery")
                 webView.configuration.userContentController.removeAllScriptMessageHandlers()
                 webView.configuration.userContentController.removeAllUserScripts()
                 
@@ -1240,6 +1243,127 @@ struct BrowserWebView: NSViewRepresentable {
         config.userContentController.addUserScript(afScript)
         config.userContentController.add(context.coordinator, name: "autofillRequest")
         
+        let printScriptSource = """
+        window.print = function() {
+            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.printPage) {
+                window.webkit.messageHandlers.printPage.postMessage({});
+            }
+        };
+        """
+        let printScript = WKUserScript(source: printScriptSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        config.userContentController.addUserScript(printScript)
+        config.userContentController.add(context.coordinator, name: "printPage")
+        
+        let webShareSource = """
+        (function() {
+            if (!navigator.canShare) {
+                navigator.canShare = function(data) {
+                    if (!data || typeof data !== 'object') return false;
+                    if (!data.url && !data.text && !data.title) return false;
+                    return true;
+                };
+            }
+            navigator.share = function(data) {
+                return new Promise((resolve, reject) => {
+                    if (!data || typeof data !== 'object' || (!data.url && !data.text && !data.title)) {
+                        reject(new TypeError("Invalid share data: at least one of url, text, or title must be provided"));
+                        return;
+                    }
+                    const callbackId = 'share_' + Math.random().toString(36).substr(2, 9);
+                    window['__balanceShareCallback_' + callbackId] = function(success, errorMsg) {
+                        delete window['__balanceShareCallback_' + callbackId];
+                        if (success) {
+                            resolve();
+                        } else {
+                            reject(new DOMException(errorMsg || 'Share canceled', 'AbortError'));
+                        }
+                    };
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.webShare) {
+                        window.webkit.messageHandlers.webShare.postMessage({
+                            id: callbackId,
+                            title: data.title || '',
+                            text: data.text || '',
+                            url: data.url || ''
+                        });
+                    } else {
+                        delete window['__balanceShareCallback_' + callbackId];
+                        reject(new DOMException('Share not supported', 'AbortError'));
+                    }
+                });
+            };
+        })();
+        """
+        let webShareScript = WKUserScript(source: webShareSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        config.userContentController.addUserScript(webShareScript)
+        config.userContentController.add(context.coordinator, name: "webShare")
+        
+        let permissionsSource = """
+        (function() {
+            const originalQuery = (navigator.permissions && typeof navigator.permissions.query === 'function') 
+                ? navigator.permissions.query.bind(navigator.permissions) 
+                : null;
+
+            class BalancePermissionStatus extends EventTarget {
+                constructor(name, state) {
+                    super();
+                    this._name = name;
+                    this._state = state;
+                    this.onchange = null;
+                }
+                get name() { return this._name; }
+                get state() { return this._state; }
+                _update(newState) {
+                    if (this._state !== newState) {
+                        this._state = newState;
+                        const event = new Event('change');
+                        this.dispatchEvent(event);
+                        if (typeof this.onchange === 'function') {
+                            this.onchange.call(this, event);
+                        }
+                    }
+                }
+            }
+
+            if (!navigator.permissions) {
+                navigator.permissions = {};
+            }
+
+            navigator.permissions.query = function(descriptor) {
+                return new Promise((resolve, reject) => {
+                    if (!descriptor || typeof descriptor !== 'object' || !descriptor.name) {
+                        reject(new TypeError("The name property is required"));
+                        return;
+                    }
+                    const name = descriptor.name;
+                    const handledNames = ['geolocation', 'notifications', 'camera', 'microphone'];
+                    if (!handledNames.includes(name)) {
+                        if (originalQuery) {
+                            originalQuery(descriptor).then(resolve).catch(reject);
+                            return;
+                        }
+                        resolve(new BalancePermissionStatus(name, 'prompt'));
+                        return;
+                    }
+
+                    const callbackId = 'perm_' + Math.random().toString(36).substr(2, 9);
+                    window['__balancePermCallback_' + callbackId] = function(state) {
+                        delete window['__balancePermCallback_' + callbackId];
+                        resolve(new BalancePermissionStatus(name, state));
+                    };
+                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.balancePermissionsQuery) {
+                        window.webkit.messageHandlers.balancePermissionsQuery.postMessage({ id: callbackId, name: name });
+                    } else {
+                        delete window['__balancePermCallback_' + callbackId];
+                        resolve(new BalancePermissionStatus(name, 'prompt'));
+                    }
+                });
+            };
+        })();
+        """
+        let permissionsScript = WKUserScript(source: permissionsSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+        config.userContentController.addUserScript(permissionsScript)
+        config.userContentController.add(context.coordinator, name: "balancePermissionsQuery")
+        
         WebExtensionManager.shared.loadAllFromDisk()
         if !priv {
             WebExtensionManager.shared.activeTab = state
@@ -1454,7 +1578,10 @@ struct BrowserWebView: NSViewRepresentable {
         "installExtension",
         "scrollObserver",
         "balanceLocation",
-        "autofillRequest"
+        "autofillRequest",
+        "printPage",
+        "webShare",
+        "balancePermissionsQuery"
     ]
 
     private static func configureContentBlockers(
@@ -1527,6 +1654,7 @@ struct BrowserWebView: NSViewRepresentable {
         var lastFailedURL: URL?
         var contentBlockersEnabled: Bool?
         let profile: String
+        var activeShareDelegates: [NSSharingServicePicker: WebShareDelegate] = [:]
 
         func syncNotificationPermission(in webView: WKWebView) {
             guard let host = webView.url?.host else { return }
@@ -1716,6 +1844,92 @@ struct BrowserWebView: NSViewRepresentable {
                             }
                         }
                     }
+                }
+            } else if message.name == "printPage" {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    guard let webView = self.state.webView ?? (message.webView as? BrowserWKWebView) ?? message.webView else { return }
+                    
+                    let printInfo = NSPrintInfo()
+                    let operation = webView.printOperation(with: printInfo)
+                    
+                    operation.view?.frame = webView.bounds
+                    operation.view?.layoutSubtreeIfNeeded()
+                    
+                    operation.showsPrintPanel = true
+                    operation.showsProgressPanel = true
+                    
+                    if let window = webView.window {
+                        operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+                    } else {
+                        operation.run()
+                    }
+                }
+            } else if message.name == "webShare", let dict = message.body as? [String: Any], let id = dict["id"] as? String {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    guard let webView = self.state.webView ?? (message.webView as? BrowserWKWebView) ?? message.webView else { return }
+                    
+                    var items: [Any] = []
+                    if let urlStr = dict["url"] as? String, !urlStr.isEmpty, let url = URL(string: urlStr) {
+                        items.append(url)
+                    }
+                    if let text = dict["text"] as? String, !text.isEmpty {
+                        items.append(text)
+                    } else if let title = dict["title"] as? String, !title.isEmpty, items.isEmpty {
+                        items.append(title)
+                    }
+                    
+                    guard !items.isEmpty else {
+                        webView.evaluateJavaScript("if (window['__balanceShareCallback_\(id)']) { window['__balanceShareCallback_\(id)'](false, 'No items to share'); }", completionHandler: nil)
+                        return
+                    }
+                    
+                    let picker = NSSharingServicePicker(items: items)
+                    let delegate = WebShareDelegate { [weak self, weak picker] success in
+                        webView.evaluateJavaScript("if (window['__balanceShareCallback_\(id)']) { window['__balanceShareCallback_\(id)'](\(success), \(success ? "null" : "'Share canceled'")); }", completionHandler: nil)
+                        if let picker = picker {
+                            self?.activeShareDelegates.removeValue(forKey: picker)
+                        }
+                    }
+                    picker.delegate = delegate
+                    self.activeShareDelegates[picker] = delegate
+                    
+                    let bounds = webView.bounds
+                    let targetRect = NSRect(x: bounds.midX, y: bounds.midY, width: 1, height: 1)
+                    picker.show(relativeTo: targetRect, of: webView, preferredEdge: .minY)
+                }
+            } else if message.name == "balancePermissionsQuery", let dict = message.body as? [String: Any], let id = dict["id"] as? String, let name = dict["name"] as? String {
+                DispatchQueue.main.async { [weak self] in
+                    guard let self = self else { return }
+                    guard let webView = self.state.webView ?? (message.webView as? BrowserWKWebView) ?? message.webView else { return }
+                    let host = webView.url?.host ?? ""
+                    
+                    let permState: PermissionState
+                    switch name {
+                    case "geolocation":
+                        permState = SitePermissionStore.shared.mediaPermission(for: host, type: "location")
+                    case "notifications":
+                        permState = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
+                    case "camera":
+                        permState = SitePermissionStore.shared.mediaPermission(for: host, type: "camera")
+                    case "microphone":
+                        permState = SitePermissionStore.shared.mediaPermission(for: host, type: "microphone")
+                    default:
+                        permState = .ask
+                    }
+                    
+                    let stateStr: String
+                    switch permState {
+                    case .allow:
+                        stateStr = "granted"
+                    case .deny:
+                        stateStr = "denied"
+                    case .ask:
+                        stateStr = "prompt"
+                    }
+                    
+                    webView.evaluateJavaScript("if (window['__balancePermCallback_\(id)']) { window['__balancePermCallback_\(id)']('\(stateStr)'); }", completionHandler: nil)
                 }
             }
         }
@@ -2256,6 +2470,16 @@ struct BrowserWebView: NSViewRepresentable {
             }
         }
 
+    }
+}
+
+final class WebShareDelegate: NSObject, NSSharingServicePickerDelegate {
+    let onComplete: (Bool) -> Void
+    init(onComplete: @escaping (Bool) -> Void) {
+        self.onComplete = onComplete
+    }
+    func sharingServicePicker(_ sharingServicePicker: NSSharingServicePicker, didChoose service: NSSharingService?) {
+        onComplete(service != nil)
     }
 }
 

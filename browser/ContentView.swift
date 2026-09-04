@@ -1056,7 +1056,11 @@ struct ContentView: View {
         operation.showsPrintPanel = true
         operation.showsProgressPanel = true
 
-        operation.run()
+        if let window = webView.window {
+            operation.runModal(for: window, delegate: nil, didRun: nil, contextInfo: nil)
+        } else {
+            operation.run()
+        }
     }
     
     
