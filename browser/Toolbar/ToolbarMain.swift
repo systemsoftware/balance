@@ -96,6 +96,68 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+import SwiftUI
+import AppKit
+
+// 1. Transparent AppKit view that forwards left clicks but catches right clicks
+struct RightClickDetector: NSViewRepresentable {
+    var onRightClick: () -> Void
+
+    func makeNSView(context: Context) -> NSView {
+        let view = RightClickableView()
+        view.onRightClick = onRightClick
+        return view
+    }
+
+    func updateNSView(_ nsView: NSView, context: Context) {}
+}
+
+class RightClickableView: NSView {
+    var onRightClick: (() -> Void)?
+
+    // FIX: Returning nil allows standard left-clicks to bypass this overlay
+    // and hit the native SwiftUI views underneath.
+    override func hitTest(_ point: NSPoint) -> NSView? {
+        return nil
+    }
+
+    private var monitor: Any?
+
+    // Catch right clicks inside our bounding box via a local mouse monitor
+    override func viewDidMoveToWindow() {
+        super.viewDidMoveToWindow()
+        
+        if window != nil {
+            monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
+                guard let self = self, let _ = self.window else { return event }
+                
+                // Convert global window click location to this view's coordinates
+                let point = self.convert(event.locationInWindow, from: nil)
+                if self.bounds.contains(point) {
+                    self.onRightClick?()
+                    return nil // Consume event so system sounds/menus don't trigger
+                }
+                return event
+            }
+        } else {
+            if let monitor = monitor {
+                NSEvent.removeMonitor(monitor)
+            }
+        }
+    }
+}
+
+// 2. View Extension
+extension View {
+    func onRightClick(perform action: @escaping () -> Void) -> some View {
+        self.overlay(
+            RightClickDetector(onRightClick: action)
+                .allowsHitTesting(true)
+        )
+    }
+}
+
+
 
 struct BrowserToolbar: View {
     
@@ -124,6 +186,9 @@ struct BrowserToolbar: View {
     @State private var showAddRemoveMenu = false
     
     @State private var draggedItemID: UUID?
+    
+    @State var showEdit = false
+    @State var editSection = 0
 
     @AppStorage("showToolbarDragHandle") private var showDrag = false
 
@@ -169,34 +234,9 @@ struct BrowserToolbar: View {
                             draggedItemID: $draggedItemID
                         )
                     )
-                        .contextMenu {
-                            
-                            Menu("Remove") {
-                                ForEach(toolbarStore.items) { removeEntry in
-                                    Button(removeEntry.item.name) {
-                                        toolbarStore.remove(id: removeEntry.id)
-                                    }
-                                }
+                    .onRightClick {
+                           showEdit = true
                             }
-                                                
-                            Menu("Add") {
-                                ForEach(ToolbarItemType.allCases) { newItem in
-                                    if newItem == .spacer || !toolbarStore.contains(newItem) {
-                                        Button(newItem.name) {
-                                            toolbarStore.add(newItem)
-                                        }
-                                    }
-                                }
-                                
-                            }
-                            
-                            Menu("Options") {
-                                Toggle(isOn: $showDrag) {
-                                    Text("Show Address Bar Drag Handle")
-                                }
-                            }
-                            
-                        }
                     
                     
                 }
@@ -213,6 +253,90 @@ struct BrowserToolbar: View {
                 FindBarView(state: browserState)
                     .padding(Layout.controlPadding)
             }
+        }
+        .popover(isPresented: $showEdit) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Customize Toolbar")
+                    .font(.headline)
+                
+                Picker("", selection: $editSection) {
+                    Text("Add").tag(0)
+                    Text("Remove").tag(1)
+                    Text("Options").tag(2)
+                }
+                .pickerStyle(.segmented)
+                
+                ScrollView {
+                    switch editSection {
+                    case 0:
+                        VStack(alignment: .leading, spacing: 4) {
+                            ForEach(ToolbarItemType.allCases) { newItem in
+                                if newItem == .spacer || !toolbarStore.contains(newItem) {
+                                    Button {
+                                        toolbarStore.add(newItem)
+                                    } label: {
+                                        HStack {
+                                            Text(newItem.name)
+                                            Spacer()
+                                            Image(systemName: "plus.circle")
+                                                .foregroundStyle(.secondary)
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 8)
+                                    .background(Color.primary.opacity(0.001))
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
+                        
+                    case 1:
+                        if toolbarStore.items.isEmpty {
+                            Text("No items to remove")
+                                .foregroundStyle(.secondary)
+                                .padding(.vertical, 6)
+                        } else {
+                            VStack(alignment: .leading, spacing: 4) {
+                                ForEach(toolbarStore.items) { removeEntry in
+                                    Button {
+                                        toolbarStore.remove(id: removeEntry.id)
+                                    } label: {
+                                        HStack {
+                                            Text(removeEntry.item.name)
+                                            Spacer()
+                                            Image(systemName: "minus.circle")
+                                                .foregroundStyle(.red)
+                                        }
+                                        .contentShape(Rectangle())
+                                    }
+                                    .buttonStyle(.plain)
+                                    .padding(.vertical, 6)
+                                    .padding(.horizontal, 8)
+                                    .background(Color.primary.opacity(0.001))
+                                    .cornerRadius(6)
+                                }
+                            }
+                        }
+                        
+                    default:
+                        Toggle(isOn: $showDrag) {
+                            Text("Show Address Bar Drag Handle")
+                        }
+                        .padding(.vertical, 4)
+                    }
+                }
+       //         .frame(width: 280)
+                .frame(maxHeight: 400)
+                .animation(.default, value: editSection)
+                Text("Drag toolbar items to reorder them.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+            }
+            .padding(20)
+
         }
     }
 
