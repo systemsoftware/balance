@@ -112,6 +112,24 @@ class BrowserImporter: ObservableObject {
     @Published var currentlyImporting: ImportBrowser?
     
     private let bookmarkStore = BookmarkStore()
+
+    private struct ImportedHistory {
+        let title: String
+        let url: String
+    }
+
+    private struct ImportedPassword {
+        let domain: String
+        let username: String
+        let password: String
+    }
+
+    private struct ImportPayload {
+        var bookmarks: [Bookmark] = []
+        var history: [ImportedHistory] = []
+        var passwords: [ImportedPassword] = []
+        var result = ImportResult()
+    }
     
     // MARK: - Main Import
     
@@ -137,16 +155,25 @@ class BrowserImporter: ObservableObject {
             }
 
             DispatchQueue.global(qos: .userInitiated).async {
+                var payload: ImportPayload
                 if browser == .firefox {
-                    self.importFirefox(&result)
+                    payload = self.importFirefox()
                 } else {
-                    self.importChromium(browser, &result)
+                    payload = self.importChromium(browser)
                 }
-
-                result.completed = true
+                payload.result.completed = true
 
                 DispatchQueue.main.async {
-                    self.results[browser] = result
+                    self.bookmarkStore.add(contentsOf: payload.bookmarks)
+                    HistoryManager.addToHistory(
+                        payload.history.map { .init(title: $0.title, url: $0.url) }
+                    )
+                    PasswordManager.shared.savePasswords(
+                        payload.passwords.map {
+                            PasswordImport(domain: $0.domain, username: $0.username, password: $0.password)
+                        }
+                    )
+                    self.results[browser] = payload.result
                     self.currentlyImporting = nil
                     SandboxedFileAccess.shared.release(accessURL)
                 }
@@ -156,49 +183,39 @@ class BrowserImporter: ObservableObject {
     
     // MARK: - Chromium Import (Chrome & Edge)
     
-    private func importChromium(_ browser: ImportBrowser, _ result: inout ImportResult) {
+    private func importChromium(_ browser: ImportBrowser) -> ImportPayload {
+        var payload = ImportPayload()
         let basePath = browser.profilePath
         
         // Bookmarks
         let bookmarksPath = "\(basePath)/Bookmarks"
         if FileManager.default.fileExists(atPath: bookmarksPath) {
-            let bookmarks = parseChromiumBookmarks(at: bookmarksPath)
-            DispatchQueue.main.sync {
-                bookmarkStore.add(contentsOf: bookmarks)
-            }
-            result.bookmarksCount = bookmarks.count
+            payload.bookmarks = parseChromiumBookmarks(at: bookmarksPath)
+            payload.result.bookmarksCount = payload.bookmarks.count
         } else {
-            result.errors.append("Bookmarks file not found")
+            payload.result.errors.append("Bookmarks file not found")
         }
         
         // History
         let historyPath = "\(basePath)/History"
         if FileManager.default.fileExists(atPath: historyPath) {
-            let entries = readChromiumHistory(at: historyPath)
-            let context = HistoryManager.sharedContainer.mainContext
-            for entry in entries {
-                DispatchQueue.main.sync {
-                    HistoryManager.addToHistory(title: entry.title, url: entry.url, context: context)
-                }
+            payload.history = readChromiumHistory(at: historyPath).map {
+                ImportedHistory(title: $0.title, url: $0.url)
             }
-            result.historyCount = entries.count
+            payload.result.historyCount = payload.history.count
         } else {
-            result.errors.append("History file not found")
+            payload.result.errors.append("History file not found")
         }
         
         // Passwords
         let loginDataPath = "\(basePath)/Login Data"
         if FileManager.default.fileExists(atPath: loginDataPath) {
-            let passwords = readChromiumPasswords(at: loginDataPath, browser: browser)
-            for pw in passwords {
-                DispatchQueue.main.sync {
-                    PasswordManager.shared.savePassword(username: pw.username, passwordString: pw.password, domain: pw.domain)
-                }
-            }
-            result.passwordsCount = passwords.count
+            payload.passwords = readChromiumPasswords(at: loginDataPath, browser: browser)
+            payload.result.passwordsCount = payload.passwords.count
         } else {
-            result.errors.append("Login Data file not found")
+            payload.result.errors.append("Login Data file not found")
         }
+        return payload
     }
     
     // MARK: Chromium Bookmarks (JSON)
@@ -261,12 +278,6 @@ class BrowserImporter: ObservableObject {
     }
     
     // MARK: Chromium Passwords (SQLite + Keychain)
-    
-    private struct ImportedPassword {
-        let domain: String
-        let username: String
-        let password: String
-    }
     
     private func readChromiumPasswords(at path: String, browser: ImportBrowser) -> [ImportedPassword] {
         // Copy file
@@ -386,48 +397,38 @@ class BrowserImporter: ObservableObject {
     
     // MARK: - Firefox Import
     
-    private func importFirefox(_ result: inout ImportResult) {
+    private func importFirefox() -> ImportPayload {
+        var payload = ImportPayload()
         guard let profilePath = findFirefoxProfile() else {
-            result.errors.append("No Firefox profile found")
-            return
+            payload.result.errors.append("No Firefox profile found")
+            return payload
         }
         
         let placesPath = "\(profilePath)/places.sqlite"
         
         // Bookmarks
         if FileManager.default.fileExists(atPath: placesPath) {
-            let bookmarks = readFirefoxBookmarks(at: placesPath)
-            DispatchQueue.main.sync {
-                bookmarkStore.add(contentsOf: bookmarks)
-            }
-            result.bookmarksCount = bookmarks.count
+            payload.bookmarks = readFirefoxBookmarks(at: placesPath)
+            payload.result.bookmarksCount = payload.bookmarks.count
             
             // History
-            let entries = readFirefoxHistory(at: placesPath)
-            let context = HistoryManager.sharedContainer.mainContext
-            for entry in entries {
-                DispatchQueue.main.sync {
-                    HistoryManager.addToHistory(title: entry.title, url: entry.url, context: context)
-                }
+            payload.history = readFirefoxHistory(at: placesPath).map {
+                ImportedHistory(title: $0.title, url: $0.url)
             }
-            result.historyCount = entries.count
+            payload.result.historyCount = payload.history.count
         } else {
-            result.errors.append("places.sqlite not found")
+            payload.result.errors.append("places.sqlite not found")
         }
         
         // Passwords
         let loginsPath = "\(profilePath)/logins.json"
         if FileManager.default.fileExists(atPath: loginsPath) {
-            let passwords = readFirefoxPasswords(at: loginsPath)
-            for pw in passwords {
-                DispatchQueue.main.sync {
-                    PasswordManager.shared.savePassword(username: pw.username, passwordString: pw.password, domain: pw.domain)
-                }
-            }
-            result.passwordsCount = passwords.count
+            payload.passwords = readFirefoxPasswords(at: loginsPath)
+            payload.result.passwordsCount = payload.passwords.count
         } else {
-            result.errors.append("logins.json not found")
+            payload.result.errors.append("logins.json not found")
         }
+        return payload
     }
     
     private func findFirefoxProfile() -> String? {

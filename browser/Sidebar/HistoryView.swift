@@ -20,6 +20,18 @@ final class HistoryItem {
 // MARK: - 2. Management Logic
 @MainActor
 class HistoryManager {
+    struct Entry {
+        let title: String
+        let url: String
+    }
+
+    private struct PendingVisit {
+        let entry: Entry
+        let profile: String
+    }
+
+    private static var pendingVisits: [String: PendingVisit] = [:]
+    private static var saveTask: Task<Void, Never>?
     
     static let sharedContainer: ModelContainer = {
         let schema = Schema([HistoryItem.self])
@@ -46,39 +58,67 @@ class HistoryManager {
         }
     }()
     
-    static func addToHistory(title: String, url: String, profile: String = "", context: ModelContext?) {
-        // 1. Check for empty data
-        guard !url.isEmpty else {
-            print("⚠️ History: URL was empty, skipping.")
-            return
+    static func addToHistory(title: String, url: String, profile: String = "") {
+        guard !url.isEmpty else { return }
+        pendingVisits["\(profile)\u{0}\(url)"] = PendingVisit(
+            entry: Entry(title: title, url: url),
+            profile: profile
+        )
+        saveTask?.cancel()
+        saveTask = Task { @MainActor in
+            try? await Task.sleep(for: .milliseconds(350))
+            guard !Task.isCancelled else { return }
+            flushPending()
         }
-        
-        print("📜 Attempting to save: \(title) at \(url) for profile \(profile)")
+    }
 
-        let searchURL = url
+    static func flushPending() {
+        saveTask?.cancel()
+        saveTask = nil
+        let visits = Array(pendingVisits.values)
+        pendingVisits.removeAll(keepingCapacity: true)
+        for group in Dictionary(grouping: visits, by: \.profile) {
+            persist(group.value.map(\.entry), profile: group.key)
+        }
+    }
+
+    /// Imports many visits with one fetch and one save instead of blocking the
+    /// main context once per entry.
+    static func addToHistory(_ entries: [Entry], profile: String = "") {
+        persist(entries, profile: profile)
+    }
+
+    private static func persist(_ entries: [Entry], profile: String) {
+        guard !entries.isEmpty else { return }
         let searchProfile = profile
         let descriptor = FetchDescriptor<HistoryItem>(
-            predicate: #Predicate { $0.url == searchURL && $0.profile == searchProfile }
+            predicate: #Predicate { $0.profile == searchProfile }
         )
-        
+
         do {
             let existingItems = try sharedContainer.mainContext.fetch(descriptor)
-            
-            if let existingItem = existingItems.first {
-                existingItem.timestamp = Date()
-                existingItem.title = title
-                print("🔄 Updated existing history item")
-            } else {
-                let newItem = HistoryItem(title: title, url: url, profile: profile)
-                sharedContainer.mainContext.insert(newItem)
-                print("✅ Inserted new history item")
+            var itemsByURL = Dictionary(existingItems.map { ($0.url, $0) }, uniquingKeysWith: { first, _ in first })
+            let timestamp = Date()
+
+            for entry in entries where !entry.url.isEmpty {
+                if let item = itemsByURL[entry.url] {
+                    item.title = entry.title
+                    item.timestamp = timestamp
+                } else {
+                    let item = HistoryItem(
+                        title: entry.title,
+                        url: entry.url,
+                        profile: profile,
+                        timestamp: timestamp
+                    )
+                    sharedContainer.mainContext.insert(item)
+                    itemsByURL[entry.url] = item
+                }
             }
-            
-            // 2. Explicitly save to ensure persistence
             try sharedContainer.mainContext.save()
-            
         } catch {
-            print("❌ SwiftData Error: \(error.localizedDescription)")
+            print("❌ Failed to import history: \(error.localizedDescription)")
+            sharedContainer.mainContext.rollback()
         }
     }
     

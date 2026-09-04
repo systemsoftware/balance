@@ -285,6 +285,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         Task { @MainActor in
             if clearHistory {
                 HistoryManager.clearAllHistory()
+            } else {
+                HistoryManager.flushPending()
             }
             if clearDownloadHistory {
                 let downloadStore = DownloadStore()

@@ -1,13 +1,13 @@
 import SwiftUI
-import Foundation
 
 struct RoundedBorderStyle: ViewModifier {
     var cornerRadius: CGFloat = 20
     var lineWidth: CGFloat = 1
     var color: Color = .gray
-    
+    var usesSidebarWidth = false
+
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
-    private var sidebarWidth: Int = 345
+    private var sidebarWidth = 345
 
     func body(content: Content) -> some View {
         content
@@ -16,22 +16,7 @@ struct RoundedBorderStyle: ViewModifier {
                     .stroke(color, lineWidth: lineWidth)
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .frame(width: CGFloat(sidebarWidth))
-    }
-}
-
-struct RoundedBorderStyleNoFrame: ViewModifier {
-    var cornerRadius: CGFloat = 20
-    var lineWidth: CGFloat = 1
-    var color: Color = .gray
-    
-    func body(content: Content) -> some View {
-        content
-            .overlay(
-                RoundedRectangle(cornerRadius: cornerRadius)
-                    .stroke(color, lineWidth: lineWidth)
-            )
-            .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
+            .frame(width: usesSidebarWidth ? CGFloat(sidebarWidth) : nil)
     }
 }
 
@@ -41,10 +26,11 @@ extension View {
         lineWidth: CGFloat = 1,
         color: Color = .gray
     ) -> some View {
-        self.modifier(RoundedBorderStyle(
+        modifier(RoundedBorderStyle(
             cornerRadius: cornerRadius,
             lineWidth: lineWidth,
-            color: color
+            color: color,
+            usesSidebarWidth: true
         ))
     }
     
@@ -54,14 +40,11 @@ extension View {
         lineWidth: CGFloat = 1,
         color: Color = .gray
     ) -> some View {
-        if enabled == true {
-            self.modifier(RoundedBorderStyleNoFrame(
-                cornerRadius: cornerRadius,
-                lineWidth: lineWidth,
-                color: color
-            ))
-        } else {
-            self.modifier(RoundedBorderStyleNoFrame(cornerRadius: 0, lineWidth: 0, color: .clear))
-        }
+        modifier(RoundedBorderStyle(
+            cornerRadius: cornerRadius,
+            lineWidth: enabled ? lineWidth : 0,
+            color: enabled ? color : .clear,
+            usesSidebarWidth: false
+        ))
     }
 }

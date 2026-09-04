@@ -1257,8 +1257,7 @@ struct ContentView: View {
             HistoryManager.addToHistory(
                 title: historyTitle,
                 url: historyURL,
-                profile: bProfile,
-                context: modelContext
+                profile: bProfile
             )
         }
     }
@@ -1289,8 +1288,7 @@ struct ContentView: View {
             HistoryManager.addToHistory(
                 title: historyTitle,
                 url: historyURL,
-                profile: bProfile,
-                context: modelContext
+                profile: bProfile
             )
         }
     }

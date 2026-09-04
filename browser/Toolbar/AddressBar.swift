@@ -17,15 +17,9 @@ struct AddressBar: View {
     let events: [EventExtraction]
     let submitURL: () -> Void
 
-    @State private var suggestionsAnchor = NSView()
-
     var body: some View {
         HStack {
-                // Keep this view in the hierarchy even while WebKit is updating
-                // serverTrust. Removing a sibling of the native text field while
-                // AppKit is establishing its field editor can corrupt the key-view
-                // loop and crash when the address field is clicked.
-                TrustIndicator(trust: browserState.serverTrust, url: location, isPresented: $showTrustInfo)
+                TrustIndicator(url: location, isPresented: $showTrustInfo)
                     .popover(isPresented: $showTrustInfo) {
                         ServerTrustView(
                             trust: browserState.serverTrust,
@@ -36,7 +30,7 @@ struct AddressBar: View {
                         )
                     }
 
-                AddressField(text: $urlInput, focusOnAppear: focusOnAppear, onSubmit: submitURL, suggestionsAnchor: suggestionsAnchor)
+                AddressField(text: $urlInput, focusOnAppear: focusOnAppear, onSubmit: submitURL)
                 Spacer()
 
                 if isPrivate {
@@ -51,7 +45,6 @@ struct AddressBar: View {
                         .padding(.trailing, 10)
                 }
         }
-        .background(AddressBarAnchor(view: suggestionsAnchor))
         .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
         .sheet(isPresented: $showTabSearch) {
                 TabSearchView(isPopover: true)
@@ -93,7 +86,6 @@ struct AddressBar: View {
 }
 
 private struct TrustIndicator: View {
-    let trust: SecTrust?
     let url: URL?
     @Binding var isPresented: Bool
 
@@ -102,19 +94,13 @@ private struct TrustIndicator: View {
     }
 
     private var isSecure: Bool {
-        guard url?.scheme == "https" else { return false }
-
-        // WebKit publishes the URL before it publishes serverTrust. A committed
-        // HTTPS URL is a safe interim state; replace it with the evaluated result
-        // as soon as the trust object arrives.
-        guard let trust else { return true }
-        return SecTrustEvaluateWithError(trust, nil)
+        url?.scheme == "https"
     }
 
     var body: some View {
         Button(action: { isPresented.toggle() }) {
             Image(systemName: isSecure ? "lock.fill" : "exclamationmark.triangle.fill")
-                .foregroundColor(isSecure ? .primary : .red)
+                .foregroundStyle(isSecure ? Color.primary : Color.red)
                 .frame(width: 16, height: 16)
         }
         .buttonStyle(.plain)
@@ -133,22 +119,10 @@ private struct TrustIndicator: View {
     }
 }
 
-private struct AddressBarAnchor: NSViewRepresentable {
-    let view: NSView
-
-    func makeNSView(context: Context) -> NSView {
-        view.postsFrameChangedNotifications = true
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}
-
 private struct AddressField: View {
     @Binding var text: String
     var focusOnAppear = false
     let onSubmit: () -> Void
-    let suggestionsAnchor: NSView
 
     @AppStorage("showAddressBarAutofill") private var showAddressBarAutofill = true
 
@@ -157,8 +131,7 @@ private struct AddressField: View {
             text: $text,
             onSubmit: onSubmit,
             focusOnAppear: focusOnAppear,
-            showAutofill: showAddressBarAutofill,
-            suggestionsAnchor: suggestionsAnchor
+            showAutofill: showAddressBarAutofill
         )
         .padding(10)
         .frame(height: 40)
@@ -175,7 +148,6 @@ private struct NativeAddressField: NSViewRepresentable {
     let onSubmit: () -> Void
     var focusOnAppear = false
     var showAutofill = true
-    let suggestionsAnchor: NSView
 
     func makeCoordinator() -> Coordinator {
         Coordinator(parent: self)
@@ -209,7 +181,9 @@ private struct NativeAddressField: NSViewRepresentable {
         } else if field.stringValue != text {
             field.stringValue = text
         }
-        context.coordinator.updateSuggestions()
+        if !showAutofill || text.isEmpty || text.contains("//") {
+            context.coordinator.closeSuggestions()
+        }
         if focusOnAppear && !context.coordinator.didFocus {
             context.coordinator.didFocus = true
             let coordinator = context.coordinator
@@ -242,15 +216,12 @@ private struct NativeAddressField: NSViewRepresentable {
         private var suggestionsPanel: AddressSuggestionsPanel?
         private var clickMonitor: Any?
         private var resignObserver: NSObjectProtocol?
-        private var anchorObserver: NSObjectProtocol?
 
         func closeSuggestions() {
             if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
             clickMonitor = nil
             if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
             resignObserver = nil
-            if let anchorObserver { NotificationCenter.default.removeObserver(anchorObserver) }
-            anchorObserver = nil
             if let panel = suggestionsPanel {
                 panel.parent?.removeChildWindow(panel)
                 panel.orderOut(nil)
@@ -260,8 +231,8 @@ private struct NativeAddressField: NSViewRepresentable {
 
         private func positionSuggestions() {
             guard let panel = suggestionsPanel,
-                  let window = parent.suggestionsAnchor.window else { return }
-            let view = parent.suggestionsAnchor
+                  let view = field,
+                  let window = view.window else { return }
             let anchor = window.convertToScreen(view.convert(view.bounds, to: nil))
             let screen = window.screen?.visibleFrame ?? anchor
             let width = anchor.width
@@ -326,11 +297,6 @@ private struct NativeAddressField: NSViewRepresentable {
             panel.contentView = NSHostingView(rootView: content)
             suggestionsPanel = panel
             positionSuggestions()
-            anchorObserver = NotificationCenter.default.addObserver(
-                forName: NSView.frameDidChangeNotification, object: parent.suggestionsAnchor, queue: .main
-            ) { [weak self] _ in
-                self?.positionSuggestions()
-            }
             window.addChildWindow(panel, ordered: .above)
             panel.orderFront(nil)
 

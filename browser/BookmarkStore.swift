@@ -3,12 +3,12 @@ internal import Combine
 import SwiftUI
 
 final class BookmarkStore: ObservableObject {
-    @Published var items: [Bookmark] = []
+    @Published private(set) var items: [Bookmark] = []
 
     private let defaults = Config.defaults
     private let profile: String
     private var storageKey: String {
-        return profile.isEmpty ? "bookmarks" : "bookmarks_\(profile)"
+        profile.isEmpty ? "bookmarks" : "bookmarks_\(profile)"
     }
 
     init(profile: String = "") {
@@ -16,7 +16,7 @@ final class BookmarkStore: ObservableObject {
         load()
     }
 
-    func load() {
+    private func load() {
         guard
             let data = defaults.data(forKey: storageKey),
             let decoded = try? JSONDecoder().decode([Bookmark].self, from: data)
@@ -27,7 +27,7 @@ final class BookmarkStore: ObservableObject {
         items = decoded
     }
 
-    func save() {
+    private func save() {
         guard let data = try? JSONEncoder().encode(items) else { return }
         defaults.set(data, forKey: storageKey)
     }
@@ -44,11 +44,10 @@ final class BookmarkStore: ObservableObject {
     }
 
     func update(id: UUID, title: String, url: String) {
-        if let index = items.firstIndex(where: { $0.id == id }) {
-            items[index].title = title
-            items[index].url = url
-            save()
-        }
+        guard let index = items.firstIndex(where: { $0.id == id }) else { return }
+        items[index].title = title
+        items[index].url = url
+        save()
     }
 
     func remove(id: UUID) {

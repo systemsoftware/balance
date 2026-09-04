@@ -1,9 +1,27 @@
 import SwiftUI
 
 struct Bookmark: Codable, Identifiable, Equatable {
-    var id = UUID()
+    let id: UUID
     var title: String
     var url: String
+
+    init(id: UUID = UUID(), title: String, url: String) {
+        self.id = id
+        self.title = title
+        self.url = url
+    }
+
+    var displayTitle: String {
+        title.isEmpty ? url : title
+    }
+
+    var faviconURL: URL? {
+        guard var components = URLComponents(string: "https://www.google.com/s2/favicons") else {
+            return nil
+        }
+        components.queryItems = [URLQueryItem(name: "domain", value: url)]
+        return components.url
+    }
 }
 
 
@@ -20,13 +38,13 @@ struct BookmarkRow: View {
                     Circle()
                         .fill(Color.accentColor.opacity(0.1))
                         .frame(width: 32, height: 32)
-                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(bookmark.url)"))
+                    CachedAsyncImage(url: bookmark.faviconURL)
                         .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.blue)
+                        .foregroundStyle(.blue)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {
-                    Text(bookmark.title.isEmpty ? bookmark.url : bookmark.title)
+                    Text(bookmark.displayTitle)
                         .font(.system(.subheadline, design: .rounded))
                         .fontWeight(.medium)
                         .lineLimit(1)
@@ -43,8 +61,7 @@ struct BookmarkRow: View {
             .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
         }
         .buttonStyle(.plain)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
-        .cornerRadius(12)
+        .background(Color(NSColor.windowBackgroundColor).opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.primary.opacity(0.05), lineWidth: 1)
@@ -83,14 +100,14 @@ struct BookmarksView: View {
                         .font(.system(.headline, design: .rounded))
                     Spacer()
                     
-                    Button() {
-                        showAddSheet = true
+                    Button {
+                        presentNewBookmark()
                     } label: {
                         Label("New", systemImage: "plus")
                     }
                     .buttonStyle(.plain)
                     .font(.caption)
-                    .foregroundColor(.secondary)
+                    .foregroundStyle(.secondary)
                     .menuStyle(.borderlessButton)
                     .fixedSize()
                 }
@@ -158,31 +175,34 @@ struct BookmarksView: View {
         .background(Color.black.opacity(0.03))
         .sheet(isPresented: $showAddSheet) {
             AddBookmarkSheet(url: $urlInput, title: $titleInput) {
-                let newBookmark = Bookmark(title: titleInput, url: urlInput)
-                store.add(newBookmark)
-                urlInput = ""
-                titleInput = ""
+                store.add(Bookmark(title: titleInput, url: urlInput))
+                resetForm()
                 showAddSheet = false
             }
         }
-        .sheet(isPresented: $showAddBookmark) {
-            AddBookmarkSheet(url: $urlInput, title: $titleInput) {
-                let newBookmark = Bookmark(title: titleInput, url: urlInput)
-                store.add(newBookmark)
-                urlInput = ""
-                titleInput = ""
-                showAddBookmark = false
-            }
+        .onChange(of: showAddBookmark) { _, shouldPresent in
+            guard shouldPresent else { return }
+            presentNewBookmark()
+            showAddBookmark = false
         }
         .sheet(item: $editingBookmark) { mark in
             AddBookmarkSheet(url: $urlInput, title: $titleInput, isEditing: true) {
                 store.update(id: mark.id, title: titleInput, url: urlInput)
                 editingBookmark = nil
-                urlInput = ""
-                titleInput = ""
+                resetForm()
             }
         }
 
+    }
+
+    private func presentNewBookmark() {
+        resetForm()
+        showAddSheet = true
+    }
+
+    private func resetForm() {
+        urlInput = ""
+        titleInput = ""
     }
 }
 
@@ -193,10 +213,10 @@ struct EmptyBookmarksView: View {
         VStack(spacing: 12) {
             Image(systemName: "bookmark.slash")
                 .font(.system(size: 30))
-                .foregroundColor(.secondary.opacity(0.4))
+                .foregroundStyle(.secondary.opacity(0.4))
             Text("No Bookmarks Yet")
                 .font(.system(.subheadline, design: .rounded))
-                .foregroundColor(.secondary)
+                .foregroundStyle(.secondary)
         }
         .frame(maxWidth: .infinity)
     }
@@ -207,7 +227,12 @@ struct AddBookmarkSheet: View {
     @Binding var title: String
     var isEditing: Bool = false
     var onSave: () -> Void
-    @Environment(\.dismiss) var dismiss
+    @Environment(\.dismiss) private var dismiss
+
+    private var canSave: Bool {
+        !url.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+            && !title.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+    }
 
     var body: some View {
         VStack(spacing: 20) {
@@ -227,9 +252,13 @@ struct AddBookmarkSheet: View {
                 
                 Spacer()
                 
-                Button("Save Bookmark") { onSave() }
+                Button("Save Bookmark") {
+                    url = url.trimmingCharacters(in: .whitespacesAndNewlines)
+                    title = title.trimmingCharacters(in: .whitespacesAndNewlines)
+                    onSave()
+                }
                     .buttonStyle(.borderedProminent)
-                    .disabled(url.isEmpty || title.isEmpty)
+                    .disabled(!canSave)
             }
         }
         .padding()

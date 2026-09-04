@@ -8,6 +8,12 @@ struct SavedCredential: Identifiable, Hashable {
     let username: String
 }
 
+struct PasswordImport: Sendable {
+    let domain: String
+    let username: String
+    let password: String
+}
+
 class PasswordManager: ObservableObject {
 
     
@@ -135,6 +141,25 @@ class PasswordManager: ObservableObject {
     }
     
     func savePassword(username: String, passwordString: String, domain: String) {
+        Self.persistPassword(username: username, passwordString: passwordString, domain: domain)
+        loadAllCredentials()
+    }
+
+    func savePasswords(_ passwords: [PasswordImport]) {
+        guard !passwords.isEmpty else { return }
+        DispatchQueue.global(qos: .userInitiated).async {
+            for password in passwords {
+                Self.persistPassword(
+                    username: password.username,
+                    passwordString: password.password,
+                    domain: password.domain
+                )
+            }
+            self.loadAllCredentials()
+        }
+    }
+
+    nonisolated private static func persistPassword(username: String, passwordString: String, domain: String) {
         guard let passwordData = passwordString.data(using: .utf8),
               let domainData = domain.lowercased().data(using: .utf8) else { return }
         
@@ -169,7 +194,6 @@ class PasswordManager: ObservableObject {
             print("PasswordManager: SecItemUpdate status: \(status)")
         }
         
-        loadAllCredentials()
     }
     
     func updateUsername(oldUsername: String, newUsername: String, domain: String) {

@@ -1,4 +1,5 @@
 import AppKit
+import ImageIO
 import SwiftUI
 import WebKit
 import SwiftData
@@ -152,16 +153,7 @@ struct InventorySidebar: View {
             }
 
             if !item.isRemoteLink, item.mime.lowercased().contains("image") {
-                if let imgData = try? Data(contentsOf: item.url), let img = NSImage(data: imgData) {
-                    Image(nsImage: img)
-                        .resizable()
-                        .scaledToFit()
-                        .frame(maxWidth: 200, maxHeight: 200)
-                        .clipShape(RoundedRectangle(cornerRadius: 8))
-                } else {
-                    Text("Unable to load image")
-                        .foregroundStyle(.red)
-                }
+                InventoryThumbnail(url: item.url)
             }
         }
         .padding(10)
@@ -178,13 +170,7 @@ struct InventorySidebar: View {
         if item.isRemoteLink {
             return NSItemProvider(object: item.url as NSURL)
         }
-        let provider = NSItemProvider(contentsOf: item.url) ?? NSItemProvider(object: item.url as NSURL)
-        if item.mime.lowercased().contains("image"),
-           let data = try? Data(contentsOf: item.url),
-           let image = NSImage(data: data) {
-            provider.registerObject(image, visibility: .all)
-        }
-        return provider
+        return NSItemProvider(contentsOf: item.url) ?? NSItemProvider(object: item.url as NSURL)
     }
 
     private func open(_ item: InventoryItem) {
@@ -214,8 +200,13 @@ struct InventorySidebar: View {
 
         guard item.mime.lowercased().contains("image") else { return }
 
-        if let imgData = try? Data(contentsOf: item.url), let img = NSImage(data: imgData) {
-            pasteboard.writeObjects([img])
+        let url = item.url
+        Task {
+            let image = await Task.detached(priority: .userInitiated) {
+                NSImage(contentsOf: url)
+            }.value
+            guard let image else { return }
+            pasteboard.writeObjects([image])
         }
     }
 
@@ -516,5 +507,50 @@ struct InventorySidebar: View {
             context.rollback()
             print("Couldn't add link item:", error)
         }
+    }
+}
+
+private struct InventoryThumbnail: View {
+    let url: URL
+    @State private var image: NSImage?
+    @State private var failed = false
+
+    var body: some View {
+        Group {
+            if let image {
+                Image(nsImage: image)
+                    .resizable()
+                    .scaledToFit()
+            } else if failed {
+                Text("Unable to load image")
+                    .foregroundStyle(.red)
+            } else {
+                ProgressView()
+                    .controlSize(.small)
+            }
+        }
+        .frame(maxWidth: 200, maxHeight: 200)
+        .clipShape(RoundedRectangle(cornerRadius: 8))
+        .task(id: url) {
+            let thumbnail = await Task.detached(priority: .utility) {
+                Self.loadThumbnail(at: url)
+            }.value
+            image = thumbnail
+            failed = thumbnail == nil
+        }
+    }
+
+    nonisolated private static func loadThumbnail(at url: URL) -> NSImage? {
+        guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
+        let options: [CFString: Any] = [
+            kCGImageSourceCreateThumbnailFromImageAlways: true,
+            kCGImageSourceCreateThumbnailWithTransform: true,
+            kCGImageSourceThumbnailMaxPixelSize: 400,
+            kCGImageSourceShouldCacheImmediately: true
+        ]
+        guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
+            return nil
+        }
+        return NSImage(cgImage: image, size: .zero)
     }
 }
