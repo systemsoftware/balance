@@ -140,15 +140,10 @@ struct MapView: View {
                     Image(systemName: "magnifyingglass")
                         .foregroundColor(.secondary)
                         .font(.system(size: 14, weight: .medium))
-                    NativeSearchField(
+                    TextField("Search places...",
                         text: $searchText,
-                        placeholder: "Search places...",
-                        onFocusChange: { _ in },
-                        onSubmit: {
-                            search(for: searchText)
-                            completerManager.completerResults = []
-                        }
                     )
+                    .textFieldStyle(.plain)
                         .onChange(of: searchText) { old, new in
                             completerManager.updateSearch(query: new)
                         }

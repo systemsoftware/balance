@@ -125,222 +125,52 @@ private struct AddressField: View {
     let onSubmit: () -> Void
 
     @AppStorage("showAddressBarAutofill") private var showAddressBarAutofill = true
+    @FocusState private var isFocused: Bool
+    @State private var showSuggestions = false
+    @State private var inputWidth: CGFloat = 1
 
     var body: some View {
-        NativeAddressField(
-            text: $text,
-            onSubmit: onSubmit,
-            focusOnAppear: focusOnAppear,
-            showAutofill: showAddressBarAutofill
-        )
+        TextField("Search or enter website name", text: $text)
+        .textFieldStyle(.plain)
+        .focused($isFocused)
+        .onSubmit {
+            showSuggestions = false
+            onSubmit()
+        }
+        .onChange(of: text) { _, newValue in
+            showSuggestions = shouldShowSuggestions(for: newValue)
+        }
+        .onChange(of: isFocused) { _, focused in
+            showSuggestions = focused && shouldShowSuggestions(for: text)
+        }
+        .onAppear {
+            guard focusOnAppear else { return }
+            DispatchQueue.main.async { isFocused = true }
+        }
         .padding(10)
         .frame(height: 40)
-    }
-}
-
-private final class AddressSuggestionsPanel: NSPanel {
-    override var canBecomeKey: Bool { false }
-    override var canBecomeMain: Bool { false }
-}
-
-private struct NativeAddressField: NSViewRepresentable {
-    @Binding var text: String
-    let onSubmit: () -> Void
-    var focusOnAppear = false
-    var showAutofill = true
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeNSView(context: Context) -> NSTextField {
-        let field = NSTextField()
-        context.coordinator.field = field
-        field.delegate = context.coordinator
-        field.placeholderString = "Search or enter website name"
-        field.font = .systemFont(ofSize: NSFont.systemFontSize)
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.usesSingleLineMode = true
-        field.maximumNumberOfLines = 1
-        field.lineBreakMode = .byTruncatingTail
-        field.cell?.wraps = false
-        field.cell?.isScrollable = true
-        field.stringValue = text
-        return field
-    }
-
-    func updateNSView(_ field: NSTextField, context: Context) {
-        context.coordinator.parent = self
-        if let editor = field.currentEditor() {
-            if editor.string != text {
-                field.stringValue = text
-                editor.string = text
-            }
-        } else if field.stringValue != text {
-            field.stringValue = text
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { width in
+            inputWidth = width
         }
-        if !showAutofill || text.isEmpty || text.contains("//") {
-            context.coordinator.closeSuggestions()
-        }
-        if focusOnAppear && !context.coordinator.didFocus {
-            context.coordinator.didFocus = true
-            let coordinator = context.coordinator
-            DispatchQueue.main.async { [weak field, weak coordinator] in
-                guard let field, let coordinator, !coordinator.isDismantled,
-                      coordinator.parent.focusOnAppear,
-                      field.currentEditor() == nil,
-                      let window = field.window, window.isKeyWindow else { return }
-                window.makeFirstResponder(field)
-            }
-        }
-    }
-
-    static func dismantleNSView(_ field: NSTextField, coordinator: Coordinator) {
-        coordinator.closeSuggestions()
-        coordinator.isDismantled = true
-        field.delegate = nil
-        if let window = field.window,
-           window.firstResponder === field || field.currentEditor() != nil {
-            window.makeFirstResponder(nil)
-            field.abortEditing()
-        }
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: NativeAddressField
-        var didFocus = false
-        var isDismantled = false
-        weak var field: NSTextField?
-        private var suggestionsPanel: AddressSuggestionsPanel?
-        private var clickMonitor: Any?
-        private var resignObserver: NSObjectProtocol?
-
-        func closeSuggestions() {
-            if let clickMonitor { NSEvent.removeMonitor(clickMonitor) }
-            clickMonitor = nil
-            if let resignObserver { NotificationCenter.default.removeObserver(resignObserver) }
-            resignObserver = nil
-            if let panel = suggestionsPanel {
-                panel.parent?.removeChildWindow(panel)
-                panel.orderOut(nil)
-            }
-            suggestionsPanel = nil
-        }
-
-        private func positionSuggestions() {
-            guard let panel = suggestionsPanel,
-                  let view = field,
-                  let window = view.window else { return }
-            let anchor = window.convertToScreen(view.convert(view.bounds, to: nil))
-            let screen = window.screen?.visibleFrame ?? anchor
-            let width = anchor.width
-            let x = max(screen.minX, min(anchor.minX, screen.maxX - width))
-            let y = anchor.minY - 310 >= screen.minY ? anchor.minY - 310 : anchor.maxY + 10
-            panel.setFrame(NSRect(x: x, y: y, width: width, height: 300), display: true)
-        }
-
-        func updateSuggestions(showIfNeeded: Bool = false) {
-            guard !isDismantled, parent.showAutofill,
-                  !parent.text.isEmpty, !parent.text.contains("//"),
-                  let field, field.currentEditor() != nil,
-                  let window = field.window, window.isKeyWindow else {
-                closeSuggestions()
-                return
-            }
-            guard showIfNeeded || suggestionsPanel != nil else { return }
-
-            let content = AnyView(
-                List {
-                    AutoFillView(searchTerm: parent.$text, onSelection: { [weak self] in
-                        guard let self else { return }
-                        if let field = self.field {
-                            field.stringValue = self.parent.text
-                            if let editor = field.currentEditor() {
-                                editor.string = self.parent.text
-                                editor.selectedRange = NSRange(location: (self.parent.text as NSString).length, length: 0)
-                            }
-                        }
-                        self.closeSuggestions()
-                    },
+        .popover(isPresented: $showSuggestions, arrowEdge: .bottom) {
+            ScrollView {
+                AutoFillView(
+                    searchTerm: $text,
+                    onSelection: { showSuggestions = false },
                     loadQuery: {
-                        self.parent.onSubmit()
+                        showSuggestions = false
+                        onSubmit()
                     }
-                    )
-                    .listRowBackground(Color.clear)
-                }
-                .listStyle(.inset)
-                .scrollContentBackground(.hidden)
-                .frame(maxWidth: .infinity)
-                .frame(height: 300)
-                .glassEffect(.regular, in: .rect(cornerRadius: 12))
-            )
-
-            if let host = suggestionsPanel?.contentView as? NSHostingView<AnyView> {
-                host.rootView = content
-                positionSuggestions()
-                return
+                )
             }
-
-            let panel = AddressSuggestionsPanel(
-                contentRect: .zero,
-                styleMask: [.borderless, .nonactivatingPanel],
-                backing: .buffered,
-                defer: false
-            )
-            panel.isReleasedWhenClosed = false
-            panel.isOpaque = false
-            panel.backgroundColor = .clear
-            panel.hasShadow = true
-            panel.hidesOnDeactivate = true
-            panel.contentView = NSHostingView(rootView: content)
-            suggestionsPanel = panel
-            positionSuggestions()
-            window.addChildWindow(panel, ordered: .above)
-            panel.orderFront(nil)
-
-            clickMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
-                guard let self else { return event }
-                if event.window !== self.suggestionsPanel {
-                    self.closeSuggestions()
-                }
-                return event
-            }
-            resignObserver = NotificationCenter.default.addObserver(
-                forName: NSWindow.didResignKeyNotification, object: window, queue: .main
-            ) { [weak self] _ in
-                self?.closeSuggestions()
-            }
+            .padding()
+            .frame(width: inputWidth, height: 300)
         }
+    }
 
-        func controlTextDidEndEditing(_ notification: Notification) {
-            closeSuggestions()
-        }
-
-        init(parent: NativeAddressField) {
-            self.parent = parent
-        }
-
-        func controlTextDidChange(_ notification: Notification) {
-            guard let field = notification.object as? NSTextField else { return }
-            parent.text = field.stringValue
-            updateSuggestions(showIfNeeded: true)
-        }
-
-        func control(
-            _ control: NSControl,
-            textView: NSTextView,
-            doCommandBy commandSelector: Selector
-        ) -> Bool {
-            if commandSelector == #selector(NSResponder.cancelOperation(_:)), suggestionsPanel != nil {
-                closeSuggestions()
-                return true
-            }
-            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
-            closeSuggestions()
-            parent.onSubmit()
-            return true
-        }
+    private func shouldShowSuggestions(for value: String) -> Bool {
+        showAddressBarAutofill && isFocused && !value.isEmpty && !value.contains("//")
     }
 }

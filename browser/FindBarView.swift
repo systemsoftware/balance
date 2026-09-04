@@ -7,10 +7,8 @@ struct FindBarView: View {
     
     var body: some View {
         HStack(spacing: 6) {
-            NativeSearchField(
+            TextField("Find in page",
                 text: $state.findQuery,
-                placeholder: "Find in page",
-                onFocusChange: { _ in }
             )
             .padding(5)
             .frame(width: 200)

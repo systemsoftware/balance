@@ -57,9 +57,9 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var tabID: String = ""
     @Published var webView: WKWebView?
     weak var underlyingWebView: WKWebView?
-    var pendingURL: URL?
 
     @Published var url: URL?
+    @Published private(set) var navigationRevision: UInt = 0
     @Published var title: String = ""
     @Published var customTitle: String? = nil
     @Published var isLoading: Bool = false
@@ -85,6 +85,11 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var failedToLoad = false
     var lastHighlightedQuery: String = ""
 
+    init(initialURL: URL? = nil) {
+        self.url = initialURL
+        super.init()
+    }
+
     
     // MARK: - WKWebExtensionTab
     
@@ -101,7 +106,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     }
     
     func url(for context: WKWebExtensionContext) -> URL? {
-        self.url ?? self.pendingURL ?? self.underlyingWebView?.url
+        self.url ?? self.underlyingWebView?.url
     }
     
     func isLoadingComplete(for context: WKWebExtensionContext) -> Bool {
@@ -136,7 +141,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
         // overwritten by BrowserWebView's per-site zoom synchronization.
         (webView ?? underlyingWebView)?.pageZoom = zoom
 
-        if let host = (webView ?? underlyingWebView)?.url?.host ?? url?.host ?? pendingURL?.host {
+        if let host = (webView ?? underlyingWebView)?.url?.host ?? url?.host {
             SitePermissionStore.shared.setZoomLevel(
                 for: host,
                 value: Int((zoom * 100).rounded())
@@ -309,6 +314,11 @@ extension BrowserState {
     func attach(_ webView: WKWebView) {
         self.webView = webView
         self.hasCleanedUp = false
+    }
+
+    func navigate(to url: URL?) {
+        self.url = url
+        navigationRevision &+= 1
     }
     
     func find(_ query: String, forward: Bool = true) {
@@ -756,11 +766,28 @@ enum ErrorPageBuilder {
 struct BrowserWebView: NSViewRepresentable {
     let request: URLRequest
     @ObservedObject var state: BrowserState
+    let navigationRevision: UInt
     @ObservedObject var permissions = SitePermissionStore.shared
     
     var priv: Bool = false
     var profile = ""
     var userAgent: String = ""
+
+    init(
+        request: URLRequest,
+        state: BrowserState,
+        navigationRevision: UInt? = nil,
+        priv: Bool = false,
+        profile: String = "",
+        userAgent: String = ""
+    ) {
+        self.request = request
+        self.state = state
+        self.navigationRevision = navigationRevision ?? state.navigationRevision
+        self.priv = priv
+        self.profile = profile
+        self.userAgent = userAgent
+    }
 
     func makeCoordinator() -> Coordinator {
         // The coordinator belongs to the live page, not its SwiftUI mount.
@@ -774,9 +801,6 @@ struct BrowserWebView: NSViewRepresentable {
     func makeNSView(context: Context) -> WKWebView {
         if let webView = state.webView,
            webView.navigationDelegate === context.coordinator {
-            // ContentView seeds its request from the current page URL on
-            // remount. That is a new baseline, not a navigation request.
-            context.coordinator.lastLoadedRequestURL = request.url
             return webView
         }
         // A tab that is not visible parks its WKWebView in BrowserState. Reuse
@@ -848,7 +872,7 @@ struct BrowserWebView: NSViewRepresentable {
                 }
             }
             
-            context.coordinator.lastLoadedRequestURL = request.url
+            context.coordinator.handledNavigationRevision = navigationRevision
             state.preloadedWebView = nil
             return preloaded
         }
@@ -1117,6 +1141,7 @@ struct BrowserWebView: NSViewRepresentable {
         config.userContentController.addUserScript(locScript)
         config.userContentController.add(context.coordinator, name: "balanceLocation")
         
+        
         let dntEnabled = Config.sharedDefaults?.bool(forKey: "doNotTrack") ?? false
         if dntEnabled {
             let dntScript = WKUserScript(source: "Object.defineProperty(navigator, 'doNotTrack', { get: function() { return '1'; } });", injectionTime: .atDocumentStart, forMainFrameOnly: false)
@@ -1267,7 +1292,6 @@ struct BrowserWebView: NSViewRepresentable {
         webView.uiDelegate = context.coordinator
 
         state.underlyingWebView = webView
-        state.pendingURL = request.url
 
         DispatchQueue.main.async {
             state.attach(webView)
@@ -1329,7 +1353,7 @@ struct BrowserWebView: NSViewRepresentable {
             context.coordinator.contentBlockersEnabled = blockersEnabled
             Self.configureContentBlockers(on: webView, enabled: blockersEnabled, directory: dir, reloadWhenReady: false, coordinator: context.coordinator)
         
-        context.coordinator.lastLoadedRequestURL = request.url
+        context.coordinator.handledNavigationRevision = navigationRevision
         if let url = request.url, url.isFileURL {
             let manager = LocalFileAccessManager.shared
             if let accessURL = manager.grantedAccessURL(for: url) {
@@ -1387,8 +1411,8 @@ struct BrowserWebView: NSViewRepresentable {
             Self.configureContentBlockers(on: nsView, enabled: blockersEnabled, directory: directory, reloadWhenReady: true, coordinator: context.coordinator)
         }
 
-        if context.coordinator.lastLoadedRequestURL != request.url {
-            context.coordinator.lastLoadedRequestURL = request.url
+        if context.coordinator.handledNavigationRevision != navigationRevision {
+            context.coordinator.handledNavigationRevision = navigationRevision
             if let url = request.url, url.isFileURL {
                 let manager = LocalFileAccessManager.shared
                 if let accessURL = manager.grantedAccessURL(for: url) {
@@ -1499,7 +1523,7 @@ struct BrowserWebView: NSViewRepresentable {
         let state: BrowserState
         let isPrivate: Bool
         var downloads: Set<WKDownload> = []
-        var lastLoadedRequestURL: URL?
+        var handledNavigationRevision: UInt?
         var lastFailedURL: URL?
         var contentBlockersEnabled: Bool?
         let profile: String
@@ -1726,7 +1750,7 @@ struct BrowserWebView: NSViewRepresentable {
 
             let failedURL = (error.userInfo[NSURLErrorFailingURLErrorKey] as? URL)
                 ?? webView.url
-                ?? lastLoadedRequestURL
+                ?? state.url
             lastFailedURL = failedURL
 
             let html = ErrorPageBuilder.html(for: kind, url: failedURL)
@@ -2034,7 +2058,7 @@ struct BrowserWebView: NSViewRepresentable {
             }
             
             let newWebView = BrowserWKWebView(frame: .zero, configuration: configuration)
-            let newState = BrowserState()
+            let newState = BrowserState(initialURL: navigationAction.request.url)
             newState.preloadedWebView = newWebView
             
             DispatchQueue.main.async {
@@ -2341,7 +2365,7 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, openNewTabUsing configuration: WKWebExtension.TabConfiguration, for extensionContext: WKWebExtensionContext, completionHandler: @escaping ((any WKWebExtensionTab)?, Error?) -> Void) {
-        let newState = BrowserState()
+        let newState = BrowserState(initialURL: configuration.url)
         if let url = configuration.url {
             DispatchQueue.main.async {
                 createNewTab(with: url, browserState: newState)

@@ -18,92 +18,6 @@ struct SearchInputVisualConfig {
     var animation: Animation? = .easeInOut(duration: 0.15)
 }
 
-// MARK: - NSViewRepresentable wrapper
-//
-// SwiftUI's FocusBridge deadlocks while resolving the key-view loop on
-// macOS 26/27 beta whenever a TextField backed by @FocusState is clicked.
-// Using NSViewRepresentable keeps the text field out of that path entirely.
-// Keep the field out of automatic keyboard traversal without overriding
-// AppKit's next/previous key-view storage. AppKit must be allowed to maintain
-// and clear those links when a SwiftUI hosting view is dismantled.
-final class IsolatedSearchField: NSTextField {
-    override var canBecomeKeyView: Bool { false }
-}
-
-struct NativeSearchField: NSViewRepresentable {
-    @Binding var text: String
-    var placeholder: String
-    var onFocusChange: (Bool) -> Void
-    var onSubmit: () -> Void = {}
-
-    func makeCoordinator() -> Coordinator { Coordinator(parent: self) }
-
-    func makeNSView(context: Context) -> IsolatedSearchField {
-        let field = IsolatedSearchField()
-        field.delegate = context.coordinator
-        field.placeholderString = placeholder
-        field.font = NSFont.systemFont(ofSize: NSFont.systemFontSize - 2)
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.stringValue = text
-        return field
-    }
-
-    func updateNSView(_ field: IsolatedSearchField, context: Context) {
-        context.coordinator.parent = self
-        // Do not overwrite text while the user is typing.
-        if field.currentEditor() == nil, field.stringValue != text {
-            field.stringValue = text
-        }
-    }
-
-    static func dismantleNSView(_ field: IsolatedSearchField, coordinator: Coordinator) {
-        // NSTextField delegates editing to a window-owned field editor. Detach
-        // that editor before SwiftUI releases this view; otherwise AppKit can
-        // discover the dying field while rebuilding/removing the key-view loop.
-        if let window = field.window,
-           window.firstResponder === field || field.currentEditor() != nil {
-            window.makeFirstResponder(nil)
-            field.abortEditing()
-        }
-        field.delegate = nil
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: NativeSearchField
-
-        init(parent: NativeSearchField) {
-            self.parent = parent
-        }
-
-        func controlTextDidChange(_ notification: Notification) {
-            guard let field = notification.object as? NSTextField else { return }
-            parent.text = field.stringValue
-        }
-
-        func controlTextDidBeginEditing(_ notification: Notification) {
-            parent.onFocusChange(true)
-        }
-
-        func controlTextDidEndEditing(_ notification: Notification) {
-            parent.onFocusChange(false)
-        }
-
-        func control(
-            _ control: NSControl,
-            textView: NSTextView,
-            doCommandBy commandSelector: Selector
-        ) -> Bool {
-            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
-            parent.onSubmit()
-            return true
-        }
-    }
-}
-
-// MARK: - SearchInputView
-
 struct SearchInputView: View {
     @Binding var text: String
     var config: SearchInputVisualConfig = SearchInputVisualConfig()
@@ -118,12 +32,8 @@ struct SearchInputView: View {
                 .font(.system(size: 11, weight: .medium))
                 .frame(width: 16)
 
-            NativeSearchField(
+            TextField(placeholder ?? config.placeholderText,
                 text: $text,
-                placeholder: placeholder ?? config.placeholderText,
-                onFocusChange: { focused in
-                    withAnimation(config.animation) { isFocused = focused }
-                }
             )
 
             if !text.isEmpty {

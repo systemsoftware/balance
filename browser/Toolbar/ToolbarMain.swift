@@ -96,69 +96,6 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
-import SwiftUI
-import AppKit
-
-// 1. Transparent AppKit view that forwards left clicks but catches right clicks
-struct RightClickDetector: NSViewRepresentable {
-    var onRightClick: () -> Void
-
-    func makeNSView(context: Context) -> NSView {
-        let view = RightClickableView()
-        view.onRightClick = onRightClick
-        return view
-    }
-
-    func updateNSView(_ nsView: NSView, context: Context) {}
-}
-
-class RightClickableView: NSView {
-    var onRightClick: (() -> Void)?
-
-    // FIX: Returning nil allows standard left-clicks to bypass this overlay
-    // and hit the native SwiftUI views underneath.
-    override func hitTest(_ point: NSPoint) -> NSView? {
-        return nil
-    }
-
-    private var monitor: Any?
-
-    // Catch right clicks inside our bounding box via a local mouse monitor
-    override func viewDidMoveToWindow() {
-        super.viewDidMoveToWindow()
-        
-        if window != nil {
-            monitor = NSEvent.addLocalMonitorForEvents(matching: .rightMouseDown) { [weak self] event in
-                guard let self = self, let _ = self.window else { return event }
-                
-                // Convert global window click location to this view's coordinates
-                let point = self.convert(event.locationInWindow, from: nil)
-                if self.bounds.contains(point) {
-                    self.onRightClick?()
-                    return nil // Consume event so system sounds/menus don't trigger
-                }
-                return event
-            }
-        } else {
-            if let monitor = monitor {
-                NSEvent.removeMonitor(monitor)
-            }
-        }
-    }
-}
-
-// 2. View Extension
-extension View {
-    func onRightClick(perform action: @escaping () -> Void) -> some View {
-        self.overlay(
-            RightClickDetector(onRightClick: action)
-                .allowsHitTesting(true)
-        )
-    }
-}
-
-
-
 struct BrowserToolbar: View {
     
     @ObservedObject var browserState: BrowserState
@@ -234,9 +171,13 @@ struct BrowserToolbar: View {
                             draggedItemID: $draggedItemID
                         )
                     )
-                    .onRightClick {
-                           showEdit = true
-                            }
+                    .contextMenu {
+                        Button {
+                            showEdit = true
+                        } label: {
+                            Text("Customize Toolbar")
+                        }
+                    }
                     
                     
                 }
@@ -247,8 +188,6 @@ struct BrowserToolbar: View {
                     }
             }
 
-            // Keep Cmd-F usable even when the optional find button is not part of
-            // the user's customized toolbar.
             if browserState.isFindBarVisible && !toolbarStore.contains(.findInPage) {
                 FindBarView(state: browserState)
                     .padding(Layout.controlPadding)
@@ -322,9 +261,9 @@ struct BrowserToolbar: View {
                         
                     default:
                         Toggle(isOn: $showDrag) {
-                            Text("Show Address Bar Drag Handle")
-                        }
-                        .padding(.vertical, 4)
+                                                    Text("Show Address Bar Drag Handle")
+                                                }
+                                                .padding(.vertical, 4)
                     }
                 }
        //         .frame(width: 280)

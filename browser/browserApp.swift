@@ -206,20 +206,6 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         }
     }
 
-    func describePasskeyState(
-        _ state: ASAuthorizationWebBrowserPublicKeyCredentialManager.AuthorizationState
-    ) -> String {
-        switch state {
-        case .authorized:
-            return "authorized"
-        case .denied:
-            return "denied"
-        case .notDetermined:
-            return "notDetermined"
-        @unknown default:
-            return "unknown (\(state.rawValue))"
-        }
-    }
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if #available(macOS 13.3, *) {
@@ -227,11 +213,11 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             let manager = ASAuthorizationWebBrowserPublicKeyCredentialManager()
             credentialManager = manager
 
-            if manager.authorizationStateForPlatformCredentials == .notDetermined {
+            if manager.authorizationStateForPlatformCredentials != .authorized {
                 manager.requestAuthorizationForPublicKeyCredentials { state in
                     print(
                         "Passkey authorization:",
-                        self.describePasskeyState(state)
+                        state == .authorized ? "authorized" : "not authorized"
                     )
                 }
             }

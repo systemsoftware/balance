@@ -71,6 +71,7 @@ struct TabSearchView: View {
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .padding()
     }
 }
 
@@ -97,6 +98,6 @@ struct WindowRow: View {
                 .frame(maxWidth: .infinity, alignment: .leading)
         }
         .padding()
-        .glassEffect(.regular)
+        .glassEffect(.regular, in: RoundedRectangle(cornerSize: CGSize(width: 16, height: 16)))
     }
 }

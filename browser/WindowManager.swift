@@ -12,7 +12,7 @@ final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
     let restoredState: TabSessionState?
     let browserState: BrowserState
     let splitState: BrowserState
-    var shouldDeferFirstPresentation = false
+    @Published var hasLoaded = false
 
     init(
         id: String = UUID().uuidString,
@@ -30,8 +30,9 @@ final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
         self.profile = restoredState?.profile ?? profile
         self.profileIcon = profileIcon
         self.restoredState = restoredState
-        self.browserState = browserState ?? BrowserState()
-        self.splitState = BrowserState()
+        let restoredURL = restoredState?.url.flatMap(URL.init(string:))
+        self.browserState = browserState ?? BrowserState(initialURL: restoredURL ?? initialURL)
+        self.splitState = BrowserState(initialURL: restoredState?.splitURL.flatMap(URL.init(string:)))
         self.splitState.tabID = id + "_split"
         self.splitState.isPrivateBrowsing = self.isPrivate
         self.browserState.tabID = id
@@ -64,7 +65,6 @@ final class BrowserWindowModel: ObservableObject, Identifiable {
         self.tabs = tabs
         self.activeTabID = activeTabID ?? tabs.first?.id ?? UUID().uuidString
         self.frameString = frameString
-        self.tabs.first(where: { $0.id == self.activeTabID })?.shouldDeferFirstPresentation = true
     }
 
     var activeTab: BrowserTabModel? {
@@ -79,8 +79,10 @@ final class WindowManager: ObservableObject {
     @Published var browserWindows: [BrowserWindowModel] = []
     @Published var activeWindowID: String?
 
-    // Kept as a BrowserState projection for existing sidebar/search/extension code.
-    @Published var windows: [BrowserState] = []
+    // Flat compatibility view; browserWindows remains the single source of truth.
+    var windows: [BrowserState] {
+        browserWindows.flatMap { $0.tabs.map(\.browserState) }
+    }
 
     @Published var currentSpaceIndex: Int = 0
     @Published var spaceNames: [String] = ["Space 1"]
@@ -111,7 +113,6 @@ final class WindowManager: ObservableObject {
         let window = BrowserWindowModel(tabs: [tab])
         browserWindows = [window]
         activeWindowID = window.id
-        rebuildTabProjection()
         return window.id
     }
 
@@ -166,7 +167,6 @@ final class WindowManager: ObservableObject {
         if !restoredWindows.isEmpty {
             browserWindows = restoredWindows
             activeWindowID = restoredWindows.first?.id
-            rebuildTabProjection()
             if shouldOpenAdditionalWindows {
                 for window in restoredWindows.dropFirst() {
                     openBrowserWindow(window.id)
@@ -190,7 +190,6 @@ final class WindowManager: ObservableObject {
         let window = BrowserWindowModel(tabs: [tab])
         browserWindows.append(window)
         activeWindowID = window.id
-        rebuildTabProjection()
         openBrowserWindow(window.id)
         return window.id
     }
@@ -212,7 +211,6 @@ final class WindowManager: ObservableObject {
             let window = BrowserWindowModel(tabs: [tab])
             browserWindows.append(window)
             activeWindowID = window.id
-            rebuildTabProjection()
             openBrowserWindow(window.id)
             return tab.id
         }
@@ -239,7 +237,6 @@ final class WindowManager: ObservableObject {
         if !openInBackground {
             window.activeTabID = tab.id
         }
-        rebuildTabProjection()
         objectWillChange.send()
         return tab.id
     }
@@ -292,7 +289,6 @@ final class WindowManager: ObservableObject {
             closeWindow(window.id)
             return
         }
-        rebuildTabProjection()
         if activeWindowID == window.id {
             syncExtensionActiveTab()
         }
@@ -309,8 +305,8 @@ final class WindowManager: ObservableObject {
         
         withAnimation {
             window.tabs.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
-            rebuildTabProjection()
         }
+        objectWillChange.send()
     }
 
     func closeWindow(_ windowID: String) {
@@ -334,7 +330,6 @@ final class WindowManager: ObservableObject {
         } else if activeWindowID == windowID {
             activeWindowID = browserWindows.first?.id
         }
-        rebuildTabProjection()
         syncExtensionActiveTab()
     }
 
@@ -403,11 +398,6 @@ final class WindowManager: ObservableObject {
         if activeWindowID == nil {
             activeWindowID = window.id
         }
-        rebuildTabProjection()
-    }
-
-    func rebuildTabProjection() {
-        windows = browserWindows.flatMap { $0.tabs.map(\.browserState) }
     }
 
     private func openBrowserWindow(_ id: String) {
@@ -573,15 +563,10 @@ private struct BrowserWindowContent: View {
 
     var body: some View {
         ZStack {
+            ForEach(window.tabs) { tab in
+                BrowserWindowTabContainer(tab: tab, activeTabID: window.activeTabID)
+            }
             if let activeTab = window.activeTab {
-                // Only mount the active tab's SwiftUI hierarchy. Keeping every
-                // previously visited tab mounted at zero opacity makes
-                // FocusBridge traverse all of their controls whenever a tab is
-                // added, which eventually wedges the main thread. BrowserWebView
-                // parks its WKWebView during this transition so page state is
-                // preserved when the tab is selected again.
-                BrowserWindowTabContainer(tab: activeTab, activeTabID: window.activeTabID)
-                    .id(activeTab.id)
                 ActiveTabTitleObserver(state: activeTab.browserState)
             }
         }
@@ -599,34 +584,21 @@ private struct ActiveTabTitleObserver: View {
 }
 
 private struct BrowserWindowTabContainer: View {
-    @ObservedObject var state: BrowserState
-    let tab: BrowserTabModel
+    @ObservedObject var tab: BrowserTabModel
     let activeTabID: String
     @EnvironmentObject private var windowManager: WindowManager
 
-    /// Tracks whether this tab has ever been the active (visible) tab.
-    /// Until it is first activated we render a transparent placeholder so
-    /// the tab contributes zero focusable views to the key-view loop,
-    /// preventing FocusBridge.updateDefaultKeyViewLoop() from hanging on
-    /// launch when many tabs are restored from a session.
-    @State private var hasAppearedActive: Bool
-    @State private var isActivationScheduled = false
-
     init(tab: BrowserTabModel, activeTabID: String) {
         self.tab = tab
-        self.state = tab.browserState
         self.activeTabID = activeTabID
-        // Only the window's initial tab needs to wait for ordering. Once the
-        // window is established, new and revisited tabs can attach immediately
-        // because inactive control trees are no longer kept mounted.
-        self._hasAppearedActive = State(initialValue: !tab.shouldDeferFirstPresentation)
     }
 
     var body: some View {
         let isActive = activeTabID == tab.id
+        let state = tab.browserState
 
         Group {
-            if hasAppearedActive && !state.isSleeping {
+            if tab.hasLoaded && !state.isSleeping {
                 ContentView(
                     initialURL: tab.initialURL,
                     pvt: tab.isPrivate,
@@ -640,40 +612,22 @@ private struct BrowserWindowTabContainer: View {
                 .environmentObject(windowManager)
                 .opacity(isActive ? 1 : 0)
                 .allowsHitTesting(isActive)
+                .disabled(!isActive)
                 .accessibilityHidden(!isActive)
             } else {
                 // Lightweight placeholder — no focusable elements.
                 Color.clear
             }
         }
-        .onAppear {
-            guard activeTabID == tab.id else { return }
-            scheduleFirstActivation()
-        }
-        .onChange(of: activeTabID) { _, newActiveID in
-            if newActiveID == tab.id {
-                scheduleFirstActivation()
-            }
+        .task(id: isActive) {
+            guard isActive, !tab.hasLoaded else { return }
+            await Task.yield()
+            guard !Task.isCancelled, activeTabID == tab.id else { return }
+            tab.hasLoaded = true
         }
         .onDisappear {
             windowManager.finishCleanup(tabID: tab.id)
         }
     }
 
-    private func scheduleFirstActivation() {
-        guard !hasAppearedActive, !isActivationScheduled else { return }
-        isActivationScheduled = true
-
-        // Creating a foreground tab changes activeTabID while SwiftUI is
-        // already reconciling the window. Installing ContentView in that same
-        // pass can make AppKit synchronously rebuild a very large key-view loop
-        // and occasionally hang in FocusBridge. Always defer the first full
-        // render, not just the window's initial tab.
-        DispatchQueue.main.async {
-            isActivationScheduled = false
-            guard activeTabID == tab.id else { return }
-            tab.shouldDeferFirstPresentation = false
-            hasAppearedActive = true
-        }
-    }
 }

@@ -131,7 +131,14 @@ struct ContentView: View {
     
     @StateObject var splitState = BrowserState()
     
-    @State private var location: URL?
+    private var location: URL? { browserState.url }
+
+    private var locationBinding: Binding<URL?> {
+        Binding(
+            get: { browserState.url },
+            set: { browserState.navigate(to: $0) }
+        )
+    }
 
     @State private var showingSidebarAddAlert = false
     @State private var draggedSidebarItem: SidebarItem?
@@ -232,7 +239,6 @@ struct ContentView: View {
         } else {
             initURL = initURLString.flatMap { URL(string: $0) }
         }
-        self._location = State(initialValue: initURL)
         self._splitURL = State(initialValue: latestState?.splitURL ?? "")
         self._sidebarURL = State(initialValue: latestState?.sidebarURL != nil ? URL(string: latestState!.sidebarURL!) : nil)
         
@@ -273,7 +279,7 @@ struct ContentView: View {
         if let provided = providedState {
             initialBrowserState = provided
         } else {
-            let newState = BrowserState()
+            let newState = BrowserState(initialURL: initURL)
             newState.tabID = tabID
             newState.spaceIndex = WindowManager.shared.currentSpaceIndex
             initialBrowserState = newState
@@ -286,7 +292,7 @@ struct ContentView: View {
         self._browserState = StateObject(wrappedValue: initialBrowserState)
         
         self._splitState = StateObject(wrappedValue: {
-            let split = providedSplitState ?? BrowserState()
+            let split = providedSplitState ?? BrowserState(initialURL: latestState?.splitURL.flatMap(URL.init(string:)))
             split.tabID = tabID + "_split"
             if split.webView == nil, let state = restoredState {
                 split.restoredScrollX = state.splitScrollX
@@ -333,7 +339,7 @@ struct ContentView: View {
                 browserState: browserState,
                 sidebarStore: sidebarStore,
                 bookmarkStore: bookmarkStore,
-                location: $location,
+                location: locationBinding,
                 urlInput: $urlInput,
                 showTrustInfo: $showTrustInfo,
                 showTabSearch: $showTabSearch,
@@ -436,7 +442,7 @@ struct ContentView: View {
                             }
                             
                             if !splitURL.isEmpty {
-                                BrowserWebView(request:URLRequest(url:URL(string:splitURL) ?? URL(string: "about:blank")!), state: splitState, priv:priv, profile:bProfile, userAgent: userAgent)
+                                BrowserWebView(request: URLRequest(url: splitState.url ?? URL(string: "about:blank")!), state: splitState, priv: priv, profile: bProfile, userAgent: userAgent)
                                     .roundedBorderStyleNoFrame()
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                             }
@@ -707,16 +713,13 @@ struct ContentView: View {
             if let initialURLString {
                 print("has initialURLString: \(initialURLString)")
                 urlInput = initialURLString
-                if location?.isFileURL != true {
-                    location = URL(string: initialURLString)
-                }
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
                 if homepage == "default-home" {
                     browserState.title = "Home"
                 } else if let url = URL(string: homepage) {
-                    location = url
+                    browserState.navigate(to: url)
                 } else {
                     print("Homepage URL was invalid: \(homepage)")
                 }
@@ -764,9 +767,6 @@ struct ContentView: View {
         }
         .onAppear {
             updateTabState()
-            if !windowManager.windows.contains(where: { $0 === browserState }) {
-                windowManager.windows.append(browserState)
-            }
             if windowManager.isActiveTab(tabID), enableHandoff, let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
                 if currentUserActivity == nil {
                     currentUserActivity = NSUserActivity(activityType: NSUserActivityTypeBrowsingWeb)
@@ -776,7 +776,10 @@ struct ContentView: View {
             }
         }
         .onChange(of: location) { _, _ in updateTabState() }
-        .onChange(of: splitURL) { _, _ in updateTabState() }
+        .onChange(of: splitURL) { _, newValue in
+            splitState.navigate(to: newValue.isEmpty ? nil : URL(string: newValue))
+            updateTabState()
+        }
         .onChange(of: sidebarURL) { _, _ in updateTabState() }
         .onChange(of: showSidebar) { _, _ in updateTabState() }
         .onChange(of: browserState.scrollX) { _, _ in updateTabState() }
@@ -1022,7 +1025,7 @@ struct ContentView: View {
             url = URL(string: "\(searchURL)\(encoded)")
         }
 
-        location = url
+        browserState.navigate(to: url)
     }
 
     private func toggleSidebar(_ targetURL: URL?) {

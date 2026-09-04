@@ -66,10 +66,8 @@ struct Tabs: View {
                             Image(systemName: "magnifyingglass")
                                 .font(.system(size: 11, weight: .medium))
                                 .foregroundStyle(.tertiary)
-                            NativeSearchField(
+                            TextField("Search tabs…",
                                 text: $searchText,
-                                placeholder: "Search tabs…",
-                                onFocusChange: { _ in }
                             )
                             if !searchText.isEmpty {
                                 Button {
