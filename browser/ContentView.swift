@@ -39,7 +39,8 @@ let builtInSidebar = [
     SidebarItem(icon:"antenna.radiowaves.left.and.right", view:"RSSView"),
     SidebarItem(icon:"calendar", view:"CalendarView"),
     SidebarItem(icon:"cloud.sun", view: "WeatherView"),
-    SidebarItem(icon: "bag", view: "InventoryView")
+    SidebarItem(icon: "bag", view: "InventoryView"),
+    SidebarItem(icon: "internaldrive", view: "WebDataView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -75,7 +76,7 @@ struct AutoFillPopover: View {
     @Binding var searchTerm: String
     var body: some View {
         List {
-            AutoFillView(searchTerm: $searchTerm)
+            AutoFillView(searchTerm: $searchTerm, loadQuery: {})
         }
         .listStyle(.inset)
         .frame(width: 500, height:300)
@@ -110,7 +111,7 @@ struct ContentView: View {
     private var sidebarWidth: Int = 345
     
     @AppStorage("userAgent", store:Config.sharedDefaults)
-    private var userAgent: String = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.0 Safari/605.1.15"
+    private var userAgent = DEFAULT_USER_AGENT
     
     @AppStorage("homepage", store: Config.sharedDefaults)
     private var homepage: String = "default-home"
@@ -312,6 +313,9 @@ struct ContentView: View {
     
     @State private var showEventPopup = false
     @State private var events: [EventExtraction] = []
+    
+    @State private var showAddPopover = false
+    @State private var addIndex = 0
     
     var body: some View {
         VStack(spacing: 0) {
@@ -554,6 +558,10 @@ struct ContentView: View {
                                 InventorySidebar()
                                     .roundedBorderStyle()
                                 
+                            case let str where str.contains("WebData"):
+                                WebDataView()
+                                    .roundedBorderStyle()
+
                             default:
                                 EmptyView()
                             }
@@ -608,34 +616,84 @@ struct ContentView: View {
                                             }
                                             Divider()
                                         }
-                                        Button("Add remote page") {
-                                            showingSidebarAddAlert = true
-                                        }
-                                        Menu("Add built-in") {
-                                            ForEach(builtInSidebar) { builtIn in
-                                                let title = builtIn.view?.replacingOccurrences(of: "View", with: "") ?? builtIn.icon
-                                                Button(title, action: {
-                                                    guard let view = builtIn.view else { return }
-                                                    sidebarStore.add(SidebarItem(icon: builtIn.icon, view: view))
-                                                })
-                                            }
+                                        Button("Add") {
+                                            showAddPopover = true
                                         }
                                     }
                                     .id(item.id)
          //                       }
                             }
                         }
-                        .alert("Enter URL", isPresented: $showingSidebarAddAlert) {
-                            TextField("URL", text: $userInput)
-                            Button("OK") {
-                                let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput)
-                                    sidebarStore.add(SidebarItem(
-                                        icon: "https://www.google.com/s2/favicons?domain=\(userInput)",
-                                        url: sidebarItemURL
-                                    ))
-                                
+                        .popover(isPresented: $showAddPopover,   attachmentAnchor: .rect(.bounds),
+                                 arrowEdge: .trailing) {
+                            VStack(alignment: .leading, spacing: 16) {
+                                Text("Add Sidebar Item")
+                                    .font(.headline)
+
+                                Picker("", selection: $addIndex) {
+                                    Text("Built-in").tag(0)
+                                    Text("Remote page").tag(1)
+                                }
+                                .pickerStyle(.segmented)
+
+                                if addIndex == 0 {
+                                    VStack(alignment: .leading, spacing: 4) {
+                                        ForEach(builtInSidebar) { builtIn in
+                                            let rawTitle = builtIn.view?.replacingOccurrences(of: "View", with: "") ?? builtIn.icon
+
+                                            let title = rawTitle.replacingOccurrences(
+                                                of: "([a-z])([A-Z])",
+                                                with: "$1 $2",
+                                                options: .regularExpression
+                                            )
+                                            
+                                            Button {
+                                                guard let view = builtIn.view else { return }
+                                                sidebarStore.add(SidebarItem(icon: builtIn.icon, view: view))
+                                                showAddPopover = false
+                                            } label: {
+                                                HStack {
+                                                    Image(systemName: builtIn.icon)
+                                                        .frame(width: 20)
+                                                        .foregroundStyle(.secondary)
+                                                    Text(title)
+                                                    Spacer()
+                                                }
+                                                .contentShape(Rectangle())
+                                            }
+                                            .buttonStyle(.plain)
+                                            .padding(.vertical, 6)
+                                            .padding(.horizontal, 8)
+                                            .background(Color.primary.opacity(0.001)) // keeps hover/click area
+                                            .cornerRadius(6)
+                                        }
+                                    }
+                                } else {
+                                    VStack(alignment: .leading, spacing: 10) {
+                                        TextField("https://example.com", text: $userInput)
+                                            .textFieldStyle(.roundedBorder)
+
+                                        HStack {
+                                            Spacer()
+                                            Button("Cancel", role: .cancel) {
+                                                showAddPopover = false
+                                            }
+                                            Button("Add") {
+                                                let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput)
+                                                sidebarStore.add(SidebarItem(
+                                                    icon: "https://www.google.com/s2/favicons?domain=\(userInput)",
+                                                    url: sidebarItemURL
+                                                ))
+                                                showAddPopover = false
+                                            }
+                                            .buttonStyle(.borderedProminent)
+                                            .disabled(userInput.isEmpty)
+                                        }
+                                    }
+                                }
                             }
-                            Button("Cancel", role: .cancel) { }
+                            .padding(20)
+                //            .frame(width: 280)
                         }
                         .frame(maxHeight: .infinity)
                         .padding(.vertical, Layout.outerPadding)

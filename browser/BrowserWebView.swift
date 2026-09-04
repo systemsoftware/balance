@@ -1256,6 +1256,8 @@ struct BrowserWebView: NSViewRepresentable {
         webView.downloadStore = DownloadStore(profile: profile)
         if !userAgent.isEmpty {
             webView.customUserAgent = userAgent
+        } else {
+            webView.customUserAgent = DEFAULT_USER_AGENT
         }
         
         let defaultZoom = SitePermissionStore.shared.zoomLevel(for: host)

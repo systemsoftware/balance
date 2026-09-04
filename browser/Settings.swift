@@ -878,6 +878,7 @@ struct SettingsSectionContent: View {
     let profiles: [Profile]
     @Binding var defaultProfile: String
     var activeProfile: String?
+    @ObservedObject private var forgetManager = ForgetManager.shared
 
     private var settingsForCategory: [Setting] {
         Settings.filter { $0.category.id == def.id }
@@ -1004,6 +1005,22 @@ struct SettingsSectionContent: View {
                         .background(Color.clear)
             }
 
+            if def.id == "privacy" {
+                SettingsCardRow(
+                    setting: Setting(
+                        name:"Forget on Close",
+                        category: catPrivacy,
+                        type:"header",
+                        appStorageKey:"",
+                    ),
+                    icon: "externaldrive.badge.minus",
+                    accentColor: def.color
+                )
+                .padding(0)
+                .zIndex(5)
+                forgetView
+            }
+
             if def.id == "advanced" && !defaultProfile.isEmpty {
                 clearProfileCacheButton
             }
@@ -1012,6 +1029,49 @@ struct SettingsSectionContent: View {
                 clearCacheButton
             }
         }
+    }
+
+
+    private var forgetView: some View {
+
+        VStack {
+            if !forgetManager.list.isEmpty {
+            ForEach(forgetManager.list) { site in
+                    HStack(spacing: 12) {
+                        ZStack {
+                            Circle()
+                                .fill(Color.accentColor.opacity(0.1))
+                                .frame(width: 32, height: 32)
+                            CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(site.site)"))
+                                .font(.system(size: 14, weight: .bold))
+                                .foregroundColor(.blue)
+                        }
+
+                        Text(site.site)
+                            .font(.system(.subheadline, design: .rounded))
+                            .fontWeight(.medium)
+                            .lineLimit(1)
+                        Spacer()
+
+                        Button {
+                            _ = forgetManager.remove(site: site.site, profile: site.profile)
+                        } label: {
+                            Text("Stop Forgetting")
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                    .padding()
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+                }
+            }
+            else {
+                Text("No sites are currently set to be forgotten on close.")
+                    .foregroundStyle(.secondary)
+            }
+        }.onAppear {
+            forgetManager.load()
+        }
+        .padding(.leading)
     }
 
     private var profilePickerRow: some View {

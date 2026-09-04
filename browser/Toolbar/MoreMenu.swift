@@ -1,7 +1,6 @@
 import SwiftUI
 
-/// The toolbar's overflow menu. Its contents are supplied by BrowserToolbar so
-/// they always mirror the controls that are currently absent from the toolbar.
+
 struct MoreMenuToolbar: View {
     let items: [ToolbarItemType]
     let itemContent: (ToolbarItemType) -> AnyView
@@ -13,7 +12,7 @@ struct MoreMenuToolbar: View {
                     .disabled(true)
             } else {
                 ForEach(items) { item in
-                    if item != .spacer && item != .autocomplete && item != .addressBar && item != .rename {
+                    if item != .spacer && item != .autocomplete && item != .addressBar && item != .rename && item != .extensions {
                         itemContent(item)
                     }
                 }

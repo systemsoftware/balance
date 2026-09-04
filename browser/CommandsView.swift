@@ -266,7 +266,8 @@ struct CommandsView: View {
                                  updateOther: Binding<String?>(
                                     get: { searchQuery },
                                     set: { searchQuery = $0 ?? "" }
-                                 )
+                                 ),
+                                 loadQuery: {}
                     )
                 }
             }

@@ -26,6 +26,7 @@ struct AutoFillView: View {
     @State private var isLoading = false
     
     @AppStorage("autofillEngine", store:Config.sharedDefaults) private var engine: String = "https://ac.duckduckgo.com/ac/?type=list&q="
+    @AppStorage("searchURL", store:Config.sharedDefaults) private var searchEngine: String = "https://google.com/search?q="
     
     var noContentAvView = false
     
@@ -38,8 +39,10 @@ struct AutoFillView: View {
     var updateOther: Binding<String?>?
     var onSelection: (() -> Void)?
     
+    var loadQuery: () -> Void
+    
     var suggestions: [String] {
-        result?.suggestions ?? []
+        ["Search for \(searchTerm)"]  + (result?.suggestions ?? [])
     }
     
     var body: some View {
@@ -70,17 +73,24 @@ struct AutoFillView: View {
             } else {
                 ForEach(suggestions, id: \.self) { suggestion in
                     Button {
+                        var sugg = suggestion
+                        if suggestion == "Search for \(searchTerm)" {
+                            sugg = "\(searchEngine)\(searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? searchTerm)"
+                        }
+                        
                         if let other = updateOther {
-                            other.wrappedValue = suggestion
+                            other.wrappedValue = sugg
                             searchTerm = ""
                         } else {
-                            searchTerm = suggestion
+                            searchTerm = sugg
                         }
                         if let onSelection {
                             onSelection()
                         } else {
                             dismiss()
                         }
+                        
+                        loadQuery()
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")
@@ -88,6 +98,7 @@ struct AutoFillView: View {
                             
                             Text(suggestion)
                                 .frame(maxWidth: .infinity, alignment: .leading)
+                                .italic(suggestion == "Search for \(searchTerm)")
                         }
                         .padding(.vertical, 6)
                     }

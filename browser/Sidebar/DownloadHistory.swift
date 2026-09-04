@@ -113,13 +113,16 @@ struct DownloadsView: View {
             }
             .padding()
             VStack(spacing: 0) {
+
+                SearchInputView(text:$searchText)
+                    .padding(.horizontal)
+                    .padding(.bottom, 10)
+
                 ScrollView {
                     if downloadStore.items.isEmpty {
                         EmptyDownloadsView()
                             .padding(.top, 40)
                     } else {
-                        SearchInputView(text:$searchText)
-                            .padding(.horizontal)
                         VStack(alignment: .leading, spacing: 10) {
                             ForEach(filteredHistory) { mark in
                                 DownloadRow(

@@ -23,8 +23,17 @@ class HistoryManager {
     
     static let sharedContainer: ModelContainer = {
         let schema = Schema([HistoryItem.self])
-        let configuration = ModelConfiguration(schema: schema)
         do {
+            let directory = FileManager.default.urls(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask
+            )[0].appendingPathComponent("Balance", isDirectory: true)
+            try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+            let configuration = ModelConfiguration(
+                "History",
+                schema: schema,
+                url: directory.appendingPathComponent("History.store")
+            )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             print("❌ Unable to open history store; using an in-memory store: \(error)")
@@ -93,6 +102,29 @@ class HistoryManager {
         }
     }
     
+    @discardableResult
+    static func deleteHistory(matchingSite site: String) -> Bool {
+        let target = site.lowercased()
+        do {
+            let allItems = try sharedContainer.mainContext.fetch(FetchDescriptor<HistoryItem>())
+            let matches = allItems.filter { item in
+                guard let host = URL(string: item.url)?.host?.lowercased() else { return false }
+                return host == target || host.hasSuffix(".\(target)")
+            }
+            guard !matches.isEmpty else { return true }
+            for item in matches {
+                sharedContainer.mainContext.delete(item)
+            }
+            try sharedContainer.mainContext.save()
+            print("🧹 Removed \(matches.count) history item(s) for \(site) across all profiles")
+            return true
+        } catch {
+            print("❌ Failed to delete history matching \(site): \(error)")
+            sharedContainer.mainContext.rollback()
+            return false
+        }
+    }
+
 }
 
 
@@ -142,7 +174,14 @@ struct HistoryView: View {
             }
             .padding()
 
+
+            SearchInputView(text:$searchText)
+                .padding(.horizontal)
+                .padding(.bottom, 10)
+
+
             ScrollView {
+
                 if historyItems.isEmpty {
                     VStack(spacing: 20) {
                         Image(systemName: "clock.badge.questionmark")
@@ -154,8 +193,6 @@ struct HistoryView: View {
                     .padding(.top, 60)
                 } else {
                     LazyVStack(spacing: 8) {
-                        
-                        SearchInputView(text:$searchText)
                         
                         ForEach(filteredHistory) { item in
                             HistoryRow(item: item) {

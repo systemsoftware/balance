@@ -127,18 +127,6 @@ struct browserApp: App {
                         handleDeepLink(url)
                     }
                 }
-                .onReceive(NotificationCenter.default.publisher(for: NSApplication.willTerminateNotification)) { _ in
-                    print("App is about to close.")
-                    if(clearHistoryOnClose) {
-                        HistoryManager.clearAllHistory()
-                    }
-                    if(clearDownloadHistoryOnClose) {
-                        for download in downloadStore.items {
-                            downloadStore.remove(id: download.id)
-                        }
-                    }
-                    cleanTemporaryDirectory()
-                }
         } defaultValue: {
             WindowManager.shared.initialWindowID
         }
@@ -189,6 +177,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     var pendingFileURLs: [URL] = []
     var didFinishLaunching = false
     var credentialManager: Any?
+    private var terminationCleanupStarted = false
+    private var terminationReplySent = false
 
     func applicationWillFinishLaunching(_ notification: Notification) {
         NSAppleEventManager.shared().setEventHandler(
@@ -272,13 +262,42 @@ class AppDelegate: NSObject, NSApplicationDelegate {
     }
     
     func applicationShouldTerminate(_ sender: NSApplication) -> NSApplication.TerminateReply {
+        guard !terminationCleanupStarted else { return .terminateLater }
+        terminationCleanupStarted = true
+
+        let finishTermination = { [weak self, weak sender] in
+            guard let self, !self.terminationReplySent else { return }
+            self.terminationReplySent = true
+            sender?.reply(toApplicationShouldTerminate: true)
+        }
+
+        // WebKit cleanup should not be able to leave the app stuck quitting forever.
+        DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: finishTermination)
+
         SessionManager.shared.saveSession()
         
         let defaults = Config.sharedDefaults ?? UserDefaults.standard
         let clearCache = defaults.bool(forKey: "clearCacheOnClose")
         let clearCookies = defaults.bool(forKey: "clearCookiesOnClose")
-        
-        if clearCache || clearCookies {
+        let clearHistory = defaults.bool(forKey: "clearHistoryOnClose")
+        let clearDownloadHistory = defaults.bool(forKey: "clearDownloadHistoryOnClose")
+
+        Task { @MainActor in
+            if clearHistory {
+                HistoryManager.clearAllHistory()
+            }
+            if clearDownloadHistory {
+                let downloadStore = DownloadStore()
+                for download in downloadStore.items {
+                    downloadStore.remove(id: download.id)
+                }
+            }
+            cleanTemporaryDirectory()
+
+            for site in ForgetManager.shared.list {
+                await ForgetManager.shared.forget(site: site)
+            }
+
             var types = Set<String>()
             if clearCache {
                 types.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations])
@@ -286,8 +305,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             if clearCookies {
                 types.insert(WKWebsiteDataTypeCookies)
             }
-            
-            WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: Date.distantPast) {
+
+            if !types.isEmpty {
+                await WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: Date.distantPast)
                 if clearCache {
                     if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
                         let webKitCache = cacheURL.appendingPathComponent("WebKit")
@@ -295,18 +315,12 @@ class AppDelegate: NSObject, NSApplicationDelegate {
                     }
                     URLCache.shared.removeAllCachedResponses()
                 }
-                sender.reply(toApplicationShouldTerminate: true)
             }
-            
-            // Fallback timeout in case removeData hangs due to lingering web views
-            DispatchQueue.main.asyncAfter(deadline: .now() + 1.5) {
-                sender.reply(toApplicationShouldTerminate: true)
-            }
-            
-            return .terminateLater
+
+            finishTermination()
         }
-        
-        return .terminateNow
+
+        return .terminateLater
     }
     
     func applicationDockMenu(_ sender: NSApplication) -> NSMenu? {

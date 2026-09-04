@@ -23,3 +23,11 @@ enum Config {
         defaults
     }
 }
+
+
+let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
+
+let DEFAULT_USER_AGENT =
+    "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) " +
+    "AppleWebKit/605.1.15 (KHTML, like Gecko) " +
+    "Version/\(major).0 Safari/605.1.15"

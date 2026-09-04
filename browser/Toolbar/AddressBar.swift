@@ -161,10 +161,10 @@ private struct AddressField: View {
             suggestionsAnchor: suggestionsAnchor
         )
         .padding(10)
+        .frame(height: 40)
     }
 }
 
-// Suggestions accept mouse input without taking the address field's keyboard focus.
 private final class AddressSuggestionsPanel: NSPanel {
     override var canBecomeKey: Bool { false }
     override var canBecomeMain: Bool { false }
@@ -292,7 +292,11 @@ private struct NativeAddressField: NSViewRepresentable {
                             }
                         }
                         self.closeSuggestions()
-                    })
+                    },
+                    loadQuery: {
+                        self.parent.onSubmit()
+                    }
+                    )
                     .listRowBackground(Color.clear)
                 }
                 .listStyle(.inset)
