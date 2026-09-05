@@ -4,16 +4,27 @@ struct FindBarView: View {
     @ObservedObject var state: BrowserState
     
     @Namespace private var glassNamespace
+    @State private var pendingSearch: Task<Void, Never>?
     
     var body: some View {
         HStack(spacing: 6) {
             TextField("Find in page",
                 text: $state.findQuery,
             )
+            .textFieldStyle(.plain)
             .padding(5)
             .frame(width: 200)
             .onChange(of: state.findQuery) { old, query in
-                state.find(query)
+                pendingSearch?.cancel()
+                guard !query.isEmpty else {
+                    state.clearFind()
+                    return
+                }
+                pendingSearch = Task { @MainActor in
+                    try? await Task.sleep(for: .milliseconds(150))
+                    guard !Task.isCancelled, state.findQuery == query else { return }
+                    state.find(query)
+                }
             }
             .padding(Layout.controlPadding)
 
@@ -23,13 +34,13 @@ struct FindBarView: View {
                     .foregroundStyle(.secondary)
             }
 
-            Button(action: { state.find(state.findQuery, forward: false) }) {
+            Button(action: { findNext(forward: false) }) {
                 Image(systemName: "chevron.up")
             }
             .buttonStyle(.plain)
             .disabled(state.findQuery.isEmpty)
 
-            Button(action: { state.find(state.findQuery) }) {
+            Button(action: { findNext(forward: true) }) {
                 Image(systemName: "chevron.down")
             }
             .buttonStyle(.plain)
@@ -46,6 +57,14 @@ struct FindBarView: View {
         .padding(.vertical, 4)
         .glassEffect()
         .glassEffectUnion(id: "find", namespace: glassNamespace)
+        .onDisappear {
+            pendingSearch?.cancel()
+        }
+    }
+
+    private func findNext(forward: Bool) {
+        pendingSearch?.cancel()
+        state.find(state.findQuery, forward: forward)
     }
 
     private func dismissFindBar() {
@@ -55,7 +74,6 @@ struct FindBarView: View {
         Task { @MainActor in
             await Task.yield()
             state.findQuery = ""
-            state.clearFind()
             state.isFindBarVisible = false
         }
     }

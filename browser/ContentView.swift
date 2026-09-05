@@ -332,7 +332,10 @@ struct ContentView: View {
                 Tabs(browserState: browserState, profile: bProfile)
                     .frame(height:50)
                     .frame(maxWidth: .infinity)
-                    .padding(.horizontal)
+                    .padding(
+                        .horizontal,
+                        Layout.outerPadding + Layout.controlPadding + 5
+                    )
             }
             
             BrowserToolbar(

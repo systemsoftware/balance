@@ -17,6 +17,7 @@ struct Tabs: View {
     @State private var hoveredID: ObjectIdentifier?
     @State private var draggedPin: Bookmark?
     @State private var draggedTab: BrowserState?
+    @State private var tabFrames: [String: CGRect] = [:]
     
     @AppStorage("tabMode", store:Config.sharedDefaults) var tabMode = 0
     
@@ -69,6 +70,7 @@ struct Tabs: View {
                             TextField("Search tabs…",
                                 text: $searchText,
                             )
+                            .textFieldStyle(.plain)
                             if !searchText.isEmpty {
                                 Button {
                                     searchText = ""
@@ -80,16 +82,17 @@ struct Tabs: View {
                                 .buttonStyle(.plain)
                             }
                         }
-                        .padding(.horizontal, 10)
                         .padding(.vertical, 7)
-                        .background(.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
                         .padding(.horizontal, 10)
+                        .glassEffect()
+                        
+                        
+                        Divider()
+                            .opacity(0.3)
+                            .padding(.top, 10)
                     }
                 }
                 
-                Divider()
-                    .opacity(0.3)
-                    .padding(.top, 10)
                 
                 ScrollView(.vertical, showsIndicators: false) {
                     VStack(spacing: 0) {
@@ -152,6 +155,7 @@ struct Tabs: View {
                                         isActive: tab === browserState,
                                         isHovered: hoveredID == ObjectIdentifier(tab),
                                         pinStore: store,
+                                        applyGlass:true,
                                         animateInsertion: tab.shouldAnimateTabInsertion
                                     )
                                     .padding(.horizontal, 8)
@@ -160,11 +164,8 @@ struct Tabs: View {
                                             hoveredID = over ? ObjectIdentifier(tab) : nil
                                         }
                                     }
-                                    .onDrag {
-                                        self.draggedTab = tab
-                                        return NSItemProvider(object: tab.tabID as NSString)
-                                    }
-                                    .onDrop(of: [UTType.text], delegate: TabDropDelegate(item: tab, windowManager: windowManager, draggedItem: $draggedTab))
+                                    .background(tabFrameReader(for: tab))
+                                    .simultaneousGesture(tabReorderGesture(for: tab))
                                 }
                             }
                         }
@@ -287,34 +288,86 @@ struct Tabs: View {
                             }
                             
                         }
+                        Spacer()
                     }
-                    Spacer()
-                    ForEach(filteredTabs, id: \.self) { tab in
-                        TabRow(
-                            state: tab,
-                            isActive: tab === browserState,
-                            isHovered: hoveredID == ObjectIdentifier(tab),
-                            pinStore: store,
-                            showURL:false,
-                            animateInsertion: tab.shouldAnimateTabInsertion
-                        )
-                        .onHover { over in
-                            withAnimation(.easeInOut(duration: 0.12)) {
-                                hoveredID = over ? ObjectIdentifier(tab) : nil
+                    HStack {
+                        ForEach(filteredTabs, id: \.self) { tab in
+                            TabRow(
+                                state: tab,
+                                isActive: tab === browserState,
+                                isHovered: hoveredID == ObjectIdentifier(tab),
+                                pinStore: store,
+                                showURL:false,
+                                animateInsertion: tab.shouldAnimateTabInsertion
+                            )
+                            .onHover { over in
+                                withAnimation(.easeInOut(duration: 0.12)) {
+                                    hoveredID = over ? ObjectIdentifier(tab) : nil
+                                }
                             }
+                            .background(tabFrameReader(for: tab))
+                            .simultaneousGesture(tabReorderGesture(for: tab))
                         }
-                        .onDrag {
-                            self.draggedTab = tab
-                            return NSItemProvider(object: tab.tabID as NSString)
-                        }
-                        .onDrop(of: [UTType.text], delegate: TabDropDelegate(item: tab, windowManager: windowManager, draggedItem: $draggedTab))
+                    }
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.vertical, 0.7)
+                    .background {
+                        Capsule()
+                            .fill(.clear)
+                            .glassEffect()
+                            .allowsHitTesting(false)
                     }
                 }
+                .padding(.horizontal, 0)
                 .padding(.top)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .onPreferenceChange(TabFramePreferenceKey.self) { tabFrames = $0 }
             
+    }
+
+    private func tabFrameReader(for tab: BrowserState) -> some View {
+        GeometryReader { proxy in
+            Color.clear.preference(
+                key: TabFramePreferenceKey.self,
+                value: [tab.tabID: proxy.frame(in: .global)]
+            )
+        }
+    }
+
+    private func tabReorderGesture(for tab: BrowserState) -> some Gesture {
+        DragGesture(minimumDistance: 5, coordinateSpace: .global)
+            .onChanged { value in
+                draggedTab = tab
+                guard let target = nearestTab(to: value.location), target !== tab else { return }
+                windowManager.moveTab(tab.tabID, toTabID: target.tabID)
+            }
+            .onEnded { _ in
+                draggedTab = nil
+            }
+    }
+
+    private func nearestTab(to location: CGPoint) -> BrowserState? {
+        filteredTabs.min { lhs, rhs in
+            guard let lhsFrame = tabFrames[lhs.tabID],
+                  let rhsFrame = tabFrames[rhs.tabID] else { return false }
+            let lhsDistance = tabMode == 0
+                ? abs(lhsFrame.midX - location.x)
+                : abs(lhsFrame.midY - location.y)
+            let rhsDistance = tabMode == 0
+                ? abs(rhsFrame.midX - location.x)
+                : abs(rhsFrame.midY - location.y)
+            return lhsDistance < rhsDistance
+        }
+    }
+}
+
+private struct TabFramePreferenceKey: PreferenceKey {
+    static var defaultValue: [String: CGRect] = [:]
+
+    static func reduce(value: inout [String: CGRect], nextValue: () -> [String: CGRect]) {
+        value.merge(nextValue(), uniquingKeysWith: { _, new in new })
     }
 }
 
@@ -346,25 +399,6 @@ struct PinDropDelegate: DropDelegate {
         }
     }
 }
-
-struct TabDropDelegate: DropDelegate {
-    let item: BrowserState
-    var windowManager: WindowManager
-    @Binding var draggedItem: BrowserState?
-
-    func performDrop(info: DropInfo) -> Bool {
-        draggedItem = nil
-        return true
-    }
-    
-    func dropEntered(info: DropInfo) {
-        guard let draggedItem = self.draggedItem else { return }
-        guard draggedItem != item else { return }
-        
-        windowManager.moveTab(draggedItem.tabID, toTabID: item.tabID)
-    }
-}
-
 
 // MARK: - Section Label
 
@@ -442,6 +476,8 @@ private struct TabRow: View {
     @EnvironmentObject var windowManager: WindowManager
     @State private var insertionFinished: Bool
     
+    var glass = false
+    
     @AppStorage("tabMode", store:Config.sharedDefaults) var tabMode = 0
 
     init(
@@ -450,7 +486,8 @@ private struct TabRow: View {
         isHovered: Bool,
         pinStore: PinStore,
         showURL: Bool = true,
-        animateInsertion: Bool = false
+        applyGlass: Bool = false,
+        animateInsertion: Bool = false,
     ) {
         self.state = state
         self.isActive = isActive
@@ -458,6 +495,7 @@ private struct TabRow: View {
         self.pinStore = pinStore
         self.showURL = showURL
         self.animateInsertion = animateInsertion
+        self.glass = applyGlass
         self._insertionFinished = State(initialValue: !animateInsertion)
     }
 
@@ -529,29 +567,43 @@ private struct TabRow: View {
             
         }
         .padding(.horizontal, 8)
-        .padding(.vertical, 7)
+        .padding(.vertical, 9)
         .background {
             if isActive {
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(.tint.opacity(0.18))
+                Capsule()
+                    .fill(.tint)
+                    .opacity(glass ? 0.0 : 0.18)
+                    .glassEffect(glass ? .regular : .identity)
                     .overlay(
-                        RoundedRectangle(cornerRadius: 9)
-                            .strokeBorder(.tint.opacity(0.35), lineWidth: 0.75)
+                        Capsule()
+                            .strokeBorder(.tint, lineWidth: 1)
+                            .opacity(glass ? 0.0 : 0.35)
                     )
             } else if isHovered {
-                RoundedRectangle(cornerRadius: 9)
-                    .fill(.secondary.opacity(0.1))
+                Capsule()
+                    .fill(.secondary)
+                    .opacity(0.1)
             } else {
                 Color.clear
             }
         }
         .contentShape(RoundedRectangle(cornerRadius: 9))
-        .offset(x: insertionFinished ? 0 : 400)
+        .offset(
+            x: insertionFinished || tabMode != 0 ? 0 : 80,
+            y: insertionFinished || tabMode == 0 ? 0 : 24
+        )
+        .scaleEffect(insertionFinished ? 1 : 0.94)
+        .opacity(insertionFinished ? 1 : 0)
         .onAppear {
             guard animateInsertion, !insertionFinished else { return }
-            state.shouldAnimateTabInsertion = false
-            withAnimation(.easeInOut(duration: 0.3)) {
-                insertionFinished = true
+            Task { @MainActor in
+                // Allow the initial offset/opacity to render before transitioning.
+                // Updating immediately in onAppear is coalesced into the first frame.
+                await Task.yield()
+                state.shouldAnimateTabInsertion = false
+                withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.82)) {
+                    insertionFinished = true
+                }
             }
         }
         .onTapGesture {

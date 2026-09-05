@@ -303,10 +303,13 @@ final class WindowManager: ObservableObject {
         guard let from = window.tabs.firstIndex(where: { $0.id == fromTabID }),
               let to = window.tabs.firstIndex(where: { $0.id == targetTabID }) else { return }
         
-        withAnimation {
+        withAnimation(.interactiveSpring(response: 0.22, dampingFraction: 0.86)) {
+            // BrowserWindow owns the tabs array, so publish before mutating it.
+            // Publishing afterward loses the animation transaction and makes
+            // reordered tabs jump directly to their new positions.
+            objectWillChange.send()
             window.tabs.move(fromOffsets: IndexSet(integer: from), toOffset: to > from ? to + 1 : to)
         }
-        objectWillChange.send()
     }
 
     func closeWindow(_ windowID: String) {

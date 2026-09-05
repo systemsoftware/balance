@@ -84,6 +84,9 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var serverTrust: SecTrust?
     @Published var failedToLoad = false
     var lastHighlightedQuery: String = ""
+    private var pendingFindRequest: (query: String, forward: Bool)?
+    private var isFindRequestInFlight = false
+    private var findRequestGeneration: UInt = 0
 
     init(initialURL: URL? = nil) {
         self.url = initialURL
@@ -333,23 +336,47 @@ extension BrowserState {
             highlightAll(query)
             lastHighlightedQuery = query
         }
+        pendingFindRequest = (query, forward)
+        performNextFindRequestIfNeeded()
+    }
+
+    private func performNextFindRequestIfNeeded() {
+        guard !isFindRequestInFlight,
+              !hasCleanedUp,
+              let webView,
+              let request = pendingFindRequest else { return }
+
+        pendingFindRequest = nil
+        isFindRequestInFlight = true
+        let generation = findRequestGeneration
         let config = WKFindConfiguration()
-        config.backwards = !forward
+        config.backwards = !request.forward
         config.caseSensitive = false
         config.wraps = true
-        webView?.find(query, configuration: config) { [weak self] result in
+        webView.find(request.query, configuration: config) { [weak self] result in
             DispatchQueue.main.async {
-                self?.findMatchCount = result.matchFound ? 1 : 0
+                guard let self else { return }
+                self.isFindRequestInFlight = false
+
+                // A completion can arrive after the query was edited, cleared, or
+                // the tab was closed. Never let that stale result update the UI.
+                if generation == self.findRequestGeneration,
+                   request.query == self.findQuery,
+                   !self.hasCleanedUp {
+                    self.findMatchCount = result.matchFound ? 1 : 0
+                }
+                self.performNextFindRequestIfNeeded()
             }
         }
     }
 
 
     func clearFind() {
+        findRequestGeneration &+= 1
+        pendingFindRequest = nil
         findMatchCount = 0
         lastHighlightedQuery = ""
         clearHighlights()
-        webView?.find("", configuration: WKFindConfiguration()) { _ in }
     }
     
     func highlightAll(_ query: String) {
