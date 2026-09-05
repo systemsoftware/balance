@@ -208,7 +208,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
 
     func applicationDidFinishLaunching(_ notification: Notification) {
-        if #available(macOS 13.3, *) {
+   /*     if #available(macOS 13.3, *) {
 
             let manager = ASAuthorizationWebBrowserPublicKeyCredentialManager()
             credentialManager = manager
@@ -223,7 +223,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
         }
-
+*/
         WindowManager.shared.restoreSavedSessionIfNeeded()
 
         // Show setup window on first launch

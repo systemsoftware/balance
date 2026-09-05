@@ -212,13 +212,15 @@ struct BrowserToolbar: View {
                             ForEach(ToolbarItemType.allCases) { newItem in
                                 if newItem == .spacer || !toolbarStore.contains(newItem) {
                                     Button {
-                                        toolbarStore.add(newItem)
+                                        withAnimation(.bouncy) {
+                                            toolbarStore.add(newItem)
+                                        }
                                     } label: {
                                         HStack {
+                                            Image(systemName: newItem.systemImage)
+                                                .foregroundStyle(.secondary)
                                             Text(newItem.name)
                                             Spacer()
-                                            Image(systemName: "plus.circle")
-                                                .foregroundStyle(.secondary)
                                         }
                                         .contentShape(Rectangle())
                                     }
@@ -240,13 +242,15 @@ struct BrowserToolbar: View {
                             VStack(alignment: .leading, spacing: 4) {
                                 ForEach(toolbarStore.items) { removeEntry in
                                     Button {
-                                        toolbarStore.remove(id: removeEntry.id)
+                                        withAnimation(.bouncy) {
+                                            toolbarStore.remove(id: removeEntry.id)
+                                        }
                                     } label: {
                                         HStack {
+                                            Image(systemName: removeEntry.item.systemImage)
+                                                .foregroundStyle(.red)
                                             Text(removeEntry.item.name)
                                             Spacer()
-                                            Image(systemName: "minus.circle")
-                                                .foregroundStyle(.red)
                                         }
                                         .contentShape(Rectangle())
                                     }
@@ -266,9 +270,7 @@ struct BrowserToolbar: View {
                                                 .padding(.vertical, 4)
                     }
                 }
-       //         .frame(width: 280)
-                .frame(maxHeight: 400)
-                .animation(.default, value: editSection)
+                .animation(.bouncy, value: editSection)
                 Text("Drag toolbar items to reorder them.")
                     .font(.caption)
                     .foregroundStyle(.secondary)

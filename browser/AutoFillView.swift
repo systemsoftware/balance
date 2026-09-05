@@ -41,12 +41,29 @@ struct AutoFillView: View {
     
     var loadQuery: () -> Void
     
-    var suggestions: [String] {
-        ["Search for \(searchTerm)"]  + (result?.suggestions ?? [])
+    private var suggestions: [String] {
+        result?.suggestions ?? []
     }
     
     var body: some View {
         Group {
+            
+            Button {
+                click("\(searchEngine)\(searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? searchTerm)")
+            } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "magnifyingglass")
+                        .foregroundStyle(.secondary)
+                    
+                    Text("Search for \(searchTerm)")
+                        .frame(maxWidth: .infinity, alignment: .leading)
+                        .italic(true)
+                    
+                    Spacer()
+                }
+                .padding(.vertical, 6)
+            }
+            
             if isLoading {
                 HStack(spacing: 8) {
                     ProgressView()
@@ -73,24 +90,7 @@ struct AutoFillView: View {
             } else {
                 ForEach(suggestions, id: \.self) { suggestion in
                     Button {
-                        var sugg = suggestion
-                        if suggestion == "Search for \(searchTerm)" {
-                            sugg = "\(searchEngine)\(searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? searchTerm)"
-                        }
-                        
-                        if let other = updateOther {
-                            other.wrappedValue = sugg
-                            searchTerm = ""
-                        } else {
-                            searchTerm = sugg
-                        }
-                        if let onSelection {
-                            onSelection()
-                        } else {
-                            dismiss()
-                        }
-                        
-                        loadQuery()
+                     click(suggestion)
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")
@@ -119,6 +119,22 @@ struct AutoFillView: View {
         }
     }
     
+    func click(_ sugg: String) {
+        if let other = updateOther {
+            other.wrappedValue = sugg
+            searchTerm = ""
+        } else {
+            searchTerm = sugg
+        }
+        if let onSelection {
+            onSelection()
+        } else {
+            dismiss()
+        }
+        
+        loadQuery()
+    }
+    
     func loadData(for query: String) async throws -> GoogleSuggestions? {
         guard
             let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
@@ -127,8 +143,15 @@ struct AutoFillView: View {
             return nil
         }
         
-        let (data, _) = try await URLSession.shared.data(from: url)
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        if let httpResponse = response as? HTTPURLResponse  {
+            let statusCode = httpResponse.statusCode
+            print("HTTP Status Code: \(statusCode)")
+        }
+        
         return try JSONDecoder().decode(GoogleSuggestions.self, from: data)
+        
     }
     
     func fetchSuggestions(for query: String) async {

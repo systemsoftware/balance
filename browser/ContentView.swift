@@ -589,7 +589,7 @@ struct ContentView: View {
                                 ForEach(sidebarStore.items) { item in
                                     Button(action: {
                                         let targetURL = item.url ?? URL(string: "\(item.view ?? "").view")
-                                        toggleSidebar(targetURL)
+                                            toggleSidebar(targetURL)
                                     }) {
                                         if item.icon.starts(with: "https") {
                                             CachedAsyncImage(url: URL(string: item.icon))
@@ -617,7 +617,9 @@ struct ContentView: View {
                                             Button("Remove", role: .destructive) {
                                                 Task { @MainActor in
                                                     try? await Task.sleep(for: .milliseconds(200))
-                                                    sidebarStore.remove(id: item.id)
+                                                    withAnimation(.bouncy) {
+                                                        sidebarStore.remove(id: item.id)
+                                                    }
                                                 }
                                             }
                                             Divider()
@@ -636,7 +638,7 @@ struct ContentView: View {
                                 Text("Add Sidebar Item")
                                     .font(.headline)
 
-                                Picker("", selection: $addIndex) {
+                                Picker("", selection: $addIndex.animation(.bouncy)) {
                                     Text("Built-in").tag(0)
                                     Text("Remote page").tag(1)
                                 }
@@ -644,7 +646,9 @@ struct ContentView: View {
 
                                 if addIndex == 0 {
                                     VStack(alignment: .leading, spacing: 4) {
-                                        ForEach(builtInSidebar) { builtIn in
+                                        ForEach(builtInSidebar.filter({ i in
+                                                !sidebarStore.items.contains(where: { $0.view == i.view })
+                                        })) { builtIn in
                                             let rawTitle = builtIn.view?.replacingOccurrences(of: "View", with: "") ?? builtIn.icon
 
                                             let title = rawTitle.replacingOccurrences(
@@ -655,7 +659,9 @@ struct ContentView: View {
                                             
                                             Button {
                                                 guard let view = builtIn.view else { return }
-                                                sidebarStore.add(SidebarItem(icon: builtIn.icon, view: view))
+                                                withAnimation(.bouncy) {
+                                                    sidebarStore.add(SidebarItem(icon: builtIn.icon, view: view))
+                                                }
                                                 showAddPopover = false
                                             } label: {
                                                 HStack {
@@ -1030,14 +1036,12 @@ struct ContentView: View {
 
     private func toggleSidebar(_ targetURL: URL?) {
         let nextURL = sidebarURL == targetURL ? nil : targetURL
-
-        // AppKit can crash while removing a focused NSView from its key-view loop.
-        // Resign the sidebar's first responder and let that teardown complete before
-        // SwiftUI replaces the hosted sidebar view.
         (browserState.webView?.window ?? NSApp.keyWindow)?.makeFirstResponder(nil)
         Task { @MainActor in
             await Task.yield()
-            sidebarURL = nextURL
+            withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
+                sidebarURL = nextURL
+            }
         }
     }
     

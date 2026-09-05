@@ -1563,9 +1563,6 @@ struct BrowserWebView: NSViewRepresentable {
         let state = coordinator.state
         guard !state.hasCleanedUp else { return }
 
-        // Only detach the native view from the inactive SwiftUI hierarchy.
-        // Script handlers retain the coordinator so background redirects and
-        // login callbacks continue working. cleanup() releases them on close.
         nsView.removeFromSuperview()
         if state.webView !== nsView {
             state.webView = nsView
@@ -1599,44 +1596,61 @@ struct BrowserWebView: NSViewRepresentable {
             return
         }
 
-        let items: [URL]
-        do {
-            items = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
-                .filter { $0.pathExtension.lowercased() == "json" }
-        } catch {
-            print("Error reading content blocker directory: \(error.localizedDescription)")
-            if reloadWhenReady { webView.reload() }
-            return
-        }
-
-        let group = DispatchGroup()
-        for item in items {
-            guard let json = try? String(contentsOf: item, encoding: .utf8),
-                  let data = json.data(using: .utf8),
-                  (try? JSONSerialization.jsonObject(with: data)) != nil else {
-                print("Content blocker contains invalid JSON: \(item.lastPathComponent)")
-                continue
+        // Reading every blocklist file and handing it to WebKit can mean multiple
+        // megabytes of disk I/O and JSON parsing (blocklists can have tens of
+        // thousands of rules). Do all of that off the main thread so opening a
+        // tab, or the page load that's about to start, is never stalled on it.
+        // WKContentRuleListStore.compileContentRuleList already validates the
+        // JSON itself, so there's no need to parse it twice with
+        // JSONSerialization first.
+        DispatchQueue.global(qos: .userInitiated).async {
+            let items: [URL]
+            do {
+                items = try FileManager.default.contentsOfDirectory(at: directory, includingPropertiesForKeys: nil)
+                    .filter { $0.pathExtension.lowercased() == "json" }
+            } catch {
+                print("Error reading content blocker directory: \(error.localizedDescription)")
+                if reloadWhenReady {
+                    DispatchQueue.main.async { [weak webView] in webView?.reload() }
+                }
+                return
             }
 
-            group.enter()
-            let identifier = "dynamicRules-\(item.lastPathComponent)"
-            WKContentRuleListStore.default().compileContentRuleList(
-                forIdentifier: identifier,
-                encodedContentRuleList: json
-            ) { ruleList, error in
-                defer { group.leave() }
-                if let ruleList, coordinator.contentBlockersEnabled == true {
-                    controller.add(ruleList)
-                } else if let error {
-                    print("Failed to compile \(item.lastPathComponent): \(error.localizedDescription)")
+            let group = DispatchGroup()
+            var compiledLists: [WKContentRuleList] = []
+            let lock = NSLock()
+
+            for item in items {
+                guard let json = try? String(contentsOf: item, encoding: .utf8) else {
+                    print("Could not read content blocker file: \(item.lastPathComponent)")
+                    continue
+                }
+
+                group.enter()
+                let identifier = "dynamicRules-\(item.lastPathComponent)"
+                WKContentRuleListStore.default().compileContentRuleList(
+                    forIdentifier: identifier,
+                    encodedContentRuleList: json
+                ) { ruleList, error in
+                    defer { group.leave() }
+                    if let ruleList {
+                        lock.lock()
+                        compiledLists.append(ruleList)
+                        lock.unlock()
+                    } else if let error {
+                        print("Failed to compile \(item.lastPathComponent): \(error.localizedDescription)")
+                    }
                 }
             }
-        }
 
-        if reloadWhenReady {
             group.notify(queue: .main) { [weak webView, weak coordinator] in
-                guard coordinator?.contentBlockersEnabled == enabled else { return }
-                webView?.reload()
+                guard let webView, coordinator?.contentBlockersEnabled == enabled else { return }
+                for ruleList in compiledLists {
+                    webView.configuration.userContentController.add(ruleList)
+                }
+                if reloadWhenReady {
+                    webView.reload()
+                }
             }
         }
     }
