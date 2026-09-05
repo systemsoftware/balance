@@ -3,6 +3,19 @@ import WebKit
 import SwiftData
 internal import Combine
 
+let commonDataTypes: [String] = [
+    WKWebsiteDataTypeDiskCache,
+    WKWebsiteDataTypeMemoryCache,
+    WKWebsiteDataTypeCookies,
+    WKWebsiteDataTypeLocalStorage,
+    WKWebsiteDataTypeSessionStorage,
+    WKWebsiteDataTypeIndexedDBDatabases,
+    WKWebsiteDataTypeWebSQLDatabases,
+    WKWebsiteDataTypeOfflineWebApplicationCache,
+    WKWebsiteDataTypeFetchCache, // iOS 16.0+
+    WKWebsiteDataTypeServiceWorkerRegistrations, // iOS 16.0+
+    WKWebsiteDataTypeFileSystem // iOS 17.0+
+]
 
 // MARK: - 3. History View
 struct WebDataView: View {
@@ -13,6 +26,7 @@ struct WebDataView: View {
     let profile: String
 
     @State var confirmDeleteAll = false
+    @State var confirmDeleteEverything = false
         
     var store: WKWebsiteDataStore? = nil
             
@@ -28,6 +42,7 @@ struct WebDataView: View {
     
     @MainActor
     private func loadData() async {
+        print("profile: \(profile), store: \(String(describing: store))")
         guard let store = store else { return }
         let records = await store.dataRecords(ofTypes: WKWebsiteDataStore.allWebsiteDataTypes())
         self.items = records.sorted { $0.displayName < $1.displayName }
@@ -49,7 +64,7 @@ struct WebDataView: View {
                 Text("Website Data")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
-                Button("Clear All") {
+                Button("Delete All") {
                     confirmDeleteAll.toggle()
                 }
                 .buttonStyle(.plain)
@@ -69,7 +84,7 @@ struct WebDataView: View {
 
                 if filtered.isEmpty {
                     VStack(spacing: 20) {
-                        Image(systemName: "clock.badge.questionmark")
+                        Image(systemName: "externaldrive.badge.questionmark")
                             .font(.system(size: 40))
                             .secondaryAlpha()
                         Text("No data found")
@@ -90,25 +105,95 @@ struct WebDataView: View {
             }
         }
         .background(Color.black.opacity(0.02))
-        .sheet(isPresented:$confirmDeleteAll) {
-            VStack{
+        .sheet(isPresented: $confirmDeleteEverything) {
+            VStack {
                 Text("Are you sure you want to delete all website data?")
                     .font(.headline)
-                Button(role:.destructive) {
-                    clearHistory()
+                    .padding()
+                Button(role: .destructive) {
+                    clearData()
+                    confirmDeleteEverything = false
                 } label: {
-                    Text("Delete All")
+                    Text("Delete Everything")
                         .frame(maxWidth:.infinity)
                 }
                 .foregroundStyle(.red)
-                .padding(.horizontal)
+                Button(role:.cancel) {
+                    confirmDeleteEverything = false
+                } label: {
+                    Text("Cancel")
+                        .frame(maxWidth:.infinity)
+                }
+            }
+            .padding()
+        }
+        .sheet(isPresented:$confirmDeleteAll) {
+            VStack{
+                Text("Delete all website data for this profile?")
+                    .font(.headline)
+                
+                ForEach(commonDataTypes, id:\.self) { type in
+                    
+                    let rawTitle = type.replacingOccurrences(of: "WKWebsiteDataType", with: "")
+
+                    let title = rawTitle.replacingOccurrences(
+                        of: "([a-z])([A-Z])",
+                        with: "$1 $2",
+                        options: .regularExpression
+                    )
+                    
+                    HStack {
+                        Text(title)
+                            .font(.subheadline)
+                        Spacer()
+                        Button(role: .destructive) {
+                            Task { @MainActor in
+                                if let store = store {
+                                    await store.removeData(ofTypes: [type], for: items)
+                                    await loadData()
+                                }
+                            }
+                        } label: {
+                            Text("Delete")
+                        }
+                        .foregroundStyle(type.contains("Cache") ? .yellow : .red)
+                    }
+                }
+                
+                Button {
+                    Task {
+                        if let store = store {
+                            await store.removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations], modifiedSince: Date.distantPast)
+                            
+                                if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                                    let webKitCache = cacheURL.appendingPathComponent("WebKit")
+                                    try? FileManager.default.removeItem(at: webKitCache)
+                                }
+                                URLCache.shared.removeAllCachedResponses()
+                        }
+                        confirmDeleteAll = false
+                    }
+                } label: {
+                    Text("Delete Cache")
+                        .frame(maxWidth: .infinity)
+                }
+                .foregroundStyle(.yellow)
+
+                Button {
+                    confirmDeleteAll = false
+                    confirmDeleteEverything = true
+                } label: {
+                    Text("Delete Everything")
+                        .frame(maxWidth: .infinity)
+                }
+                .foregroundStyle(.red)
+                
                 Button(role:.cancel) {
                     confirmDeleteAll = false
                 } label: {
                     Text("Cancel")
                         .frame(maxWidth:.infinity)
                 }
-                .padding(.horizontal)
             }
             .padding(20)
             .presentationSizing(.fitted)
@@ -118,7 +203,7 @@ struct WebDataView: View {
         }
     }
 
-    private func clearHistory() {
+    private func clearData() {
         Task { @MainActor in
             await Task.yield()
             guard let store = store else { return }

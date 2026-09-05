@@ -48,22 +48,23 @@ struct AutoFillView: View {
     var body: some View {
         Group {
             
-            Button {
-                click("\(searchEngine)\(searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? searchTerm)")
-            } label: {
-                HStack(spacing: 12) {
-                    Image(systemName: "magnifyingglass")
-                        .foregroundStyle(.secondary)
-                    
-                    Text("Search for \(searchTerm)")
-                        .frame(maxWidth: .infinity, alignment: .leading)
-                        .italic(true)
-                    
-                    Spacer()
+            if !searchTerm.isEmpty {
+                Button {
+                    click("\(searchEngine)\(searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? searchTerm)")
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "magnifyingglass")
+                            .foregroundStyle(.secondary)
+                        
+                        Text("Search for \(searchTerm)")
+                            .frame(maxWidth: .infinity, alignment: .leading)
+                            .italic(true)
+                        
+                        Spacer()
+                    }
+                    .padding(.vertical, 6)
                 }
-                .padding(.vertical, 6)
             }
-            
             if isLoading {
                 HStack(spacing: 8) {
                     ProgressView()

@@ -565,7 +565,7 @@ struct ContentView: View {
                                     .roundedBorderStyle()
                                 
                             case let str where str.contains("WebData"):
-                                WebDataView()
+                                WebDataView(profile: bProfile)
                                     .roundedBorderStyle()
 
                             default:

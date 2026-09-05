@@ -289,40 +289,12 @@ var Settings: [Setting] = [
         defaultValueBool: false
     ),
     Setting(
-        name: "Clear Web Cache",
-        icon: "trash",
-        category: catAdvanced,
-        type: "button",
-        appStorageKey: "",
-        buttonText: "Clear Now",
-        action: {
-            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations], modifiedSince: Date.distantPast, completionHandler: {
-                if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-                    let webKitCache = cacheURL.appendingPathComponent("WebKit")
-                    try? FileManager.default.removeItem(at: webKitCache)
-                }
-                URLCache.shared.removeAllCachedResponses()
-            })
-        }
-    ),
-    Setting(
         name: "Clear Cookies On Close",
         icon: "xmark.bin",
         category: catPrivacy,
         type: "toggle",
         appStorageKey: "clearCookiesOnClose",
         defaultValueBool: false
-    ),
-    Setting(
-        name: "Clear All Cookies",
-        icon: "xmark.bin.circle",
-        category: catAdvanced,
-        type: "button",
-        appStorageKey: "",
-        buttonText: "Clear Now",
-        action: {
-            WKWebsiteDataStore.default().removeData(ofTypes: [WKWebsiteDataTypeCookies], modifiedSince: Date.distantPast, completionHandler: {})
-        }
     ),
     Setting(
         name: "Tabs",
@@ -1024,10 +996,6 @@ struct SettingsSectionContent: View {
             if def.id == "advanced" && !defaultProfile.isEmpty {
                 clearProfileCacheButton
             }
-
-            if def.id == "advanced" {
-                clearCacheButton
-            }
         }
     }
 
@@ -1145,47 +1113,6 @@ struct SettingsSectionContent: View {
         .buttonStyle(.plain)
     }
 
-    private var clearCacheButton: some View {
-        Button {
-            WKWebsiteDataStore.default().removeData(
-                ofTypes: WKWebsiteDataStore.allWebsiteDataTypes(),
-                modifiedSince: Date(timeIntervalSince1970: 0),
-                completionHandler: {
-                    if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-                        let webKitCache = cacheURL.appendingPathComponent("WebKit")
-                        try? FileManager.default.removeItem(at: webKitCache)
-                    }
-                    URLCache.shared.removeAllCachedResponses()
-                    windowAlert(message: "Default cache cleared.")
-                }
-            )
-        } label: {
-            HStack(spacing: 10) {
-                ZStack {
-                    RoundedRectangle(cornerRadius: 6)
-                        .fill(Color.red.opacity(0.15))
-                        .frame(width: 28, height: 28)
-                    Image(systemName: "trash")
-                        .font(.system(size: 12, weight: .semibold))
-                        .foregroundStyle(.red)
-                }
-                Text("Clear Default Cache")
-                    .font(.system(size: 13, weight: .medium, design: .rounded))
-                    .foregroundStyle(.primary)
-                Spacer()
-                Image(systemName: "chevron.right")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(
-                RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
-            )
-        }
-        .buttonStyle(.plain)
-    }
 }
 
 // MARK: - Main SettingsView
