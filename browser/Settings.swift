@@ -34,6 +34,14 @@ let catAI = CategoryDef(
     description: "Configures AI features including model behavior, prompts, and response settings."
 )
 
+let catAutofill = CategoryDef(
+    id: "autofill",
+    name: "AutoFill",
+    icon: "person.text.rectangle",
+    color: .orange,
+    description: "Manage form autofill settings."
+)
+
 
 let catPalette = CategoryDef(
     id: "palette",
@@ -82,8 +90,26 @@ let catLearnMore = CategoryDef(
     color: .white,
     description: "Learn Balance's features and how to get started."
 )
+
+let catContetBlocker = CategoryDef(
+    id:"ContentBlocker",
+    name:"Content Blockers",
+    icon:"hand.raised",
+    color: .red,
+    description: "Add WebKit content blocker rules to block ads, trackers, and other unwanted content."
+)
+
+let catExt = CategoryDef(
+    id:"ext",
+    name:"Extensions",
+    icon:"puzzlepiece.extension",
+    color: .cyan,
+    description: "Manage extensions."
+)
+
+
 let categoryDefs: [CategoryDef] = [
-    catBrowsing, catSidebar, catAI, catPalette, catBookmarks, catProfiles, catPrivacy, catAdvanced, catLearnMore
+    catBrowsing, catSidebar, catAI, catAutofill, catPalette, catBookmarks, catProfiles, catPrivacy, catContetBlocker, catExt, catAdvanced, catLearnMore
 ]
 
 struct Setting: Identifiable {
@@ -428,7 +454,6 @@ var Settings: [Setting] = [
         appStorageKey: "openLinksInBackground",
         defaultValueBool: false
     ),
-    
     Setting(
         name: "Homepage",
         icon: "house",
@@ -472,6 +497,14 @@ var Settings: [Setting] = [
         action: {
             createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
         }
+    ),
+    Setting(
+        name: "Use Favicons",
+        icon: "network",
+        category: catAdvanced,
+        type: "toggle",
+        appStorageKey: "loadImages",
+        defaultValueBool: true
     )
 ]
 
@@ -660,29 +693,6 @@ struct ButtonRow: View {
     }
 }
 
-// MARK: - SettingRow (legacy wrapper).
-struct SettingRow: View {
-    let setting: Setting
-    var body: some View {
-        VStack(alignment: .leading, spacing: 8) {
-            if setting.type != "header" && setting.type != "dropdown" && setting.type != "dropdownString" && setting.type != "toggle" {
-                Text(setting.name).font(.headline)
-            }
-            switch setting.type {
-            case "slider":       SliderIntRow(setting: setting)
-            case "doubleSlider": SliderDoubleRow(setting: setting)
-            case "toggle":       ToggleRow(setting: setting)
-            case "text":         TextFieldRow(setting: setting)
-            case "header":       Header(text: setting.name)
-            case "dropdown":     DropdownRow(setting: setting)
-            case "dropdownString": DropdownStringRow(setting: setting)
-            case "button":       ButtonRow(setting: setting)
-            default:             EmptyView()
-            }
-        }
-        .padding(.vertical, 8)
-    }
-}
 
 // MARK: - Inline Setting Control (right-aligned)
 struct InlineSettingControl: View {
@@ -731,6 +741,7 @@ struct SettingsCardRow: View {
     let setting: Setting
     let icon: String
     let accentColor: Color
+    
 
     @State private var isHovered = false
 
@@ -766,6 +777,46 @@ struct SettingsCardRow: View {
         }
         .padding(.horizontal, 14)
         .padding(.vertical, 10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(isHovered
+                      ? Color(NSColor.controlBackgroundColor).opacity(0.8)
+                      : Color(NSColor.controlBackgroundColor).opacity(0.4))
+        )
+        .onHover { isHovered = $0 }
+        .animation(.easeInOut(duration: 0.15), value: isHovered)
+    }
+}
+
+// MARK: - Settings Custom Card Row
+struct SettingsCustomCardRow<TrailingContent: View>: View {
+    let title: String
+    let icon: String
+    let accentColor: Color
+    @ViewBuilder let trailing: () -> TrailingContent
+
+    @State private var isHovered = false
+
+    var body: some View {
+        HStack(spacing: 10) {
+            ZStack {
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(accentColor.opacity(0.15))
+                    .frame(width: 28, height: 28)
+                Image(systemName: icon)
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(accentColor)
+            }
+
+            Text(title)
+                .font(.system(size: 13, weight: .medium, design: .rounded))
+                .foregroundStyle(.primary)
+
+            Spacer()
+
+            trailing()
+        }
+        .padding(.horizontal, 14)
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(isHovered
@@ -870,6 +921,10 @@ struct SettingsSectionContent: View {
     
     @State private var lmpage = WebPage()
     
+    @State var autofillType = 0
+    
+    @State var showNewPassword = false
+    
     private func loadInitialURL() {
         if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
             lmpage.load(URLRequest(url: url))
@@ -885,6 +940,22 @@ struct SettingsSectionContent: View {
         VStack(alignment: .leading, spacing: 6) {
             if def.id == "profiles" && !profiles.isEmpty {
                     profilePickerRow
+            }
+            
+            if def.id == "advanced" {
+                SettingsCustomCardRow(
+                    title: "Clear Cache",
+                    icon: "xmark.bin",
+                    accentColor: catAdvanced.color
+                ) {
+                   CleanupButtonView()
+                }
+                .padding(.bottom, 8)
+            }
+            
+            if def.id == "ext" {
+                ExtensionsView(isSettings:true)
+                    .frame(maxWidth: .infinity)
             }
             
             ForEach(settingsForCategory) { setting in
@@ -923,6 +994,11 @@ struct SettingsSectionContent: View {
                 BookmarksView(showAddBookmark:$showNewBookmark,isSettings:true)
                     .padding(.top, -5)
                     .padding(.leading)
+            }
+            
+            if def.id == "ContentBlocker" {
+                ContentBlockerView(isSettings:true)
+                    .frame(maxWidth: .infinity)
             }
             
             if def.id == "profiles" {
@@ -977,6 +1053,38 @@ struct SettingsSectionContent: View {
                         .background(Color.clear)
             }
 
+            if def.id == "autofill" {
+                SettingsCustomCardRow(title: "Autofill Type", icon: "person.text.rectangle", accentColor: def.color) {
+                    Picker("",selection:$autofillType.animation()) {
+                        Text("Form").tag(0)
+                        Text("Passwords").tag(1)
+                    }
+                    .pickerStyle(.segmented)
+                }
+                
+                switch autofillType {
+                    
+                case 1:
+                    
+                    SettingsCustomCardRow(title: "New Password", icon: "plus", accentColor: def.color) {
+                        Button {
+                            showNewPassword = true
+                        } label: {
+                            Text("New")
+                        }
+                    }
+                    .sheet(isPresented: $showNewPassword) {
+                        NewPasswordView(showNewPassword: $showNewPassword)
+                    }
+                    .padding(.top)
+                    
+                    PasswordsView()
+                default:
+                    AutoFillSettingsView()
+                    
+                }
+            }
+            
             if def.id == "privacy" {
                 SettingsCardRow(
                     setting: Setting(
@@ -1011,9 +1119,8 @@ struct SettingsSectionContent: View {
                                 .fill(Color.accentColor.opacity(0.1))
                                 .frame(width: 32, height: 32)
                             CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(site.site)"))
-                                .font(.system(size: 14, weight: .bold))
-                                .foregroundColor(.blue)
-                        }
+                                .frame(width: 16, height: 16)
+                              }
 
                         Text(site.site)
                             .font(.system(.subheadline, design: .rounded))
@@ -1416,4 +1523,52 @@ func windowAlert(message: String) {
     let a = NSAlert()
     a.messageText = message
     a.runModal()
+}
+
+
+struct NewPasswordView: View {
+    
+    @Binding var showNewPassword: Bool
+    @State var u = ""
+    @State var p = ""
+    @State var host = ""
+    
+    var body: some View {
+        VStack(alignment: .leading) {
+            Text("New Password")
+                .font(.headline)
+                .padding(.bottom, 10)
+            TextField("Username", text: $u)
+                .textFieldStyle(.roundedBorder)
+            TextField("Password", text: $p)
+                .textFieldStyle(.roundedBorder)
+            TextField("Website URL", text: $host)
+                .textFieldStyle(.roundedBorder)
+            HStack {
+                Spacer()
+                Button {
+                    showNewPassword = false
+                } label: {
+                    Text("Cancel")
+                }
+                
+                Button {
+                    if !u.isEmpty && !p.isEmpty && !host.isEmpty {
+                        PasswordManager.shared.savePassword(username: u, passwordString: p, domain: host)
+                        u = ""
+                        p = ""
+                        host = ""
+                        showNewPassword = false
+                    }
+                } label: {
+                    Text("Add Password")
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(u.isEmpty || p.isEmpty || host.isEmpty)
+            }
+            .padding(.top, 10)
+        }
+        .padding()
+    }
+    
 }

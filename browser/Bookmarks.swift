@@ -39,8 +39,7 @@ struct BookmarkRow: View {
                         .fill(Color.accentColor.opacity(0.1))
                         .frame(width: 32, height: 32)
                     CachedAsyncImage(url: bookmark.faviconURL)
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundStyle(.blue)
+                        .frame(width: 16, height: 16)
                 }
 
                 VStack(alignment: .leading, spacing: 2) {

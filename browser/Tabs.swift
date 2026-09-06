@@ -437,15 +437,7 @@ private struct PinnedSiteButton: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(.secondary.opacity(isHovered ? 0.18 : 0.1))
                         .frame(width: 40, height: 40)
-                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(URL(string: bookmark.url)?.host ?? "")&sz=64")) { phase in
-                        if let img = phase.image {
-                            img.resizable().scaledToFit()
-                        } else {
-                            Image(systemName: "globe")
-                                .font(.system(size: 16, weight: .light))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(URL(string: bookmark.url)?.host ?? "")&sz=64"))
                     .frame(width: 22, height: 22)
                 }
                 .scaleEffect(isHovered ? 1.06 : 1.0)
@@ -508,15 +500,7 @@ private struct TabRow: View {
                         .scaleEffect(0.5)
                         .frame(width: 16, height: 16)
                 } else {
-                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(state.url?.host ?? "")")) { phase in
-                        if let img = phase.image {
-                            img.resizable().scaledToFit()
-                        } else {
-                            Image(systemName: "globe")
-                                .font(.system(size: 10))
-                                .foregroundStyle(.secondary)
-                        }
-                    }
+                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(state.url?.host ?? "")"))
                     .frame(width: 16, height: 16)
                 }
             }

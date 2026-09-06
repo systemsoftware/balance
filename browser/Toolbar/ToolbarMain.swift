@@ -10,6 +10,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     case addressBar
     case search
     case autocomplete
+    case autofill
     case extensions
     case saveTo
     case splitView
@@ -44,6 +45,8 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
             "Go"
         case .autocomplete:
             "Autocomplete"
+        case .autofill:
+            "Autofill"
         case .extensions:
             "Extensions"
         case .saveTo:
@@ -78,6 +81,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .addressBar: "link"
         case .search: "arrow.turn.down.right"
         case .autocomplete: "character.cursor.ibeam"
+        case .autofill: "person.text.rectangle"
         case .extensions: "puzzlepiece.extension"
         case .saveTo: "star"
         case .splitView: "rectangle.split.2x1"
@@ -317,6 +321,8 @@ struct BrowserToolbar: View {
         let scanEvents: () async -> Void
         
         @State var showSuggestions = false
+        @AppStorage(AutofillPreferences.enabledKey, store: Config.sharedDefaults)
+        private var autofillEnabled = true
         
         var body: some View {
             switch item {
@@ -369,6 +375,27 @@ struct BrowserToolbar: View {
                 .popover(isPresented: $showSuggestions) {
                     AutoFillPopover(searchTerm: $urlInput)
                 }
+
+            case .autofill:
+                Button {
+                    autofillEnabled.toggle()
+                    if !autofillEnabled {
+                        AutofillPopoverManager.shared.hide()
+                    }
+                } label: {
+                    Image(systemName: "person.text.rectangle")
+                        .font(.title2)
+                        .foregroundStyle(autofillEnabled ? Color.primary : Color.secondary)
+                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                }
+                .frame(width: 40, height: 40)
+                .glassEffect(.regular.interactive(), in: .circle)
+                .buttonStyle(.plain)
+                .background(AutofillToolbarPopoverAnchor())
+                .help(autofillEnabled ? "Turn Off Autofill" : "Turn On Autofill")
+                .accessibilityLabel("Autofill")
+                .accessibilityValue(autofillEnabled ? "On" : "Off")
+                .disabled(location == nil)
                 
             case .extensions:
                 ExtensionsToolbarButton(browserState: browserState, location: $location)
@@ -396,7 +423,7 @@ struct BrowserToolbar: View {
                 Color.clear
                     .frame(
                         minWidth: Layout.toolbarButtonSize,
-                        maxWidth: .infinity
+                        maxWidth: Layout.toolbarButtonSize * 2
                     )
                     .frame(height: Layout.toolbarButtonSize)
                     .contentShape(Rectangle())

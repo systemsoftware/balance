@@ -11,31 +11,60 @@ struct ExtensionsView: View {
     @State private var errorMessage: String?
     @State private var isInstalling: Bool = false
     
+    var isSettings = false
+    
     var body: some View {
         VStack(spacing: 0) {
             // MARK: - Header
-            HStack {
-                Text("Extensions")
-                    .font(.system(.headline, design: .rounded))
-                Spacer()
-                
-                Menu {
-                    Button(action: installFromFile) {
-                        Label("Install from File…", systemImage: "folder")
-                    }
-                    Button(action: installFromURL) {
-                        Label("Install from URL…", systemImage: "link")
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .semibold))
+            if !isSettings {
+                HStack {
+                    Text("Extensions")
+                        .font(.system(.headline, design: .rounded))
+                    Spacer()
+                    
+                    buildMenu()
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Install extension")
+                .padding(.horizontal)
+                .padding(.bottom, 8)
+            } else {
+                SettingsCustomCardRow(
+                    title: "Add Extension",
+                    icon: "plus",
+                    accentColor: catExt.color
+                ) {
+                    buildMenu()
+                }
+                .padding(.bottom, 8)
+                .padding(.top, -15)
+                
+                SettingsCardRow(
+                    setting: Setting(
+                        name:"Open Chrome Web Store",
+                        category: catBookmarks,
+                        type:"button",
+                        appStorageKey:"",
+                        buttonText: "Open",
+                        action: {
+                            let webstore = URL(string: "https://chrome.google.com/webstore/category/extensions")!
+                            createNewTab(with: webstore)
+                        }
+                    ),
+                    icon: "gearshape",
+                    accentColor: catExt.color,
+                )
+                
+                SettingsCardRow(
+                    setting: Setting(
+                        name:"Manage",
+                        category: catBookmarks,
+                        type:"header",
+                        appStorageKey:"",
+                    ),
+                    icon: "gearshape",
+                    accentColor: catExt.color
+                )
+                
             }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
             
             // MARK: - Extension List
             ScrollView {
@@ -47,7 +76,7 @@ struct ExtensionsView: View {
                         Text("No Extensions Installed")
                             .font(.headline)
                             .foregroundStyle(.secondary)
-                        Text("Use the + menu to install extensions from a .crx file or URL.")
+                        Text("If you have not loaded a website, this list may be empty. Extensions are only loaded when a webpage is active.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)
@@ -91,7 +120,7 @@ struct ExtensionsView: View {
             }
         }
         .padding(.vertical)
-        .frame(width: CGFloat(sidebarWidth))
+        .frame(maxWidth: isSettings ? .infinity : CGFloat(sidebarWidth))
     }
     
     // MARK: - Actions
@@ -161,7 +190,8 @@ struct ExtensionsView: View {
     
     private func openOptionsPage(for context: WKWebExtensionContext) {
         if let optionsURL = context.optionsPageURL {
-            createNewTab(with: optionsURL)
+            let extensionURL = URL(string: "extension://\(context.baseURL.lastPathComponent)/\(optionsURL)")!
+            createNewTab(with: extensionURL)
         }
     }
     
@@ -198,6 +228,23 @@ struct ExtensionsView: View {
                 }
             }
         }
+    }
+    
+    @ViewBuilder
+    private func buildMenu() -> some View {
+        Menu {
+            Button(action: installFromFile) {
+                Label("Install from File…", systemImage: "folder")
+            }
+            Button(action: installFromURL) {
+                Label("Install from URL…", systemImage: "link")
+            }
+        } label: {
+            Image(systemName: "plus")
+                .font(.system(size: 12, weight: .semibold))
+        }
+        .menuStyle(.borderedButton)
+        .fixedSize()
     }
 }
 

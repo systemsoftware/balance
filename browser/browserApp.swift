@@ -156,7 +156,7 @@ struct browserApp: App {
         
         SwiftUI.Settings {
             SettingsView(isStandalone: true)
-                .frame(minWidth: 400, minHeight: 400)
+                .frame(minWidth: 450, minHeight: 530)
         }
     }
 }
@@ -289,6 +289,10 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             var types = Set<String>()
             if clearCache {
                 types.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations])
+                Task {
+                    print("Cleaning cache on exit...")
+                    await CleanupButtonView.cleanTmp()
+                }
             }
             if clearCookies {
                 types.insert(WKWebsiteDataTypeCookies)

@@ -56,6 +56,7 @@ private enum DownloadFilenameResolver {
 final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var tabID: String = ""
     @Published var webView: WKWebView?
+    @Published var webViewIdentity = UUID()
     weak var underlyingWebView: WKWebView?
 
     @Published var url: URL?
@@ -237,13 +238,9 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
         if let webView {
             if let coordinator = webView.navigationDelegate as? BrowserWebView.Coordinator {
                 coordinator.observers.removeAll()
-                webView.configuration.userContentController.removeScriptMessageHandler(forName: "installExtension")
-                webView.configuration.userContentController.removeScriptMessageHandler(forName: "scrollObserver")
-                webView.configuration.userContentController.removeScriptMessageHandler(forName: "balanceLocation")
-                webView.configuration.userContentController.removeScriptMessageHandler(forName: "autofillRequest")
-                webView.configuration.userContentController.removeScriptMessageHandler(forName: "printPage")
-                webView.configuration.userContentController.removeScriptMessageHandler(forName: "webShare")
-                webView.configuration.userContentController.removeScriptMessageHandler(forName: "balancePermissionsQuery")
+                for name in BrowserWebView.scriptMessageHandlerNames {
+                    webView.configuration.userContentController.removeScriptMessageHandler(forName: name)
+                }
                 webView.configuration.userContentController.removeAllScriptMessageHandlers()
                 webView.configuration.userContentController.removeAllUserScripts()
                 
@@ -325,6 +322,13 @@ extension BrowserState {
     func navigate(to url: URL?) {
         self.url = url
         navigationRevision &+= 1
+    }
+
+    func rebuildWebView(to url: URL) {
+        cleanup()
+        self.url = url
+        navigationRevision &+= 1
+        webViewIdentity = UUID()
     }
     
     func find(_ query: String, forward: Bool = true) {
@@ -651,147 +655,6 @@ enum BrowserErrorKind {
     case generic(String)
 }
 
-enum ErrorPageBuilder {
-
-    /// Custom scheme used by the "Try Again" button so we can intercept it
-    /// in decidePolicyFor and re-issue the real request.
-    static let retryScheme = "balance-error-retry"
-
-    /// Returns nil for errors that should NOT show an error page — most importantly
-    /// NSURLErrorCancelled (-999), which fires constantly during normal fast navigation
-    /// (e.g. the user typed a new URL before the old one finished, or a redirect
-    /// superseded the current load). Showing an error page for those would be wrong.
-    static func classify(_ error: NSError) -> BrowserErrorKind? {
-        if error.domain == NSURLErrorDomain && error.code == NSURLErrorCancelled {
-            return nil
-        }
-        // WebKitErrorDomain "frame load interrupted" (102) also happens for legitimate
-        // things like downloads and plugin handoffs — ignore it too.
-        if error.domain == "WebKitErrorDomain" && error.code == 102 {
-            return nil
-        }
-
-        guard error.domain == NSURLErrorDomain else {
-            return .generic(error.localizedDescription)
-        }
-
-        switch error.code {
-        case NSURLErrorNotConnectedToInternet, NSURLErrorNetworkConnectionLost:
-            return .offline
-        case NSURLErrorCannotFindHost, NSURLErrorDNSLookupFailed:
-            return .cannotFindHost
-        case NSURLErrorCannotConnectToHost:
-            return .cannotConnect
-        case NSURLErrorTimedOut:
-            return .timedOut
-        case NSURLErrorServerCertificateUntrusted,
-             NSURLErrorServerCertificateHasBadDate,
-             NSURLErrorServerCertificateNotYetValid,
-             NSURLErrorServerCertificateHasUnknownRoot,
-             NSURLErrorClientCertificateRejected:
-            return .sslError
-        default:
-            return .generic(error.localizedDescription)
-        }
-    }
-
-    static func html(for kind: BrowserErrorKind, url: URL?) -> String {
-            let host = url?.host ?? url?.absoluteString ?? "this site"
-            let title: String
-            let message: String
-            let icon: String
-
-            switch kind {
-            case .offline:
-                title = "No Internet Connection"
-                message = "Check your connection and try again."
-                icon = Self.iconOffline
-            case .cannotFindHost:
-                title = "Can't Find Server"
-                message = "Balance can't find the server at \(escape(host))."
-                icon = Self.iconWarning
-            case .cannotConnect:
-                title = "Can't Connect to Server"
-                message = "The server at \(escape(host)) may be temporarily down."
-                icon = Self.iconWarning
-            case .timedOut:
-                title = "Request Timed Out"
-                message = "The connection to \(escape(host)) timed out."
-                icon = Self.iconWarning
-            case .sslError:
-                title = "Connection Not Private"
-                message = "Balance can't verify the identity of \(escape(host))."
-                icon = Self.iconLock
-            case .generic(let msg):
-                title = "Something Went Wrong"
-                message = escape(msg)
-                icon = Self.iconWarning
-            }
-
-            return """
-            <!DOCTYPE html>
-            <html>
-            <head>
-            <meta charset="utf-8">
-            <meta name="viewport" content="width=device-width, initial-scale=1">
-            <title>\(escape(title))</title>
-            <style>
-            :root { color-scheme: light dark; }
-            * { box-sizing: border-box; }
-            html, body {
-                margin: 0; height: 100%;
-                font-family: -apple-system, BlinkMacSystemFont, 'SF Pro Text', sans-serif;
-                background: Canvas; color: CanvasText;
-            }
-            body { display: flex; align-items: center; justify-content: center; padding: 24px; }
-            .wrap { max-width: 360px; }
-            .icon { width: 30px; height: 30px; margin-bottom: 16px; opacity: 0.5; }
-            .icon svg { width: 100%; height: 100%; }
-            h1 { font-size: 17px; font-weight: 600; margin: 0 0 6px; letter-spacing: -0.2px; }
-            p { font-size: 13px; opacity: 0.55; line-height: 1.45; margin: 0 0 20px; }
-            button {
-                font: inherit; font-size: 13px; font-weight: 500; padding: 7px 16px;
-                border-radius: 6px; border: 1px solid; border-color: color-mix(in srgb, CanvasText 15%, transparent);
-                background: transparent; color: CanvasText; cursor: pointer;
-            }
-            button:hover { background: color-mix(in srgb, CanvasText 6%, transparent); }
-            button:active { background: color-mix(in srgb, CanvasText 12%, transparent); }
-            .url { font-size: 11px; opacity: 0.35; margin-top: 16px; word-break: break-all; }
-            </style>
-            </head>
-            <body>
-            <div class="wrap">
-                <div class="icon">\(icon)</div>
-                <h1>\(escape(title))</h1>
-                <p>\(message)</p>
-                <button onclick="location.href='\(retryScheme)://retry'">Try Again</button>
-                \(url.map { "<div class=\"url\">\(escape($0.absoluteString))</div>" } ?? "")
-            </div>
-            </body>
-            </html>
-            """
-        }
-
-        private static let iconWarning = """
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M12 9v4M12 16.5h.01M10.3 3.9 2.6 17.5a1.8 1.8 0 0 0 1.56 2.7h15.7a1.8 1.8 0 0 0 1.56-2.7L13.7 3.9a1.8 1.8 0 0 0-3.14 0Z" stroke-linecap="round" stroke-linejoin="round"/></svg>
-        """
-
-        private static let iconOffline = """
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><path d="M2 8.5C7 4 17 4 22 8.5M5.5 12c3.5-3 9.5-3 13 0M9 15.5c1.7-1.3 4.3-1.3 6 0" stroke-linecap="round"/><circle cx="12" cy="19" r="1"/></svg>
-        """
-
-        private static let iconLock = """
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5"><rect x="5" y="10.5" width="14" height="9.5" rx="2"/><path d="M8 10.5V7.5a4 4 0 0 1 8 0v3" stroke-linecap="round"/></svg>
-        """
-
-
-    private static func escape(_ s: String) -> String {
-        s.replacingOccurrences(of: "&", with: "&amp;")
-         .replacingOccurrences(of: "<", with: "&lt;")
-         .replacingOccurrences(of: ">", with: "&gt;")
-         .replacingOccurrences(of: "\"", with: "&quot;")
-    }
-}
 
 struct BrowserWebView: NSViewRepresentable {
     let request: URLRequest
@@ -907,7 +770,12 @@ struct BrowserWebView: NSViewRepresentable {
             return preloaded
         }
 
-        let config = WKWebViewConfiguration()
+        let manager = WebExtensionManager.shared
+        manager.loadAllFromDisk()
+        let extensionControllerKey = profile
+        let extensionController = priv ? nil : manager.controller(for: extensionControllerKey)
+        let extensionContext = request.url.flatMap { extensionController?.extensionContext(for: $0) }
+        let config = extensionContext?.webViewConfiguration ?? WKWebViewConfiguration()
         config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         config.preferences.setValue(true, forKey: "fullScreenEnabled")
         if #available(macOS 12.3, *) {
@@ -925,64 +793,43 @@ struct BrowserWebView: NSViewRepresentable {
             config.mediaTypesRequiringUserActionForPlayback = .all
         }
         
-        let notificationsSetting = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
-        let notifSettingStr = notificationsSetting == .allow ? "granted" : (notificationsSetting == .deny ? "denied" : "default")
-        
-        let notificationsJS = """
-        (function() {
-            let currentPermission = '\(notifSettingStr)';
-            
-            function MockNotification(title, options) {
-                if (currentPermission !== 'granted') return;
-                let msg = { title: title };
-                if (options) {
-                    msg.body = options.body;
-                    msg.icon = options.icon;
-                }
-                window.webkit.messageHandlers.notificationShow.postMessage(msg);
-            }
-            
-            Object.defineProperty(MockNotification, 'permission', {
-                get: function() { return currentPermission; }
-            });
-
-            window.__balanceSetNotificationPermission = function(permission) {
-                currentPermission = permission;
-            };
-            
-            MockNotification.requestPermission = function(callback) {
-                return new Promise((resolve) => {
-                    if (currentPermission !== 'default') {
-                        if (callback) callback(currentPermission);
-                        resolve(currentPermission);
-                        return;
-                    }
-                    
-                    const callbackId = 'notif_' + Math.random().toString(36).substr(2, 9);
-                    window['__balanceNotificationCallback_' + callbackId] = function(result) {
-                        currentPermission = result;
-                        if (callback) callback(result);
-                        resolve(result);
-                        delete window['__balanceNotificationCallback_' + callbackId];
-                    };
-                    
-                    window.webkit.messageHandlers.notificationRequestPermission.postMessage({ id: callbackId });
-                });
-            };
-            
-            window.Notification = MockNotification;
-        })();
-        """
-        let notifScript = WKUserScript(source: notificationsJS, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-        config.userContentController.addUserScript(notifScript)
-        config.userContentController.add(context.coordinator, name: "notificationRequestPermission")
-        config.userContentController.add(context.coordinator, name: "notificationShow")
-        
         config.allowsAirPlayForMediaPlayback = true
         
-        // Chrome Web Store integration
-        config.userContentController.add(context.coordinator, name: "installExtension")
+        // Register script message handlers
+        for name in Self.scriptMessageHandlerNames {
+            config.userContentController.add(context.coordinator, name: name)
+        }
         
+        // 1. Inject document-start scripts (Notification, Geolocation, Print, Web Share, Permissions)
+        if !BrowserScripts.preload.isEmpty {
+            let preloadScript = WKUserScript(source: BrowserScripts.preload, injectionTime: .atDocumentStart, forMainFrameOnly: false)
+            config.userContentController.addUserScript(preloadScript)
+        }
+        
+        // Apply site-specific notification permission at document start
+        let notificationsSetting = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
+        let notifSettingStr = notificationsSetting == .allow ? "granted" : (notificationsSetting == .deny ? "denied" : "default")
+        if notifSettingStr != "default" {
+            let notifInitScript = WKUserScript(
+                source: "window.__balanceSetNotificationPermission && window.__balanceSetNotificationPermission('\(notifSettingStr)');",
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            )
+            config.userContentController.addUserScript(notifInitScript)
+        }
+        
+        // Do Not Track preference
+        let dntEnabled = Config.sharedDefaults?.bool(forKey: "doNotTrack") ?? false
+        if dntEnabled {
+            let dntScript = WKUserScript(
+                source: "Object.defineProperty(navigator, 'doNotTrack', { get: function() { return '1'; } });",
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: false
+            )
+            config.userContentController.addUserScript(dntScript)
+        }
+        
+        // Chrome Web Store integration: Pass installed extension IDs
         let installedIDs = WebExtensionManager.shared.contexts.compactMap { context -> String? in
             for component in context.baseURL.pathComponents.reversed() {
                 if component.count == 32 && component.allSatisfy({ $0.isLowercase && $0.isLetter }) {
@@ -992,408 +839,21 @@ struct BrowserWebView: NSViewRepresentable {
             return context.baseURL.lastPathComponent
         }
         let idsStr = installedIDs.map { "\"\($0)\"" }.joined(separator: ",")
+        let cwsExtScript = WKUserScript(
+            source: "window.balanceInstalledExtensions = [\(idsStr)];",
+            injectionTime: .atDocumentStart,
+            forMainFrameOnly: true
+        )
+        config.userContentController.addUserScript(cwsExtScript)
         
-        let cwsScript = """
-        (function() {
-            window.balanceInstalledExtensions = [\(idsStr)];
-            if (!window.location.hostname.includes("chromewebstore.google.com")) return;
-            let checkInterval = setInterval(() => {
-                let buttons = Array.from(document.querySelectorAll('button'));
-                let installBtn = buttons.find(b => {
-                    let text = b.innerText.toLowerCase();
-                    let aria = (b.getAttribute('aria-label') || "").toLowerCase();
-                    if (text.includes("switch to chrome") || aria.includes("switch to chrome")) return false;
-                    
-                    return text.includes("available on chrome") || 
-                           text.includes("add to chrome") ||
-                           text.includes("install");
-                });
-                
-                if (installBtn && !installBtn.hasAttribute('data-balance-injected')) {
-                    let pathParts = window.location.pathname.split('/');
-                    let extId = pathParts[pathParts.length - 1];
-                    
-                    if (extId && extId.length === 32) {
-                        let newBtn = installBtn.cloneNode(true);
-                        newBtn.setAttribute('data-balance-injected', 'true');
-                        newBtn.disabled = false;
-                        
-                        let isInstalled = window.balanceInstalledExtensions.includes(extId);
-                        
-                        let spans = newBtn.querySelectorAll('span');
-                        let textSpan = Array.from(spans).find(s => s.innerText.includes("Chrome") || s.innerText.includes("Install"));
-                        
-                        let btnText = isInstalled ? "Installed" : "Install in Balance";
-                        
-                        if (textSpan) {
-                            textSpan.innerText = btnText;
-                        } else {
-                            newBtn.innerText = btnText;
-                        }
-                        
-                        // Use inline interval to check if it gets installed dynamically
-                        let checkDynamic = setInterval(() => {
-                            if (window.balanceInstalledExtensions.includes(extId)) {
-                                if (textSpan) textSpan.innerText = "Installed";
-                                else newBtn.innerText = "Installed";
-                                newBtn.style.backgroundColor = "#34C759";
-                                newBtn.style.cursor = "default";
-                                newBtn.disabled = true;
-                                clearInterval(checkDynamic);
-                            }
-                        }, 500);
-                        
-                        newBtn.style.backgroundColor = isInstalled ? "#34C759" : "#007AFF"; 
-                        newBtn.style.color = "white";
-                        newBtn.style.opacity = "1";
-                        newBtn.style.cursor = isInstalled ? "default" : "pointer";
-                        newBtn.style.pointerEvents = "auto";
-                        
-                        installBtn.parentNode.replaceChild(newBtn, installBtn);
-                        
-                        if (!isInstalled) {
-                            newBtn.addEventListener('click', (e) => {
-                                e.preventDefault();
-                                e.stopPropagation();
-                                if (textSpan) textSpan.innerText = "Installing...";
-                                else newBtn.innerText = "Installing...";
-                                window.webkit.messageHandlers.installExtension.postMessage(extId);
-                                
-                                setTimeout(() => {
-                                    if (textSpan) textSpan.innerText = "Installed";
-                                    else newBtn.innerText = "Installed";
-                                    newBtn.style.backgroundColor = "#34C759";
-                                    if (!window.balanceInstalledExtensions.includes(extId)) {
-                                        window.balanceInstalledExtensions.push(extId);
-                                    }
-                                }, 2000);
-                            });
-                        }
-                    }
-                }
-                
-                
-                // Hide "Switch to Chrome" banners more aggressively
-                let promos = document.querySelectorAll('*');
-                for (let el of promos) {
-                    if (el.children.length > 4) continue;
-                    let text = (el.innerText || "").toLowerCase().trim();
-                    if (text.includes("switch to chrome") || text.includes("download chrome") || text.includes("you need chrome")) {
-                        let banner = el.closest('div[role="banner"]') || el.parentElement.parentElement;
-                        if (banner && banner.style.display !== 'none' && banner.tagName !== 'BODY') {
-                            banner.style.display = 'none';
-                        }
-                    }
-                }
-            }, 1000);
-        })();
-        """
-        let script = WKUserScript(source: cwsScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        config.userContentController.addUserScript(script)
-        
-        let scrollObserverScript = """
-        window.addEventListener('scroll', () => {
-            clearTimeout(window.scrollTimeout);
-            window.scrollTimeout = setTimeout(() => {
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.scrollObserver) {
-                    window.webkit.messageHandlers.scrollObserver.postMessage({x: window.scrollX, y: window.scrollY});
-                }
-            }, 250);
-        });
-        """
-        let scrollScript = WKUserScript(source: scrollObserverScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        config.userContentController.addUserScript(scrollScript)
-        config.userContentController.add(context.coordinator, name: "scrollObserver")
-        
-        let locationScript = """
-        (function() {
-            let locationCallbacks = {};
-            let watchCallbacks = {};
-            let callbackIdCounter = 0;
-
-            navigator.geolocation.getCurrentPosition = function(success, error, options) {
-                const state = prompt("BALANCE_INTERNAL_LOCATION_CHECK");
-                if (state === 'Deny') {
-                    if (error) error({ code: 1, message: 'User denied Geolocation' });
-                    return;
-                }
-                
-                const id = ++callbackIdCounter;
-                locationCallbacks[id] = { success: success, error: error };
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.balanceLocation) {
-                    window.webkit.messageHandlers.balanceLocation.postMessage({ type: 'get', id: id });
-                }
-            };
-
-            navigator.geolocation.watchPosition = function(success, error, options) {
-                const state = prompt("BALANCE_INTERNAL_LOCATION_CHECK");
-                if (state === 'Deny') {
-                    if (error) error({ code: 1, message: 'User denied Geolocation' });
-                    return 0;
-                }
-                const id = ++callbackIdCounter;
-                watchCallbacks[id] = { success: success, error: error };
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.balanceLocation) {
-                    window.webkit.messageHandlers.balanceLocation.postMessage({ type: 'watch', id: id });
-                }
-                return id;
-            };
-
-            navigator.geolocation.clearWatch = function(id) {
-                delete watchCallbacks[id];
-                if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.balanceLocation) {
-                    window.webkit.messageHandlers.balanceLocation.postMessage({ type: 'clear', id: id });
-                }
-            };
-
-            window.__balanceLocationCallback = function(id, errCode, lat, lng, acc) {
-                const cb = locationCallbacks[id] || watchCallbacks[id];
-                if (!cb) return;
-                
-                if (errCode === 0) {
-                    if (cb.success) {
-                        cb.success({
-                            coords: { latitude: lat, longitude: lng, accuracy: acc },
-                            timestamp: Date.now()
-                        });
-                    }
-                } else {
-                    if (cb.error) cb.error({ code: errCode, message: 'Location error' });
-                }
-                
-                if (locationCallbacks[id]) {
-                    delete locationCallbacks[id];
-                }
-            };
-        })();
-        """
-        let locScript = WKUserScript(source: locationScript, injectionTime: .atDocumentStart, forMainFrameOnly: true)
-        config.userContentController.addUserScript(locScript)
-        config.userContentController.add(context.coordinator, name: "balanceLocation")
-        
-        
-        let dntEnabled = Config.sharedDefaults?.bool(forKey: "doNotTrack") ?? false
-        if dntEnabled {
-            let dntScript = WKUserScript(source: "Object.defineProperty(navigator, 'doNotTrack', { get: function() { return '1'; } });", injectionTime: .atDocumentStart, forMainFrameOnly: false)
-            config.userContentController.addUserScript(dntScript)
+        // 2. Inject document-end scripts (Scroll observer, Autofill, Chrome Web Store UI)
+        if !BrowserScripts.documentEnd.isEmpty {
+            let documentEndScript = WKUserScript(source: BrowserScripts.documentEnd, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            config.userContentController.addUserScript(documentEndScript)
         }
         
-        let autofillScript = """
-        document.addEventListener('focusin', function(e) {
-            let el = e.target;
-            if (el.tagName === 'INPUT' && (el.type === 'password' || el.type === 'text' || el.type === 'email')) {
-                // Check if it's likely a login form
-                let form = el.closest('form');
-                let hasPassword = false;
-                if (form) {
-                    let inputs = form.querySelectorAll('input');
-                    for (let input of inputs) {
-                        if (input.type === 'password') {
-                            hasPassword = true;
-                            break;
-                        }
-                    }
-                } else if (el.type === 'password') {
-                    hasPassword = true;
-                }
-                
-                if (hasPassword) {
-                    let rect = el.getBoundingClientRect();
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.autofillRequest) {
-                        window.webkit.messageHandlers.autofillRequest.postMessage({
-                            x: rect.x,
-                            y: rect.y,
-                            width: rect.width,
-                            height: rect.height,
-                            type: el.type
-                        });
-                    }
-                }
-            }
-        });
-        
-        window.__balanceAutofill = function(username, password) {
-            let passwordInputs = document.querySelectorAll('input[type="password"]');
-            for (let passwordInput of passwordInputs) {
-                let scope = passwordInput.closest('form') || document;
-                let textInputs = scope.querySelectorAll('input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"])');
-                let usernameInput = null;
-                if (textInputs.length > 0) {
-                    for (let input of textInputs) {
-                        if (input.compareDocumentPosition(passwordInput) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                            usernameInput = input;
-                        }
-                    }
-                    if (!usernameInput) usernameInput = textInputs[0];
-                }
-                
-                const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, "value").set;
-                
-                if (usernameInput && username && username !== "Unknown") {
-                    nativeInputValueSetter.call(usernameInput, username);
-                    usernameInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    usernameInput.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                if (password) {
-                    nativeInputValueSetter.call(passwordInput, password);
-                    passwordInput.dispatchEvent(new Event('input', { bubbles: true }));
-                    passwordInput.dispatchEvent(new Event('change', { bubbles: true }));
-                }
-                return;
-            }
-        };
-        
-        window.__balanceGetFormValues = function() {
-            let passwordInputs = document.querySelectorAll('input[type="password"]');
-            for (let passwordInput of passwordInputs) {
-                if (passwordInput.value) {
-                    let scope = passwordInput.closest('form') || document;
-                    let textInputs = scope.querySelectorAll('input:not([type="password"]):not([type="hidden"]):not([type="submit"]):not([type="button"]):not([type="checkbox"]):not([type="radio"])');
-                    let usernameInput = null;
-                    if (textInputs.length > 0) {
-                        for (let input of textInputs) {
-                            if (input.compareDocumentPosition(passwordInput) & Node.DOCUMENT_POSITION_FOLLOWING) {
-                                usernameInput = input;
-                            }
-                        }
-                        if (!usernameInput) usernameInput = textInputs[0];
-                    }
-                    
-                    let username = (usernameInput && usernameInput.value) ? usernameInput.value : "Unknown";
-                    return { username: username, password: passwordInput.value };
-                }
-            }
-            return null;
-        };
-        """
-        let afScript = WKUserScript(source: autofillScript, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
-        config.userContentController.addUserScript(afScript)
-        config.userContentController.add(context.coordinator, name: "autofillRequest")
-        
-        let printScriptSource = """
-        window.print = function() {
-            if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.printPage) {
-                window.webkit.messageHandlers.printPage.postMessage({});
-            }
-        };
-        """
-        let printScript = WKUserScript(source: printScriptSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
-        config.userContentController.addUserScript(printScript)
-        config.userContentController.add(context.coordinator, name: "printPage")
-        
-        let webShareSource = """
-        (function() {
-            if (!navigator.canShare) {
-                navigator.canShare = function(data) {
-                    if (!data || typeof data !== 'object') return false;
-                    if (!data.url && !data.text && !data.title) return false;
-                    return true;
-                };
-            }
-            navigator.share = function(data) {
-                return new Promise((resolve, reject) => {
-                    if (!data || typeof data !== 'object' || (!data.url && !data.text && !data.title)) {
-                        reject(new TypeError("Invalid share data: at least one of url, text, or title must be provided"));
-                        return;
-                    }
-                    const callbackId = 'share_' + Math.random().toString(36).substr(2, 9);
-                    window['__balanceShareCallback_' + callbackId] = function(success, errorMsg) {
-                        delete window['__balanceShareCallback_' + callbackId];
-                        if (success) {
-                            resolve();
-                        } else {
-                            reject(new DOMException(errorMsg || 'Share canceled', 'AbortError'));
-                        }
-                    };
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.webShare) {
-                        window.webkit.messageHandlers.webShare.postMessage({
-                            id: callbackId,
-                            title: data.title || '',
-                            text: data.text || '',
-                            url: data.url || ''
-                        });
-                    } else {
-                        delete window['__balanceShareCallback_' + callbackId];
-                        reject(new DOMException('Share not supported', 'AbortError'));
-                    }
-                });
-            };
-        })();
-        """
-        let webShareScript = WKUserScript(source: webShareSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
-        config.userContentController.addUserScript(webShareScript)
-        config.userContentController.add(context.coordinator, name: "webShare")
-        
-        let permissionsSource = """
-        (function() {
-            const originalQuery = (navigator.permissions && typeof navigator.permissions.query === 'function') 
-                ? navigator.permissions.query.bind(navigator.permissions) 
-                : null;
-
-            class BalancePermissionStatus extends EventTarget {
-                constructor(name, state) {
-                    super();
-                    this._name = name;
-                    this._state = state;
-                    this.onchange = null;
-                }
-                get name() { return this._name; }
-                get state() { return this._state; }
-                _update(newState) {
-                    if (this._state !== newState) {
-                        this._state = newState;
-                        const event = new Event('change');
-                        this.dispatchEvent(event);
-                        if (typeof this.onchange === 'function') {
-                            this.onchange.call(this, event);
-                        }
-                    }
-                }
-            }
-
-            if (!navigator.permissions) {
-                navigator.permissions = {};
-            }
-
-            navigator.permissions.query = function(descriptor) {
-                return new Promise((resolve, reject) => {
-                    if (!descriptor || typeof descriptor !== 'object' || !descriptor.name) {
-                        reject(new TypeError("The name property is required"));
-                        return;
-                    }
-                    const name = descriptor.name;
-                    const handledNames = ['geolocation', 'notifications', 'camera', 'microphone'];
-                    if (!handledNames.includes(name)) {
-                        if (originalQuery) {
-                            originalQuery(descriptor).then(resolve).catch(reject);
-                            return;
-                        }
-                        resolve(new BalancePermissionStatus(name, 'prompt'));
-                        return;
-                    }
-
-                    const callbackId = 'perm_' + Math.random().toString(36).substr(2, 9);
-                    window['__balancePermCallback_' + callbackId] = function(state) {
-                        delete window['__balancePermCallback_' + callbackId];
-                        resolve(new BalancePermissionStatus(name, state));
-                    };
-                    if (window.webkit && window.webkit.messageHandlers && window.webkit.messageHandlers.balancePermissionsQuery) {
-                        window.webkit.messageHandlers.balancePermissionsQuery.postMessage({ id: callbackId, name: name });
-                    } else {
-                        delete window['__balancePermCallback_' + callbackId];
-                        resolve(new BalancePermissionStatus(name, 'prompt'));
-                    }
-                });
-            };
-        })();
-        """
-        let permissionsScript = WKUserScript(source: permissionsSource, injectionTime: .atDocumentStart, forMainFrameOnly: false)
-        config.userContentController.addUserScript(permissionsScript)
-        config.userContentController.add(context.coordinator, name: "balancePermissionsQuery")
-        
-        WebExtensionManager.shared.loadAllFromDisk()
         if !priv {
-            WebExtensionManager.shared.activeTab = state
+            manager.activeTab = state
         }
         
         var profileContext = ""
@@ -1421,12 +881,10 @@ struct BrowserWebView: NSViewRepresentable {
             config.websiteDataStore = .default()
         }
         
-        let extensionControllerKey = profile
-        if !priv {
-            let controller = WebExtensionManager.shared.controller(for: extensionControllerKey)
-            config.webExtensionController = controller
-            config.webExtensionController?.delegate = WebExtensionManager.shared
+        if !priv, extensionContext == nil {
+            config.webExtensionController = extensionController
         }
+        config.webExtensionController?.delegate = manager
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
         webView.downloadStore = DownloadStore(profile: profile)
@@ -1596,7 +1054,7 @@ struct BrowserWebView: NSViewRepresentable {
         }
     }
 
-    private static let scriptMessageHandlerNames = [
+    static let scriptMessageHandlerNames = [
         "notificationRequestPermission",
         "notificationShow",
         "installExtension",
@@ -1765,46 +1223,79 @@ struct BrowserWebView: NSViewRepresentable {
                     CRXInstaller.install(fromRemote: url)
                 }
             } else if message.name == "autofillRequest", let dict = message.body as? [String: Any] {
-                guard message.frameInfo.isMainFrame else { return }
+                guard AutofillPreferences.isEnabled else {
+                    AutofillPopoverManager.shared.hide()
+                    return
+                }
+
                 guard let x = dict["x"] as? Double,
                       let y = dict["y"] as? Double,
                       let width = dict["width"] as? Double,
                       let height = dict["height"] as? Double else { return }
                 
+                let inputType = (dict["type"] as? String) ?? "text"
+                let inputLabel = (dict["label"] as? String) ?? ""
+                let currentValue = (dict["value"] as? String) ?? ""
+                let hasPassword = (dict["hasPassword"] as? Bool) ?? (inputType == "password")
+                let isPasswordField = inputType == "password"
+                
                 DispatchQueue.main.async {
-                    let host = message.frameInfo.securityOrigin.host.lowercased()
-                    if let webView = self.state.webView, !host.isEmpty {
-                        let rect = NSRect(x: x, y: y, width: width, height: height)
-                        let credentials = PasswordManager.shared.credentials(for: host)
-                        
-                        let frameInfo = message.frameInfo
-                        
-                        AutofillPopoverManager.shared.show(relativeTo: rect, in: webView, domain: host, credentials: credentials) { [weak self = self] cred in
+                    guard let webView = self.state.webView ?? (message.webView as? BrowserWKWebView) ?? message.webView else { return }
+                    let host = (message.frameInfo.securityOrigin.host.isEmpty ? webView.url?.host : message.frameInfo.securityOrigin.host)?.lowercased() ?? "default"
+                    
+                    let zoom = webView.pageZoom
+                    let rect = NSRect(x: x * zoom, y: y * zoom, width: width * zoom, height: height * zoom)
+                    let credentials = (hasPassword || isPasswordField) ? PasswordManager.shared.credentials(for: host) : []
+                    let autofillItems = AutoFillStore.getMatching(type: inputType, label: inputLabel.isEmpty ? nil : inputLabel)
+                    
+                    // Show popover only when we have matching credentials or matching autofill items
+                    guard !credentials.isEmpty || !autofillItems.isEmpty else {
+                        return
+                    }
+                    
+                    let frameInfo = message.frameInfo
+                    
+                    AutofillPopoverManager.shared.show(
+                        relativeTo: rect,
+                        in: webView,
+                        domain: host,
+                        inputType: inputType,
+                        inputLabel: inputLabel,
+                        currentValue: currentValue,
+                        credentials: credentials,
+                        autofillItems: autofillItems,
+                        onSelectCredential: { [weak self = self] cred in
                             let pass = PasswordManager.shared.fetchPasswordData(for: cred.username, domain: host) ?? ""
-                            
                             let credentialsArray = [cred.username, pass]
                             if let data = try? JSONSerialization.data(withJSONObject: credentialsArray),
                                let jsonStr = String(data: data, encoding: .utf8) {
                                 let js = "window.__balanceAutofill(\(jsonStr)[0], \(jsonStr)[1]);"
                                 self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: .page, completionHandler: { _ in })
                             }
-                        } onSave: { [weak self = self] in
+                        },
+                        onSelectAutofillData: { [weak self = self] autofillValue in
+                            if let data = try? JSONSerialization.data(withJSONObject: [autofillValue]),
+                                  let jsonStr = String(data: data, encoding: .utf8) {
+                                let js = "window.__balancePopulateActiveField(\(jsonStr)[0]);"
+                                self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: .page, completionHandler: { _ in })
+                            }
+                        },
+                        onSavePassword: { [weak self = self] in
                             self?.state.webView?.evaluateJavaScript("window.__balanceGetFormValues()", in: frameInfo, in: .page) { result in
                                 switch result {
                                 case .success(let res):
-                                    print("evaluateJavaScript result: \(String(describing: res))")
                                     if let dict = res as? [String: String], let u = dict["username"], let p = dict["password"] {
-                                        print("Found username and password in JS, saving...")
                                         PasswordManager.shared.savePassword(username: u, passwordString: p, domain: host)
-                                    } else {
-                                        print("Failed to parse username and password from JS result")
                                     }
                                 case .failure(let error):
                                     print("evaluateJavaScript error: \(error)")
                                 }
                             }
+                        },
+                        onSaveAutofill: { data, type, label in
+                            AutoFillStore.add(data: data, type: type, label: label.isEmpty ? nil : label)
                         }
-                    }
+                    )
                 }
             } else if message.name == "scrollObserver", let dict = message.body as? [String: Any] {
                 guard message.frameInfo.isMainFrame else { return }
@@ -2099,6 +1590,17 @@ struct BrowserWebView: NSViewRepresentable {
                     decisionHandler(.cancel, preferences)
                     if let retryURL = lastFailedURL {
                         webView.load(URLRequest(url: retryURL))
+                    }
+                    return
+                }
+
+                if url.scheme?.lowercased() == "extension" {
+                    decisionHandler(.cancel, preferences)
+                    if let extensionContext = webView.configuration.webExtensionController?.extensionContexts.first,
+                       let secureOptionsURL = extensionContext.optionsPageURL {
+                        DispatchQueue.main.async {
+                            self.state.rebuildWebView(to: secureOptionsURL)
+                        }
                     }
                     return
                 }

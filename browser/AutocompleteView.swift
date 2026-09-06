@@ -19,7 +19,7 @@ struct GoogleSuggestions: Decodable {
 }
 
 
-struct AutoFillView: View {
+struct AutocompleteView: View {
     @Binding var searchTerm: String
     
     @State private var result: GoogleSuggestions?
@@ -58,7 +58,6 @@ struct AutoFillView: View {
                         
                         Text("Search for \(searchTerm)")
                             .frame(maxWidth: .infinity, alignment: .leading)
-                            .italic(true)
                         
                         Spacer()
                     }
@@ -99,13 +98,19 @@ struct AutoFillView: View {
                             
                             Text(suggestion)
                                 .frame(maxWidth: .infinity, alignment: .leading)
-                                .italic(suggestion == "Search for \(searchTerm)")
                         }
                         .padding(.vertical, 6)
                     }
                     .buttonStyle(.plain)
                 }
                 .animation(.default, value: suggestions)
+                
+                Text("Powered by \(engine.contains("google") ? "Google" : "DuckDuckGo")")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .frame(maxWidth: .infinity, alignment: .center)
+                    .padding(.vertical, 3)
+                    .italic()
             }
         }
         .task(id: searchTerm) {

@@ -146,7 +146,7 @@ struct ExtensionActionRow: View {
     
     private func updateInfo() {
         guard let action = getAction() else { return }
-        self.icon = action.icon(for: CGSize(width: 24, height: 24))
+        self.icon = action.icon(for: CGSize(width: 15, height: 15))
         self.title = (action.label.isEmpty ? context.webExtension.displayName : action.label) ?? ""
     }
 }

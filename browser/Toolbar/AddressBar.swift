@@ -130,13 +130,29 @@ private struct AddressField: View {
     @State private var inputWidth: CGFloat = 1
 
     var body: some View {
-        TextField("Search or enter website name", text: $text)
-        .textFieldStyle(.plain)
-        .focused($isFocused)
-        .onSubmit {
-            showSuggestions = false
-            onSubmit()
+        ZStack(alignment: .bottom) {
+            TextField("Search or enter website name", text: $text)
+                .textFieldStyle(.plain)
+                .textContentType(.URL)
+                .autocorrectionDisabled()
+                .focused($isFocused)
+                .onSubmit {
+                    showSuggestions = false
+                    onSubmit()
+                }
+
+            Color.clear
+                .frame(height: 1)
+                .allowsHitTesting(false)
+                .popover(isPresented: $showSuggestions, arrowEdge: .bottom) {
+                    suggestions
+                }
         }
+        .padding(10)
+        .frame(height: 40)
+        .onGeometryChange(for: CGFloat.self) { proxy in
+            proxy.size.width
+        } action: { inputWidth = $0 }
         .onChange(of: text) { _, newValue in
             showSuggestions = shouldShowSuggestions(for: newValue)
         }
@@ -147,27 +163,21 @@ private struct AddressField: View {
             guard focusOnAppear else { return }
             DispatchQueue.main.async { isFocused = true }
         }
-        .padding(10)
-        .frame(height: 40)
-        .onGeometryChange(for: CGFloat.self) { proxy in
-            proxy.size.width
-        } action: { width in
-            inputWidth = width
+    }
+
+    private var suggestions: some View {
+        ScrollView {
+            AutocompleteView(
+                searchTerm: $text,
+                onSelection: { showSuggestions = false },
+                loadQuery: {
+                    showSuggestions = false
+                    onSubmit()
+                }
+            )
         }
-        .popover(isPresented: $showSuggestions, arrowEdge: .bottom) {
-            ScrollView {
-                AutoFillView(
-                    searchTerm: $text,
-                    onSelection: { showSuggestions = false },
-                    loadQuery: {
-                        showSuggestions = false
-                        onSubmit()
-                    }
-                )
-            }
-            .padding()
-            .frame(width: inputWidth, height: 300)
-        }
+        .padding()
+        .frame(width: inputWidth, height: 300)
     }
 
     private func shouldShowSuggestions(for value: String) -> Bool {

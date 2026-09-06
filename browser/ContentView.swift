@@ -34,7 +34,7 @@ let builtInSidebar = [
     SidebarItem(icon:"clock.arrow.trianglehead.counterclockwise.rotate.90", view:"HistoryView"),
     SidebarItem(icon:"folder", view:"DownloadsView"),
     SidebarItem(icon:"puzzlepiece.extension", view:"ExtensionsView"),
-    SidebarItem(icon:"hand.raised", view:"ContentBlockerView"),
+    SidebarItem(icon:"hand.raised", view:"ContentBlockersView"),
     SidebarItem(icon:"map", view:"MapView"),
     SidebarItem(icon:"antenna.radiowaves.left.and.right", view:"RSSView"),
     SidebarItem(icon:"calendar", view:"CalendarView"),
@@ -76,7 +76,7 @@ struct AutoFillPopover: View {
     @Binding var searchTerm: String
     var body: some View {
         List {
-            AutoFillView(searchTerm: $searchTerm, loadQuery: {})
+            AutocompleteView(searchTerm: $searchTerm, loadQuery: {})
         }
         .listStyle(.inset)
         .frame(width: 500, height:300)
@@ -291,15 +291,20 @@ struct ContentView: View {
         }
         self._browserState = StateObject(wrappedValue: initialBrowserState)
         
-        self._splitState = StateObject(wrappedValue: {
-            let split = providedSplitState ?? BrowserState(initialURL: latestState?.splitURL.flatMap(URL.init(string:)))
-            split.tabID = tabID + "_split"
-            if split.webView == nil, let state = restoredState {
-                split.restoredScrollX = state.splitScrollX
-                split.restoredScrollY = state.splitScrollY
-            }
-            return split
-        }())
+        let initialSplitState: BrowserState
+        if let provided = providedSplitState {
+            initialSplitState = provided
+        } else {
+            let newState = BrowserState(initialURL: latestState?.splitURL.flatMap(URL.init(string:)))
+            newState.tabID = tabID + "_split"
+            initialSplitState = newState
+        }
+
+        if initialSplitState.webView == nil, let state = restoredState {
+            initialSplitState.restoredScrollX = state.splitScrollX
+            initialSplitState.restoredScrollY = state.splitScrollY
+        }
+        self._splitState = StateObject(wrappedValue: initialSplitState)
     }
     
     @State var showTabSearch = false
@@ -426,6 +431,7 @@ struct ContentView: View {
                           
                             ZStack {
                                 BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
+                                    .id(browserState.webViewIdentity)
                                     .roundedBorderStyleNoFrame(enabled: showPageShine)
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                                     .onChange(of: browserState.url) { oldValue, newValue in
@@ -446,6 +452,7 @@ struct ContentView: View {
                             
                             if !splitURL.isEmpty {
                                 BrowserWebView(request: URLRequest(url: splitState.url ?? URL(string: "about:blank")!), state: splitState, priv: priv, profile: bProfile, userAgent: userAgent)
+                                    .id(splitState.webViewIdentity)
                                     .roundedBorderStyleNoFrame()
                                     .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                             }
@@ -591,8 +598,7 @@ struct ContentView: View {
              //               GlassEffectContainer {
                                 ForEach(sidebarStore.items) { item in
                                     Button(action: {
-                                        let targetURL = item.url ?? URL(string: "\(item.view ?? "").view")
-                                            toggleSidebar(targetURL)
+                                        toggleSidebar(sidebarTargetURL(for: item))
                                     }) {
                                         if item.icon.starts(with: "https") {
                                             CachedAsyncImage(url: URL(string: item.icon))
@@ -968,6 +974,16 @@ struct ContentView: View {
     @AppStorage("searchURL", store:Config.sharedDefaults) var searchURL = "https://www.google.com/search?q="
 
     // MARK: - Helper Methods
+
+    private func sidebarTargetURL(for item: SidebarItem) -> URL? {
+        if let url = item.url {
+            return url
+        }
+        guard let view = item.view else {
+            return nil
+        }
+        return URL(string: view + ".view")
+    }
     
     private func updateTabState() {
         let state = TabSessionState(
@@ -1018,7 +1034,7 @@ struct ContentView: View {
         //   guard !trimmed.isEmpty else { return }
         
         let url: URL?
-        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
+        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("extension://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
             url = URL(string: trimmed)
         } else if trimmed.hasPrefix("/") {
             // Bare POSIX path (e.g. /Users/foo/bar/index.html) — load as file://

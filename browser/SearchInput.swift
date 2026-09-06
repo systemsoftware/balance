@@ -35,6 +35,8 @@ struct SearchInputView: View {
             TextField(placeholder ?? config.placeholderText,
                 text: $text,
             )
+            .padding(3)
+            .textFieldStyle(.plain)
 
             if !text.isEmpty {
                 Button(action: {

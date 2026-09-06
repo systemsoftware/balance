@@ -370,8 +370,7 @@ struct WebDataRow: View {
                         .fill(Color.accentColor.opacity(0.1))
                         .frame(width: 32, height: 32)
                     CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(item.displayName)"))
-                        .font(.system(size: 14, weight: .bold))
-                        .foregroundColor(.blue)
+                        .frame(width: 16, height: 16)
                 }
                 
                 VStack(alignment: .leading, spacing: 2) {

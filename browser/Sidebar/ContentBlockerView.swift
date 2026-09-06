@@ -10,44 +10,47 @@ struct ContentBlockerView: View {
     @State private var isInstalling: Bool = false
     @State private var contentBlockers: [URL] = []
     
+    var isSettings = false
+    
     var body: some View {
         VStack(spacing: 0) {
             // MARK: - Header
-            HStack {
-                Text("Content Blockers")
-                    .font(.system(.headline, design: .rounded))
-                Spacer()
-                
-                Menu {
-                    Button(action: installFromFile) {
-                        Label("Add from File…", systemImage: "folder")
-                    }
-                    Button() {
-                        installFromURL(urlStr: "", filename: "")
-                    } label: {
-                        Label("Add from URL…", systemImage: "link")
-                    }
-                    Divider()
-                    Button() {
-                        installFromURL(urlStr:"https://easylist-downloads.adblockplus.org/easylist_content_blocker.json", filename:"Ad Blocker (Easylist).json")
-                    } label: {
-                        Label("Ad Blocker (Easylist)", systemImage: "shield.slash")
-                    }
-                } label: {
-                    Image(systemName: "plus")
-                        .font(.system(size: 12, weight: .semibold))
+            if isSettings {
+                SettingsCustomCardRow(
+                    title: "Add Content Blocker",
+                    icon: "plus",
+                    accentColor: catContetBlocker.color
+                ) {
+                    addContentBlockerMenu()
                 }
-                .menuStyle(.borderlessButton)
-                .fixedSize()
-                .help("Add Content Blocker")
+                .padding(.bottom, 8)
+                
+                SettingsCardRow(
+                    setting: Setting(
+                        name:"Manage",
+                        category: catBookmarks,
+                        type:"header",
+                        appStorageKey:"",
+                    ),
+                    icon: "gearshape",
+                    accentColor: catContetBlocker.color
+                )
+
+            } else {
+                HStack {
+                    Text("Content Blockers")
+                        .font(.system(.headline, design: .rounded))
+                    Spacer()
+                    addContentBlockerMenu()
+                }
+                .padding(.horizontal)
+                .padding(.vertical, 8)
             }
-            .padding(.horizontal)
-            .padding(.bottom, 8)
             
             // MARK: - Content Blockers List
             ScrollView {
-                VStack(alignment: .leading, spacing: 0) {
-                    if contentBlockers.isEmpty {
+                VStack(alignment: .leading, spacing: 6) {
+                    if contentBlockers.isEmpty && !isInstalling {
                         VStack(spacing: 12) {
                             Image(systemName: "shield")
                                 .font(.system(size: 32))
@@ -63,12 +66,12 @@ struct ContentBlockerView: View {
                         .frame(maxWidth: .infinity)
                         .padding(.vertical, 40)
                     } else {
-                        VStack {
+                        VStack(spacing: 6) {
                             ForEach(Array(contentBlockers.enumerated()), id: \.offset) { index, url in
                                 HStack {
                                     VStack(alignment: .leading) {
                                         Text(url.lastPathComponent.replacingOccurrences(of: ".json", with: ""))
-                                            .font(.body)
+                                            .font(.system(size: 13, weight: .medium, design: .rounded))
                                     }
                                     Spacer()
                                     Button {
@@ -79,24 +82,24 @@ struct ContentBlockerView: View {
                                     }
                                     .buttonStyle(.borderless)
                                 }
-                                .padding()
-                                .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
-                                .cornerRadius(12)
+                                .padding(.horizontal, 14)
+                                .padding(.vertical, 10)
+                                .background(
+                                    RoundedRectangle(cornerRadius: 10)
+                                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
+                                )
                                 .overlay(
-                                    RoundedRectangle(cornerRadius: 12)
+                                    RoundedRectangle(cornerRadius: 10)
                                         .stroke(Color.primary.opacity(0.05), lineWidth: 1)
                                 )
-                                
-                                if index < contentBlockers.count - 1 {
-                                    Divider()
-                                        .padding(.horizontal)
-                                }
                             }
                         }
-                        .padding()
+                        .padding(.horizontal, isSettings ? 0 : 16)
                     }
                 }
             }
+            .padding(.horizontal, isSettings ? 16 : 0)
+
             
             if isInstalling {
                 HStack(spacing: 6) {
@@ -117,8 +120,8 @@ struct ContentBlockerView: View {
                     .padding(.bottom, 4)
             }
         }
-        .padding(.vertical)
-        .frame(width: CGFloat(sidebarWidth))
+        .padding(.vertical, isSettings ? 0 : 8)
+        .frame(maxWidth: isSettings ? .infinity : CGFloat(sidebarWidth))
         .onAppear {
             loadContentBlockers()
         }
@@ -256,5 +259,36 @@ struct ContentBlockerView: View {
         } catch {
             errorMessage = error.localizedDescription
         }
+    }
+    
+    @ViewBuilder
+    private func addContentBlockerMenu() -> some View {
+        Menu {
+            Button(action: installFromFile) {
+                Label("Add from File…", systemImage: "folder")
+            }
+            Button {
+                installFromURL(urlStr: "", filename: "")
+            } label: {
+                Label("Add from URL…", systemImage: "link")
+            }
+            Divider()
+            Button {
+                installFromURL(urlStr: "https://easylist-downloads.adblockplus.org/easylist_content_blocker.json", filename: "Ad Blocker (Easylist).json")
+            } label: {
+                Label("Ad Blocker (Easylist)", systemImage: "shield.slash")
+            }
+        } label: {
+            if isSettings {
+                Text("Add")
+            } else {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .semibold))
+            }
+        }
+    //    .menuStyle(isSettings ? .borderedButton : .borderlessButton)
+        .controlSize(isSettings ? .small : .regular)
+        .fixedSize()
+        .help("Add Content Blocker")
     }
 }

@@ -24,6 +24,20 @@ enum Config {
     }
 }
 
+enum AutofillPreferences {
+    static let enabledKey = "formAutofillEnabled"
+
+    static var isEnabled: Bool {
+        get {
+            guard Config.defaults.object(forKey: enabledKey) != nil else { return true }
+            return Config.defaults.bool(forKey: enabledKey)
+        }
+        set {
+            Config.defaults.set(newValue, forKey: enabledKey)
+        }
+    }
+}
+
 
 let major = ProcessInfo.processInfo.operatingSystemVersion.majorVersion
 
