@@ -85,7 +85,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .extensions: "puzzlepiece.extension"
         case .saveTo: "star"
         case .splitView: "rectangle.split.2x1"
-        case .commandPalette: "command"
+        case .commandPalette: "text.and.command.macwindow"
         case .findInPage: "doc.text.magnifyingglass"
         case .spacer: "space"
         case .ai: "sparkles"

@@ -125,28 +125,34 @@ private struct AddressField: View {
     let onSubmit: () -> Void
 
     @AppStorage("showAddressBarAutofill") private var showAddressBarAutofill = true
-    @FocusState private var isFocused: Bool
+    @State private var isFocused = false
     @State private var showSuggestions = false
     @State private var inputWidth: CGFloat = 1
 
     var body: some View {
         ZStack(alignment: .bottom) {
-            TextField("Search or enter website name", text: $text)
-                .textFieldStyle(.plain)
-                .textContentType(.URL)
-                .autocorrectionDisabled()
-                .focused($isFocused)
-                .onSubmit {
+            AddressTextField(
+                text: $text,
+                isFocused: $isFocused,
+                focusOnAppear: focusOnAppear,
+                onSubmit: {
                     showSuggestions = false
                     onSubmit()
                 }
+            )
 
-            Color.clear
+            AddressSuggestionsPopover(
+                isPresented: $showSuggestions,
+                searchTerm: $text,
+                width: inputWidth,
+                onSelection: { showSuggestions = false },
+                loadQuery: {
+                    showSuggestions = false
+                    onSubmit()
+                }
+            )
                 .frame(height: 1)
                 .allowsHitTesting(false)
-                .popover(isPresented: $showSuggestions, arrowEdge: .bottom) {
-                    suggestions
-                }
         }
         .padding(10)
         .frame(height: 40)
@@ -159,28 +165,166 @@ private struct AddressField: View {
         .onChange(of: isFocused) { _, focused in
             showSuggestions = focused && shouldShowSuggestions(for: text)
         }
-        .onAppear {
-            guard focusOnAppear else { return }
-            DispatchQueue.main.async { isFocused = true }
-        }
-    }
-
-    private var suggestions: some View {
-        ScrollView {
-            AutocompleteView(
-                searchTerm: $text,
-                onSelection: { showSuggestions = false },
-                loadQuery: {
-                    showSuggestions = false
-                    onSubmit()
-                }
-            )
-        }
-        .padding()
-        .frame(width: inputWidth, height: 300)
     }
 
     private func shouldShowSuggestions(for value: String) -> Bool {
         showAddressBarAutofill && isFocused && !value.isEmpty && !value.contains("//")
+    }
+}
+
+private struct AddressSuggestionsPopover: NSViewRepresentable {
+    @Binding var isPresented: Bool
+    @Binding var searchTerm: String
+    let width: CGFloat
+    let onSelection: () -> Void
+    let loadQuery: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSView {
+        let anchor = NSView()
+        context.coordinator.anchor = anchor
+        return anchor
+    }
+
+    func updateNSView(_ anchor: NSView, context: Context) {
+        context.coordinator.parent = self
+        context.coordinator.updateContent()
+
+        if isPresented, !context.coordinator.popover.isShown, anchor.window != nil {
+            context.coordinator.popover.show(
+                relativeTo: anchor.bounds,
+                of: anchor,
+                preferredEdge: .minY
+            )
+        } else if !isPresented, context.coordinator.popover.isShown {
+            context.coordinator.popover.performClose(nil)
+        }
+    }
+
+    static func dismantleNSView(_ anchor: NSView, coordinator: Coordinator) {
+        coordinator.popover.close()
+    }
+
+    final class Coordinator: NSObject, NSPopoverDelegate {
+        var parent: AddressSuggestionsPopover
+        weak var anchor: NSView?
+        let popover = NSPopover()
+
+        init(parent: AddressSuggestionsPopover) {
+            self.parent = parent
+            super.init()
+            popover.behavior = .transient
+            popover.animates = true
+            popover.delegate = self
+        }
+
+        func updateContent() {
+            let content = AnyView(
+                ScrollView {
+                    AutocompleteView(
+                        searchTerm: parent.$searchTerm,
+                        onSelection: parent.onSelection,
+                        loadQuery: parent.loadQuery
+                    )
+                }
+                .padding()
+                .frame(width: max(parent.width, 1), height: 300)
+            )
+
+            if let host = popover.contentViewController as? NSHostingController<AnyView> {
+                host.rootView = content
+            } else {
+                popover.contentViewController = NSHostingController(rootView: content)
+            }
+            popover.contentSize = NSSize(width: max(parent.width, 1), height: 300)
+        }
+
+        func popoverDidClose(_ notification: Notification) {
+            guard parent.isPresented else { return }
+            DispatchQueue.main.async { [weak self] in
+                self?.parent.isPresented = false
+            }
+        }
+    }
+}
+
+private struct AddressTextField: NSViewRepresentable {
+    @Binding var text: String
+    @Binding var isFocused: Bool
+    let focusOnAppear: Bool
+    let onSubmit: () -> Void
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(parent: self)
+    }
+
+    func makeNSView(context: Context) -> NSTextField {
+        let field = NSTextField()
+        field.delegate = context.coordinator
+        field.placeholderString = "Search or enter website name"
+        field.isBordered = false
+        field.drawsBackground = false
+        field.focusRingType = .none
+        field.usesSingleLineMode = true
+        field.cell?.isScrollable = true
+        field.stringValue = text
+
+        // AppKit's password-autofill heuristic can loop forever while walking a
+        // SwiftUI popover's focus graph. The address bar supplies its own results.
+        field.isAutomaticTextCompletionEnabled = false
+        field.contentType = .URL
+        return field
+    }
+
+    func updateNSView(_ field: NSTextField, context: Context) {
+        context.coordinator.parent = self
+        if field.currentEditor() == nil, field.stringValue != text {
+            field.stringValue = text
+        }
+        guard focusOnAppear, !context.coordinator.didFocus else { return }
+        context.coordinator.didFocus = true
+        DispatchQueue.main.async { [weak field] in
+            guard let field, field.window?.isKeyWindow == true else { return }
+            field.window?.makeFirstResponder(field)
+        }
+    }
+
+    static func dismantleNSView(_ field: NSTextField, coordinator: Coordinator) {
+        field.delegate = nil
+    }
+
+    final class Coordinator: NSObject, NSTextFieldDelegate {
+        var parent: AddressTextField
+        var didFocus = false
+
+        init(parent: AddressTextField) {
+            self.parent = parent
+        }
+
+        func controlTextDidBeginEditing(_ notification: Notification) {
+            parent.isFocused = true
+        }
+
+        func controlTextDidChange(_ notification: Notification) {
+            guard let field = notification.object as? NSTextField else { return }
+            parent.text = field.stringValue
+        }
+
+        func controlTextDidEndEditing(_ notification: Notification) {
+            parent.isFocused = false
+        }
+
+        func control(
+            _ control: NSControl,
+            textView: NSTextView,
+            doCommandBy commandSelector: Selector
+        ) -> Bool {
+            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
+            parent.onSubmit()
+            return true
+        }
     }
 }

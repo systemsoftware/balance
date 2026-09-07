@@ -11,7 +11,7 @@ struct CommandPaletteToolbarButton: View {
         Button() {
             showCommands = true
         } label: {
-            Image(systemName: "list.bullet.rectangle.portrait")
+            Image(systemName: "text.and.command.macwindow")
                 .font(.title2)
                 .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
         }
