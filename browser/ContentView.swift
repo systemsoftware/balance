@@ -132,6 +132,7 @@ struct ContentView: View {
     @StateObject var splitState = BrowserState()
     
     private var location: URL? { browserState.url }
+    
 
     private var locationBinding: Binding<URL?> {
         Binding(
@@ -327,13 +328,16 @@ struct ContentView: View {
     
     @State private var showAddPopover = false
     @State private var addIndex = 0
+    @State private var shouldAutoFocusAddress = true
+    
+    @AppStorage("toolbarLocation") var toolbarLocation = 0
     
     var body: some View {
         VStack(spacing: 0) {
             
             // MARK: - Address Bar
 
-            if leftSidebarMode == 0 {
+            if leftSidebarMode == 0 && !MemoryStorage.shared.focusMode {
                 Tabs(browserState: browserState, profile: bProfile)
                     .frame(height:50)
                     .frame(maxWidth: .infinity)
@@ -341,33 +345,37 @@ struct ContentView: View {
                         .horizontal,
                         Layout.outerPadding + Layout.controlPadding + 5
                     )
+                    .padding(toolbarLocation == 1 ? 8 : 0)
             }
             
-            BrowserToolbar(
-                browserState: browserState,
-                sidebarStore: sidebarStore,
-                bookmarkStore: bookmarkStore,
-                location: locationBinding,
-                urlInput: $urlInput,
-                showTrustInfo: $showTrustInfo,
-                showTabSearch: $showTabSearch,
-                showEventPopup: $showEventPopup,
-                showGoTo: $showGoTo,
-                showBoost: $showBoost,
-                splitURL: $splitURL,
-                splitState: splitState,
-                focusAddressOnAppear: initialURLString == nil,
-                isPrivate: priv,
-                profileIcon: bProfileIcon,
-                profileName: bProfileName,
-                events: events,
-                submitURL: submitURL,
-                scanEvents: scanEvents,
-                showReader: $showReader
-            )
-            .padding(.horizontal, Layout.outerPadding)
-            .padding(.vertical, 8)
-            .frame(maxWidth: .infinity)
+            if toolbarLocation == 0 && !MemoryStorage.shared.focusMode {
+                BrowserToolbar(
+                    browserState: browserState,
+                    sidebarStore: sidebarStore,
+                    bookmarkStore: bookmarkStore,
+                    location: locationBinding,
+                    urlInput: $urlInput,
+                    showTrustInfo: $showTrustInfo,
+                    showTabSearch: $showTabSearch,
+                    showEventPopup: $showEventPopup,
+                    showGoTo: $showGoTo,
+                    showBoost: $showBoost,
+                    splitURL: $splitURL,
+                    splitState: splitState,
+                    focusAddressOnAppear: initialURLString == nil && shouldAutoFocusAddress,
+                    isPrivate: priv,
+                    profileIcon: bProfileIcon,
+                    profileName: bProfileName,
+                    events: events,
+                    submitURL: submitURL,
+                    scanEvents: scanEvents,
+                    showReader: $showReader
+                )
+                .padding(.horizontal, Layout.outerPadding)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+            }
+            
             
             if scanningForEvents {
                 HStack {
@@ -410,7 +418,7 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 // MARK: - Web Content Area
                 
-                if leftSidebarMode == 2 {
+                if leftSidebarMode == 2 && !MemoryStorage.shared.focusMode {
                     Tabs(browserState: browserState, profile: bProfile)
                         .frame(width: CGFloat(leftSidebarWidth))
                         .frame(maxHeight: .infinity)
@@ -458,7 +466,7 @@ struct ContentView: View {
                             }
                         }
                     } else {
-                        BrowserHomepage(profile: bProfile)
+                        BrowserHomepage(profile: bProfile, state:browserState)
                             .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
                             .task {
                                 browserState.title = "Balance"
@@ -466,7 +474,7 @@ struct ContentView: View {
                         
                     }
                     
-                    if leftSidebarMode == 1 {
+                    if leftSidebarMode == 1 && !MemoryStorage.shared.focusMode {
                         HStack(spacing: 0) {
                             ZStack(alignment: .leading) {
                                 Color.clear
@@ -593,7 +601,7 @@ struct ContentView: View {
                         }
                     }
                     // MARK: Sidebar Items
-                    if showSidebar {
+                    if showSidebar && !MemoryStorage.shared.focusMode {
                         VStack(spacing: Layout.sidebarItemSpacing) {
              //               GlassEffectContainer {
                                 ForEach(sidebarStore.items) { item in
@@ -724,7 +732,53 @@ struct ContentView: View {
                         .padding(.vertical, Layout.outerPadding)
                 }
             
+            
+            
+            if leftSidebarMode == 4 && !MemoryStorage.shared.focusMode {
+                Tabs(browserState: browserState, profile: bProfile)
+                    .frame(height:50)
+                    .frame(maxWidth: .infinity)
+                    .padding(
+                        .horizontal,
+                        Layout.outerPadding + Layout.controlPadding + 5
+                    )
+                    .padding(.bottom, toolbarLocation == 0 ? 10 : 0)
+            }
+            
+            if toolbarLocation == 1 && !MemoryStorage.shared.focusMode {
+                BrowserToolbar(
+                    browserState: browserState,
+                    sidebarStore: sidebarStore,
+                    bookmarkStore: bookmarkStore,
+                    location: locationBinding,
+                    urlInput: $urlInput,
+                    showTrustInfo: $showTrustInfo,
+                    showTabSearch: $showTabSearch,
+                    showEventPopup: $showEventPopup,
+                    showGoTo: $showGoTo,
+                    showBoost: $showBoost,
+                    splitURL: $splitURL,
+                    splitState: splitState,
+                    focusAddressOnAppear: initialURLString == nil && shouldAutoFocusAddress,
+                    isPrivate: priv,
+                    profileIcon: bProfileIcon,
+                    profileName: bProfileName,
+                    events: events,
+                    submitURL: submitURL,
+                    scanEvents: scanEvents,
+                    showReader: $showReader
+                )
+                .padding(.horizontal, Layout.outerPadding)
+                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity)
+            }
+            
         }.onAppear {
+            // The toolbar is removed in focus mode and inserted again when it
+            // ends. Only auto-focus the address field for the initial mount;
+            // focusing every reinsert can make AppKit rebuild a transient
+            // SwiftUI key-view loop indefinitely.
+            shouldAutoFocusAddress = false
             if let initialURLString {
                 print("has initialURLString: \(initialURLString)")
                 urlInput = initialURLString
@@ -819,7 +873,7 @@ struct ContentView: View {
             case .toggleMute: browserState.toggleMute()
             case .duplicateTab: if let url = location { createNewTab(with: url) }
             case .duplicateWindow: if let url = location { createNewWindow(with: url) }
-            case .openInFocus: if let url = location { createFocusWindow(with: url) }
+            case .openInFocus: withAnimation(.bouncy) { toggleFocusMode() }
             case .copyURL:
                 if let url = location {
                     NSPasteboard.general.clearContents()
@@ -843,7 +897,7 @@ struct ContentView: View {
                 }
             case .printPage: printCurrentPage()
             case .toggleReader: showReader.toggle()
-            case .findInPage: browserState.isFindBarVisible = true
+            case .findInPage: browserState.isFindBarVisible.toggle()
             case .renameTab:
                 let alert = NSAlert()
                 alert.informativeText = "Enter new tab name:"
@@ -1051,6 +1105,18 @@ struct ContentView: View {
         }
 
         browserState.navigate(to: url)
+    }
+
+    private func toggleFocusMode() {
+        guard location != nil else { return }
+
+        // Repair the key-view loop while the current hierarchy still exists.
+        // Changing focus mode removes or inserts several focusable controls.
+        (browserState.webView?.window ?? NSApp.keyWindow)?.makeFirstResponder(nil)
+        Task { @MainActor in
+            await Task.yield()
+            MemoryStorage.shared.focusMode.toggle()
+        }
     }
 
     private func toggleSidebar(_ targetURL: URL?) {

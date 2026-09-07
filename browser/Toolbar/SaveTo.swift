@@ -9,7 +9,7 @@ struct SaveToToolbarButton: View {
     var body: some View {
         
         Menu() {
-                Text("Add Page To:")
+                Text("Add Page To")
                     .disabled(true)
                 
                 Button("Bookmarks", systemImage: "star") {

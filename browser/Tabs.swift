@@ -39,7 +39,7 @@ struct Tabs: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            if tabMode != 0 {
+            if tabMode != 0 && tabMode != 4 {
                 // MARK: Header
                 VStack(spacing: 12) {
                     if tabMode == 1 {

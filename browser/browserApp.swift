@@ -40,7 +40,8 @@ func handleDeepLink(_ url: URL) {
     print("Opening:", destination)
 
     if isFocus {
-        createFocusWindow(with: destination)
+        MemoryStorage.shared.focusMode = true
+        createNewTab(with: destination)
     } else {
         createNewTab(with: destination)
     }
@@ -359,10 +360,10 @@ enum MenuBarSection: String, CaseIterable {
 
 enum BrowserCommand: String, CaseIterable {
     // Browser
-    case searchTabs, reopenLastTab, downloads, history, showSetup
+    case searchTabs, reopenLastTab, downloads, history, openInFocus, showSetup
     // Page
     case reload, zoomIn, zoomOut, resetZoom, toggleMute
-    case duplicateTab, duplicateWindow, openInFocus
+    case duplicateTab, duplicateWindow
     case copyURL, addToBookmarks, addToSidebar, printPage, toggleReader, renameTab, savePage
     case findInPage
     case forceReload
@@ -384,7 +385,7 @@ enum BrowserCommand: String, CaseIterable {
         case .toggleMute: return "Mute"
         case .duplicateTab: return "In This Window"
         case .duplicateWindow: return "In New Window"
-        case .openInFocus: return "Open in Focus"
+        case .openInFocus: return "Toggle Focus Mode"
         case .copyURL: return "Copy URL"
         case .addToBookmarks: return "Add to Bookmarks"
         case .addToSidebar: return "Add to Sidebar"
@@ -405,7 +406,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var section: MenuBarSection {
         switch self {
-        case .searchTabs, .reopenLastTab, .downloads, .history, .showSetup:
+        case .searchTabs, .reopenLastTab, .downloads, .history, .openInFocus, .showSetup:
             return .browser
         default:
             return .page
@@ -448,6 +449,7 @@ enum BrowserCommand: String, CaseIterable {
         case .closeTab: return KeyboardShortcut("w", modifiers: [.command])
         case .goTo: return KeyboardShortcut("g", modifiers: [.command])
         case .findInPage: return KeyboardShortcut("f", modifiers: [.command])
+        case .openInFocus: return KeyboardShortcut("f", modifiers: [.command, .option])
         default: return nil
         }
     }

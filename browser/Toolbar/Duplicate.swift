@@ -7,7 +7,7 @@ struct DuplicateToolbarButton: View {
     var body: some View {
         
         Menu() {
-                Text("Duplicate Tab:")
+                Text("Duplicate Tab")
                     .disabled(true)
             if let u = location {
 
@@ -19,13 +19,7 @@ struct DuplicateToolbarButton: View {
             }
             
             
-            Divider()
-            
-                Button {
-                    createFocusWindow(with: u)
-                } label: {
-                    Label("Open in Focus", systemImage: "macwindow")
-                }
+               
             } else {
                 Text("Cannot Duplicate Tab")
                     .disabled(true)

@@ -198,7 +198,16 @@ var Settings: [Setting] = [
         type: "dropdown",
         appStorageKey: "tabMode",
         defaultValueInt: 0,
-        dropdownOptions: .staticOptions([0: "Horizontal", 1: "Slide Over", 2: "Vertical", 3:"Hidden"])
+        dropdownOptions: .staticOptions([0: "Horizontal Top", 1: "Slide Over", 2: "Vertical", 3:"Hidden", 4: "Horizontal Bottom"])
+    ),
+    Setting(
+        name: "Toolbar Position",
+        icon: "rectangle.3.offgrid",
+        category: catBrowsing,
+        type: "dropdown",
+        appStorageKey: "toolbarLocation",
+        defaultValueInt: 0,
+        dropdownOptions: .staticOptions([0: "Top", 1: "Bottom"])
     ),
     Setting(
         name: "Spaces",
@@ -958,6 +967,7 @@ struct SettingsSectionContent: View {
                     .frame(maxWidth: .infinity)
             }
             
+        
             ForEach(settingsForCategory) { setting in
                 SettingsCardRow(
                     setting: setting,

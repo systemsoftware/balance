@@ -374,6 +374,8 @@ struct BookmarkCard: View {
     @State private var isHovered = false
     
     var text = true
+    
+    var state: BrowserState
 
     var body: some View {
         VStack(spacing: 12) {
@@ -399,7 +401,7 @@ struct BookmarkCard: View {
         .onHover { isHovered = $0 }
         .onTapGesture {
             if let url = URL(string: bookmark.url) {
-                createNewTab(with:url)
+                state.navigate(to: url)
             }
         }
     }
@@ -594,6 +596,9 @@ struct BrowserHomepage: View {
     var profile: String = ""
     @StateObject private var store = BookmarkStore()
     @State private var searchText = ""
+    
+    
+    var state: BrowserState
 
     let columns = [GridItem(.adaptive(minimum: 120, maximum: 140), spacing: 20)]
     
@@ -662,7 +667,7 @@ struct BrowserHomepage: View {
                             
                             LazyVGrid(columns: columns, spacing: 30) {
                                 ForEach(store.items) { bookmark in
-                                    BookmarkCard(bookmark: bookmark)
+                                    BookmarkCard(bookmark: bookmark, state: state)
                                 }
                             }
                             .padding(.horizontal, 40)
@@ -689,7 +694,7 @@ struct BrowserHomepage: View {
                     if showStories {
                         
                         VStack(alignment: .leading, spacing: 12) {
-                            Label("Top Stories", systemImage: "newspaper.fill")
+                            Label("Recent Stories", systemImage: "newspaper.fill")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundColor(.secondary)
                             

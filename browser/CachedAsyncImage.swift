@@ -43,8 +43,11 @@ struct CachedAsyncImage: View {
                         image
                             .resizable()
                             .scaledToFit()
+                    } else if phase.error != nil {
+                      fallbackView
                     } else {
-                        fallbackView
+                        ProgressView()
+                            .scaleEffect(0.5)
                     }
                 }
             } else {

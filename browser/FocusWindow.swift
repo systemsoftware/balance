@@ -1,6 +1,8 @@
 import SwiftUI
 import WebKit
 
+// TO BE REMOVED SOON
+
 func createFocusWindow(with url: URL) {
     let window = NSWindow(
         contentRect: NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600),
