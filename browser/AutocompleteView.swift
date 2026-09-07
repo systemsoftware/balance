@@ -104,7 +104,7 @@ struct AutocompleteView: View {
                     .buttonStyle(.plain)
                 }
                 .animation(.default, value: suggestions)
-                if engine.lowercased().contains("duckduckgo") {
+                if engine.lowercased().contains("duckduckgo") || engine.isEmpty {
                     Text("Suggestions and Favicons provided by DuckDuckGo")
                 }
             }
@@ -138,9 +138,16 @@ struct AutocompleteView: View {
     }
     
     func loadData(for query: String) async throws -> GoogleSuggestions? {
+        
+        var eng = "https://ac.duckduckgo.com/ac/?type=list&t=balance&q="
+        
+        if !engine.isEmpty {
+            eng = engine
+        }
+        
         guard
             let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
-            let url = URL(string:"\(engine)\(encoded)")
+            let url = URL(string:"\(eng)\(encoded)")
         else {
             return nil
         }
