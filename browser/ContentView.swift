@@ -120,6 +120,9 @@ struct ContentView: View {
     @AppStorage("bookmarkBar", store: Config.sharedDefaults)
     private var bookmarkBar: Int = 0
     
+    @AppStorage("bookmarkbarLocation", store: Config.sharedDefaults)
+    private var bookmarkBarLoc: Int = 0
+    
     @AppStorage("backgroundType", store:Config.sharedDefaults)
     private var backgroundType: Int = 0
 
@@ -175,10 +178,6 @@ struct ContentView: View {
     
     @State private var currentUserActivity: NSUserActivity?
     @AppStorage("enableHandoff", store:Config.sharedDefaults) var enableHandoff: Bool = true
-  
-
-    @Namespace private var sidebarNamespace
-    @Namespace private var bookmarkBarNamespace
     
     
     var shouldShowBookmarks: Bool {
@@ -314,7 +313,7 @@ struct ContentView: View {
     @State private var showExtensionsPopover = false
     
     @AppStorage("tabMode", store:Config.sharedDefaults) var leftSidebarMode: Int = 0
-    @AppStorage("sidebarBackground") var sidebarBackground = true
+    @AppStorage("sidebarBackgroundType") var sidebarBackground = 1
 
     
     @State var commandSearchText = ""
@@ -393,24 +392,9 @@ struct ContentView: View {
                 }
             }
             
-            if(shouldShowBookmarks) {
-                HStack {
-                    ForEach(bookmarkStore.items) { mark in
-                        Button(mark.title) {
-                                createNewTab(with:URL(string:mark.url))
-                            }
-                        .padding(.horizontal)
-                        .padding(.vertical, 5)
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("Remove \(mark.title) Bookmark") {
-                                bookmarkStore.remove(id: mark.id)
-                            }
-                    }
-                }
-                }
-                .glassEffect(.regular.interactive())
-                .glassEffectUnion(id: "bookmarkBar", namespace: bookmarkBarNamespace)
+            if shouldShowBookmarks && bookmarkBarLoc == 0 {
+                BookmarkBar(bookmarkStore: bookmarkStore)
+                    .padding(.bottom, 5)
             }
 
             
@@ -618,9 +602,8 @@ struct ContentView: View {
                                                 .padding(Layout.sidebarIconPadding)
                                         }
                                     }
-                                    .glassEffect(sidebarBackground ? .regular : .identity)
+                                    .glassEffect(sidebarBackground == 2 ? .regular : .identity)
                                     .padding(1)
-                     //           .glassEffectUnion(id: item.id, namespace: sidebarNamespace)
                                     .buttonStyle(.plain)
                                     .padding(.horizontal, 5)
                                     .onDrag {
@@ -647,6 +630,13 @@ struct ContentView: View {
                                     .id(item.id)
          //                       }
                             }
+                        }
+                        .background {
+                            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                                .fill(.clear)
+                                .glassEffect(sidebarBackground == 1 ? .regular : .identity, in: .capsule)
+                                .allowsHitTesting(false)
+                                .padding(.horizontal, 5)
                         }
                         .popover(isPresented: $showAddPopover,   attachmentAnchor: .rect(.bounds),
                                  arrowEdge: .trailing) {
@@ -770,6 +760,13 @@ struct ContentView: View {
                 .padding(.horizontal, Layout.outerPadding)
                 .padding(.vertical, 8)
                 .frame(maxWidth: .infinity)
+            }
+            
+            
+            if shouldShowBookmarks && bookmarkBarLoc == 1 {
+                BookmarkBar(bookmarkStore: bookmarkStore)
+                    .padding(.vertical, Layout.outerPadding)
+                    .padding(.bottom, 5)
             }
             
         }.onAppear {

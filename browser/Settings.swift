@@ -236,9 +236,10 @@ var Settings: [Setting] = [
         name: "Right Sidebar Background",
         icon: "sidebar.right",
         category: catSidebar,
-        type: "toggle",
-        appStorageKey: "sidebarBackground",
-        defaultValueBool: true
+        type: "dropdown",
+        appStorageKey: "sidebarBackgroundType",
+        defaultValueInt: 1,
+        dropdownOptions: .staticOptions([0: "None", 1:"Unified", 2: "Individual"])
     ),
     Setting(
         name: "Right Sidebar Width",
@@ -295,6 +296,15 @@ var Settings: [Setting] = [
         appStorageKey: "bookmarkBar",
         defaultValueInt: 0,
         dropdownOptions: .staticOptions(Dictionary(uniqueKeysWithValues: BookmarkBarMode.allCases.map { ($0.rawValue, $0.name) }))
+    ),
+    Setting(
+        name: "Bookmark Bar Location",
+        icon: "bookmark",
+        category: catBookmarks,
+        type: "dropdown",
+        appStorageKey: "bookmarkbarLocation",
+        defaultValueInt: 0,
+        dropdownOptions: .staticOptions([0:"Top", 1:"Bottom"])
     ),
     Setting(
         name: "Clear Browsing History On Close",

@@ -1,21 +1,16 @@
 import SwiftUI
 
 func FirstLetterOfURL(url: URL?) -> String {
-    guard
-        let url,
-        let components = URLComponents(url: url, resolvingAgainstBaseURL: false),
-        let domain = components.queryItems?
-            .first(where: { $0.name == "domain" })?
-            .value
-    else {
+    guard let url else {
         return "?"
     }
 
-    let normalized = domain.contains("://")
-        ? domain
-        : "https://\(domain)"
-
-    guard var host = URL(string: normalized)?.host else {
+    guard var host = url
+        .deletingPathExtension()
+        .lastPathComponent
+        .removingPercentEncoding,
+        !host.isEmpty
+    else {
         return "?"
     }
 
@@ -96,8 +91,11 @@ struct CachedAsyncImage: View {
         
         if first == "?" {
             Image(systemName: "globe")
+                .onAppear {
+                    print("Failed to get first letter of URL: \(url?.absoluteString ?? "nil")")
+                }
         } else {
-            Text(FirstLetterOfURL(url: url))
+            Text(first)
                 .font(.system(size: 28, weight: .bold))
                 .foregroundStyle(.primary)
                 .minimumScaleFactor(0.5)

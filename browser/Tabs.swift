@@ -56,7 +56,7 @@ struct Tabs: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(.secondary.opacity(0.15), in: Capsule())
+                                .background(.secondary.opacity(0.15), in:RoundedRectangle(cornerRadius: 10))
                         }
                         .padding(.horizontal, 14)
                         .padding(.top, 14)
@@ -312,9 +312,9 @@ struct Tabs: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 0.7)
                     .background {
-                        Capsule()
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .fill(.clear)
-                            .glassEffect()
+                            .glassEffect(in: .rect(cornerRadius: 10))
                             .allowsHitTesting(false)
                     }
                 }
@@ -558,17 +558,20 @@ private struct TabRow: View {
         .padding(.vertical, 9)
         .background {
             if isActive {
-                Capsule()
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(.tint)
                     .opacity(glass ? 0.0 : 0.18)
-                    .glassEffect(glass ? .regular : .identity)
+                    .glassEffect(
+                        glass ? .regular : .identity,
+                        in: .rect(cornerRadius: 10)
+                    )
                     .overlay(
-                        Capsule()
+                        RoundedRectangle(cornerRadius: 10, style: .continuous)
                             .strokeBorder(.tint, lineWidth: 1)
                             .opacity(glass ? 0.0 : 0.35)
                     )
             } else if isHovered {
-                Capsule()
+                RoundedRectangle(cornerRadius: 10, style: .continuous)
                     .fill(.secondary)
                     .opacity(0.1)
             } else {
