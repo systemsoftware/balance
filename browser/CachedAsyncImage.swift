@@ -30,21 +30,54 @@ func FirstLetterOfURL(url: URL?) -> String {
     return String(first).uppercased()
 }
 
+struct Favicon: View {
+    
+    var url: String
+    
+    var width: CGFloat = 16
+    var height: CGFloat = 16
+    
+    static func full(_ urlString: String) -> URL? {
+        let normalized = urlString.contains("://")
+            ? urlString
+            : "https://\(urlString)"
+
+        guard let host = URL(string: normalized)?.host else {
+            return nil
+        }
+
+        return URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico")
+    }
+    
+    init(_ url: String, width: CGFloat = 16, height: CGFloat = 16) {
+        self.url = url
+        self.width = width
+        self.height = height
+    }
+    
+    var body: some View {
+        CachedAsyncImage(url:Favicon.full(url))
+            .frame(width: width, height: height)
+    }
+    
+}
+
 struct CachedAsyncImage: View {
-    @AppStorage("loadImages") var loadImages = true
+    
+    @AppStorage("loadImages") private var loadImages = true
 
     var url: URL?
 
     var body: some View {
         Group {
             if loadImages {
-                CachedAsyncImageCore(url: url) { phase in
+                    CachedAsyncImageCore(url: url) { phase in
                     if let image = phase.image {
                         image
                             .resizable()
                             .scaledToFit()
                     } else if phase.error != nil {
-                      fallbackView
+                        fallbackView
                     } else {
                         ProgressView()
                             .scaleEffect(0.5)

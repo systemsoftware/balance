@@ -75,8 +75,7 @@ struct PasswordRow: View {
                 Circle()
                     .fill(Color(NSColor.controlAccentColor).opacity(0.1))
                     .frame(width: 36, height: 36)
-                CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(cred.domain)"))
-                    .frame(width: 16, height: 16)
+                Favicon(cred.domain)
             }
             
             VStack(alignment: .leading, spacing: 2) {

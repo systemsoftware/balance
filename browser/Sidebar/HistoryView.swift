@@ -279,8 +279,7 @@ struct HistoryRow: View {
                     Circle()
                         .fill(Color.accentColor.opacity(0.1))
                         .frame(width: 32, height: 32)
-                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(item.url)"))
-                        .frame(width: 16, height: 16)
+                    Favicon(item.url)
                 }
                 
                 VStack(alignment: .leading, spacing: 2) {

@@ -128,6 +128,7 @@ struct Setting: Identifiable {
     var dropdownOptions: DropdownOptionsSource?
     var buttonText: String?
     var action: (() -> Void)?
+    var hidden: Bool = false
 }
 
 enum DropdownOptionsSource {
@@ -166,14 +167,10 @@ var Settings: [Setting] = [
     Setting(
         name: "Autocomplete Engine",
         icon: "text.cursor",
-        category: catBrowsing,
-        type: "dropdownString",
+        category: catAdvanced,
+        type: "text",
         appStorageKey: "autofillEngine",
-        defaultValueString: "https://ac.duckduckgo.com/ac/?type=list&q=",
-        dropdownOptions: .staticTaggedOptions([
-            "https://ac.duckduckgo.com/ac/?type=list&q=": "DuckDuckGo",
-            "https://suggestqueries.google.com/complete/search?client=firefox&hl=en&q=": "Google"
-        ])
+        defaultValueString: "",
     ),
     Setting(
         name: "Show Autocomplete When Typing",
@@ -969,11 +966,13 @@ struct SettingsSectionContent: View {
             
         
             ForEach(settingsForCategory) { setting in
+                if !setting.hidden {
                 SettingsCardRow(
                     setting: setting,
                     icon: setting.icon,
                     accentColor: def.color
                 )
+            }
             }
             
             if def.id == "bookmarks" && isStandalone {
@@ -1128,8 +1127,7 @@ struct SettingsSectionContent: View {
                             Circle()
                                 .fill(Color.accentColor.opacity(0.1))
                                 .frame(width: 32, height: 32)
-                            CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(site.site)"))
-                                .frame(width: 16, height: 16)
+                            Favicon(site.site)
                               }
 
                         Text(site.site)

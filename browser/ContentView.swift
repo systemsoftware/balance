@@ -609,8 +609,7 @@ struct ContentView: View {
                                         toggleSidebar(sidebarTargetURL(for: item))
                                     }) {
                                         if item.icon.starts(with: "https") {
-                                            CachedAsyncImage(url: URL(string: item.icon))
-                                                .frame(width: Layout.sidebarIconSize, height: Layout.sidebarIconSize)
+                                            Favicon(item.icon, width: Layout.sidebarIconSize, height: Layout.sidebarIconSize)
                                                 .padding(Layout.sidebarIconPadding)
                                         } else {
                                             Image(systemName: item.icon)
@@ -710,7 +709,7 @@ struct ContentView: View {
                                             Button("Add") {
                                                 let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput)
                                                 sidebarStore.add(SidebarItem(
-                                                    icon: "https://www.google.com/s2/favicons?domain=\(userInput)",
+                                                    icon: userInput,
                                                     url: sidebarItemURL
                                                 ))
                                                 showAddPopover = false
@@ -806,7 +805,9 @@ struct ContentView: View {
         }.onChange(of: location) { _, newValue in
             guard newValue != nil else { return }
             if let web = browserState.webView {
-                web.customUserAgent = userAgent
+                if userAgent != web.customUserAgent && !userAgent.isEmpty {
+                    web.customUserAgent = userAgent
+                }
             }
         }
         .onAppear {
@@ -890,8 +891,9 @@ struct ContentView: View {
             case .addToSidebar:
                 if let url = location,
                    ["http", "https"].contains(url.scheme?.lowercased() ?? "") {
+                    print("Adding to sidebar: \(url.absoluteString)")
                     sidebarStore.add(SidebarItem(
-                        icon: "https://www.google.com/s2/favicons?domain=\(url.host() ?? "")",
+                        icon: url.absoluteString,
                         url: url
                     ))
                 }

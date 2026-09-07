@@ -22,7 +22,7 @@ struct SaveToToolbarButton: View {
                 
                 Button("Sidebar", systemImage: "sidebar.left") {
                     sidebarStore.add(SidebarItem(
-                        icon: "https://www.google.com/s2/favicons?domain=\(location?.host() ?? "")",
+                        icon: location?.host ?? "globe",
                         url: location
                     ))
                 }

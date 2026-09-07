@@ -14,14 +14,6 @@ struct Bookmark: Codable, Identifiable, Equatable {
     var displayTitle: String {
         title.isEmpty ? url : title
     }
-
-    var faviconURL: URL? {
-        guard var components = URLComponents(string: "https://www.google.com/s2/favicons") else {
-            return nil
-        }
-        components.queryItems = [URLQueryItem(name: "domain", value: url)]
-        return components.url
-    }
 }
 
 
@@ -38,8 +30,8 @@ struct BookmarkRow: View {
                     Circle()
                         .fill(Color.accentColor.opacity(0.1))
                         .frame(width: 32, height: 32)
-                    CachedAsyncImage(url: bookmark.faviconURL)
-                        .frame(width: 16, height: 16)
+                    Favicon(bookmark.url)
+
                 }
 
                 VStack(alignment: .leading, spacing: 2) {

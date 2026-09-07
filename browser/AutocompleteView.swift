@@ -25,7 +25,7 @@ struct AutocompleteView: View {
     @State private var result: GoogleSuggestions?
     @State private var isLoading = false
     
-    @AppStorage("autofillEngine", store:Config.sharedDefaults) private var engine: String = "https://ac.duckduckgo.com/ac/?type=list&q="
+    @AppStorage("autofillEngine") var engine: String = "https://ac.duckduckgo.com/ac/?type=list&t=balance&q="
     @AppStorage("searchURL", store:Config.sharedDefaults) private var searchEngine: String = "https://google.com/search?q="
     
     var noContentAvView = false
@@ -104,13 +104,9 @@ struct AutocompleteView: View {
                     .buttonStyle(.plain)
                 }
                 .animation(.default, value: suggestions)
-                
-                Text("Powered by \(engine.contains("google") ? "Google" : "DuckDuckGo")")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-                    .frame(maxWidth: .infinity, alignment: .center)
-                    .padding(.vertical, 3)
-                    .italic()
+                if engine.lowercased().contains("duckduckgo") {
+                    Text("Suggestions and Favicons provided by DuckDuckGo")
+                }
             }
         }
         .task(id: searchTerm) {

@@ -384,8 +384,7 @@ struct BookmarkCard: View {
                     .fill(Color.primary.opacity(isHovered ? 0.15 : 0.05))
                     .frame(width: 80, height: 80)
 
-                CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(bookmark.url)&sz=64"))
-                    .frame(width: 40, height: 40)
+                Favicon(bookmark.url, width: 40, height: 40)
             }
             
             if text {

@@ -80,8 +80,7 @@ struct WindowRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(browserState.url?.host ?? "")")) 
-            .frame(width: 16, height: 16)
+            Favicon(browserState.url?.host ?? "")
 
             Text(browserState.title.isEmpty ? "Untitled Tab" : browserState.title)
                 .lineLimit(1)

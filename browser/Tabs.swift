@@ -437,7 +437,7 @@ private struct PinnedSiteButton: View {
                     RoundedRectangle(cornerRadius: 10)
                         .fill(.secondary.opacity(isHovered ? 0.18 : 0.1))
                         .frame(width: 40, height: 40)
-                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(URL(string: bookmark.url)?.host ?? "")&sz=64"))
+                    Favicon(bookmark.url)
                     .frame(width: 22, height: 22)
                 }
                 .scaleEffect(isHovered ? 1.06 : 1.0)
@@ -493,15 +493,19 @@ private struct TabRow: View {
 
     var body: some View {
         HStack(spacing: 8) {
-            // Favicon / loading indicator
             ZStack {
                 if state.isLoading {
                     ProgressView()
                         .scaleEffect(0.5)
                         .frame(width: 16, height: 16)
                 } else {
-                    CachedAsyncImage(url: URL(string: "https://www.google.com/s2/favicons?domain=\(state.url?.host ?? "")"))
-                    .frame(width: 16, height: 16)
+                    if let host = state.url?.host, !host.isEmpty {
+                        Favicon(host)
+                    } else{
+                        Image(systemName: "house")
+                            .resizable()
+                            .frame(width: 16, height: 16)
+                    }
                 }
             }
             .frame(width: 16, height: 16)
