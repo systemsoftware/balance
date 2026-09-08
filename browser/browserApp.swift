@@ -300,7 +300,15 @@ class AppDelegate: NSObject, NSApplicationDelegate {
             }
 
             if !types.isEmpty {
-                await WKWebsiteDataStore.default().removeData(ofTypes: types, modifiedSince: Date.distantPast)
+                var stores = [WKWebsiteDataStore.default()]
+                if let profilesJSON = defaults.string(forKey: "profiles"),
+                   let data = profilesJSON.data(using: .utf8),
+                   let profiles = try? JSONDecoder().decode([Profile].self, from: data) {
+                    stores.append(contentsOf: profiles.map { WKWebsiteDataStore(forIdentifier: $0.id) })
+                }
+                for store in stores {
+                    await store.removeData(ofTypes: types, modifiedSince: Date.distantPast)
+                }
                 if clearCache {
                     if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
                         let webKitCache = cacheURL.appendingPathComponent("WebKit")

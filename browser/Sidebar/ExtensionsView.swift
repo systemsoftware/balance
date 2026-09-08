@@ -1,5 +1,6 @@
 import SwiftUI
 import WebKit
+import CryptoKit
 internal import UniformTypeIdentifiers
 
 struct ExtensionsView: View {
@@ -197,30 +198,79 @@ struct ExtensionsView: View {
     
     private func updateExtension(_ context: WKWebExtensionContext) {
         let manifest = context.webExtension.manifest
-        let extID = context.baseURL.lastPathComponent
+        let extID = chromeExtensionID(for: context)
         
         if let updateURL = manifest["update_url"] as? String,
-           let url = URL(string: updateURL) {
+           let url = extensionUpdateURL(baseURLString: updateURL, extensionID: extID) {
             performUpdate(removing: context, from: url)
-        } else if extID.count == 32 {
-            let cwsURL = "https://clients2.google.com/service/update2/crx?response=redirect&prodversion=114.0.0.0&acceptformat=crx2,crx3&x=id%3D" + extID + "%26installsource%3Dondemand%26uc"
-            if let url = URL(string: cwsURL) {
+        } else if let extID {
+            if let url = extensionUpdateURL(
+                baseURLString: "https://clients2.google.com/service/update2/crx",
+                extensionID: extID
+            ) {
                 performUpdate(removing: context, from: url)
             }
         } else {
             errorMessage = "No update URL available for this extension."
         }
     }
+
+    private func chromeExtensionID(for context: WKWebExtensionContext) -> String? {
+        let directoryName = context.baseURL.lastPathComponent
+        if directoryName.range(of: #"^[a-p]{32}$"#, options: .regularExpression) != nil {
+            return directoryName
+        }
+
+        guard let encodedKey = context.webExtension.manifest["key"] as? String,
+              let publicKey = Data(base64Encoded: encodedKey) else {
+            return nil
+        }
+
+        let digest = SHA256.hash(data: publicKey)
+        let alphabet = Array("abcdefghijklmnop")
+        return digest.prefix(16).flatMap { byte in
+            [alphabet[Int(byte >> 4)], alphabet[Int(byte & 0x0f)]]
+        }.map(String.init).joined()
+    }
+
+    private func extensionUpdateURL(baseURLString: String, extensionID: String?) -> URL? {
+        guard let extensionID,
+              extensionID.range(of: #"^[a-p]{32}$"#, options: .regularExpression) != nil,
+              var components = URLComponents(string: baseURLString) else {
+            return URL(string: baseURLString)
+        }
+
+        var queryItems = components.queryItems ?? []
+        queryItems.removeAll { ["response", "prodversion", "acceptformat", "x"].contains($0.name) }
+        queryItems.append(contentsOf: [
+            URLQueryItem(name: "response", value: "redirect"),
+            URLQueryItem(name: "prodversion", value: "133.0.0.0"),
+            URLQueryItem(name: "acceptformat", value: "crx2,crx3"),
+            URLQueryItem(name: "x", value: "id=\(extensionID)&installsource=ondemand&uc")
+        ])
+        components.queryItems = queryItems
+        return components.url
+    }
     
     private func performUpdate(removing context: WKWebExtensionContext, from url: URL) {
         isInstalling = true
         errorMessage = nil
-        manager.removeExtensionFromDisk(context)
+        let installationURL = manager.installationURL(for: context)
         Task {
             do {
                 let crx = try await CRXInstaller.download(from: url)
-                try await CRXInstaller.install(from: crx, originalURL: url)
-                await MainActor.run { isInstalling = false }
+                defer { try? FileManager.default.removeItem(at: crx) }
+                try await CRXInstaller.install(
+                    from: crx,
+                    originalURL: url,
+                    replacing: installationURL
+                )
+                await MainActor.run {
+                    // The installer has safely replaced the files and loaded the new
+                    // context, so only unload the old in-memory context now.
+                    manager.unloadExtension(context)
+                    isInstalling = false
+                }
             } catch {
                 await MainActor.run {
                     errorMessage = "Update failed: \(error.localizedDescription)"
@@ -240,10 +290,14 @@ struct ExtensionsView: View {
                 Label("Install from URL…", systemImage: "link")
             }
         } label: {
-            Image(systemName: "plus")
-                .font(.system(size: 12, weight: .semibold))
+            if isSettings {
+                Text("Add")
+            } else {
+                Image(systemName: "plus")
+                    .font(.system(size: 12, weight: .semibold))
+            }
         }
-        .menuStyle(.borderedButton)
+        .controlSize(isSettings ? .small : .regular)
         .fixedSize()
     }
 }

@@ -455,11 +455,11 @@ var Settings: [Setting] = [
         defaultValueBool: false
     ),
     Setting(
-        name: "Do Not Track Header",
+        name: "Global Privacy Control",
         icon: "hand.raised",
         category: catPrivacy,
         type: "toggle",
-        appStorageKey: "doNotTrack",
+        appStorageKey: "globalPrivacyControl",
         defaultValueBool: false
     ),
     Setting(
@@ -797,7 +797,7 @@ struct SettingsCardRow: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(isHovered
                       ? Color(NSColor.controlBackgroundColor).opacity(0.8)
-                      : Color(NSColor.controlBackgroundColor).opacity(0.4))
+                      : Color(NSColor.controlBackgroundColor).opacity(0))
         )
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
@@ -837,7 +837,7 @@ struct SettingsCustomCardRow<TrailingContent: View>: View {
             RoundedRectangle(cornerRadius: 10)
                 .fill(isHovered
                       ? Color(NSColor.controlBackgroundColor).opacity(0.8)
-                      : Color(NSColor.controlBackgroundColor).opacity(0.4))
+                      : Color(NSColor.controlBackgroundColor).opacity(0))
         )
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
@@ -965,6 +965,8 @@ struct SettingsSectionContent: View {
                     accentColor: catAdvanced.color
                 ) {
                    CleanupButtonView()
+                        .controlSize(.small)
+                        .fixedSize()
                 }
                 .padding(.bottom, 8)
             }
@@ -1079,6 +1081,8 @@ struct SettingsSectionContent: View {
                         Text("Passwords").tag(1)
                     }
                     .pickerStyle(.segmented)
+                    .controlSize(.small)
+                    .fixedSize()
                 }
                 
                 switch autofillType {
@@ -1152,10 +1156,17 @@ struct SettingsSectionContent: View {
                             Text("Stop Forgetting")
                         }
                         .buttonStyle(.borderedProminent)
+                        .controlSize(.small)
+                        .fixedSize()
                     }
                     .padding()
                     .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+                    .overlay(
+                        RoundedRectangle(cornerRadius: 12)
+                            .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+                    )
                 }
+                
             }
             else {
                 Text("No sites are currently set to be forgotten on close.")

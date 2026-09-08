@@ -708,6 +708,24 @@ enum BrowserErrorKind {
 
 
 struct BrowserWebView: NSViewRepresentable {
+    static let internalContentWorld = WKContentWorld.world(name: "BalanceInternal")
+    static let pageScriptMessageHandlerNames = [
+        "notificationRequestPermission", "notificationShow", "balanceLocation",
+        "printPage", "webShare", "balancePermissionsQuery"
+    ]
+    static let internalScriptMessageHandlerNames = [
+        "installExtension", "scrollObserver", "autofillRequest"
+    ]
+
+    static func privacyRequest(_ request: URLRequest) -> URLRequest {
+        guard Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") == true else {
+            return request
+        }
+        var request = request
+        request.setValue("1", forHTTPHeaderField: "Sec-GPC")
+        return request
+    }
+
     let request: URLRequest
     @ObservedObject var state: BrowserState
     let navigationRevision: UInt
@@ -734,9 +752,7 @@ struct BrowserWebView: NSViewRepresentable {
     }
 
     func makeCoordinator() -> Coordinator {
-        // The coordinator belongs to the live page, not its SwiftUI mount.
-        // Keep navigation, script callbacks and content-blocker state intact.
-        if let coordinator = state.webView?.navigationDelegate as? Coordinator {
+             if let coordinator = state.webView?.navigationDelegate as? Coordinator {
             return coordinator
         }
         return Coordinator(state: state, profile: profile, isPrivate: priv)
@@ -747,9 +763,6 @@ struct BrowserWebView: NSViewRepresentable {
            webView.navigationDelegate === context.coordinator {
             return webView
         }
-        // A tab that is not visible parks its WKWebView in BrowserState. Reuse
-        // it when the tab becomes active again so removing the inactive SwiftUI
-        // control tree does not reload or discard the page.
         if let preloaded = (state.webView as? BrowserWKWebView)
             ?? (state.preloadedWebView as? BrowserWKWebView) {
             let host = request.url?.host ?? "default"
@@ -766,9 +779,13 @@ struct BrowserWebView: NSViewRepresentable {
             preloaded.uiDelegate = context.coordinator
 
             let userContentController = preloaded.configuration.userContentController
-            for name in Self.scriptMessageHandlerNames {
+            for name in Self.pageScriptMessageHandlerNames {
                 userContentController.removeScriptMessageHandler(forName: name)
                 userContentController.add(context.coordinator, name: name)
+            }
+            for name in Self.internalScriptMessageHandlerNames {
+                userContentController.removeScriptMessageHandler(forName: name, contentWorld: Self.internalContentWorld)
+                userContentController.add(context.coordinator, contentWorld: Self.internalContentWorld, name: name)
             }
             
             DispatchQueue.main.async {
@@ -849,8 +866,11 @@ struct BrowserWebView: NSViewRepresentable {
         config.allowsAirPlayForMediaPlayback = true
         
         // Register script message handlers
-        for name in Self.scriptMessageHandlerNames {
+        for name in Self.pageScriptMessageHandlerNames {
             config.userContentController.add(context.coordinator, name: name)
+        }
+        for name in Self.internalScriptMessageHandlerNames {
+            config.userContentController.add(context.coordinator, contentWorld: Self.internalContentWorld, name: name)
         }
         
         // 1. Inject document-start scripts (Notification, Geolocation, Print, Web Share, Permissions)
@@ -871,15 +891,15 @@ struct BrowserWebView: NSViewRepresentable {
             config.userContentController.addUserScript(notifInitScript)
         }
         
-        // Do Not Track preference
-        let dntEnabled = Config.sharedDefaults?.bool(forKey: "doNotTrack") ?? false
-        if dntEnabled {
-            let dntScript = WKUserScript(
-                source: "Object.defineProperty(navigator, 'doNotTrack', { get: function() { return '1'; } });",
+        // Global Privacy Control. Top-level requests also receive Sec-GPC below.
+        let gpcEnabled = Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") ?? false
+        if gpcEnabled {
+            let gpcScript = WKUserScript(
+                source: "Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: function() { return true; }, configurable: true });",
                 injectionTime: .atDocumentStart,
                 forMainFrameOnly: false
             )
-            config.userContentController.addUserScript(dntScript)
+            config.userContentController.addUserScript(gpcScript)
         }
         
         // Chrome Web Store integration: Pass installed extension IDs
@@ -895,13 +915,14 @@ struct BrowserWebView: NSViewRepresentable {
         let cwsExtScript = WKUserScript(
             source: "window.balanceInstalledExtensions = [\(idsStr)];",
             injectionTime: .atDocumentStart,
-            forMainFrameOnly: true
+            forMainFrameOnly: true,
+            in: Self.internalContentWorld
         )
         config.userContentController.addUserScript(cwsExtScript)
         
         // 2. Inject document-end scripts (Scroll observer, Autofill, Chrome Web Store UI)
         if !BrowserScripts.documentEnd.isEmpty {
-            let documentEndScript = WKUserScript(source: BrowserScripts.documentEnd, injectionTime: .atDocumentEnd, forMainFrameOnly: true)
+            let documentEndScript = WKUserScript(source: BrowserScripts.documentEnd, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: Self.internalContentWorld)
             config.userContentController.addUserScript(documentEndScript)
         }
         
@@ -1033,7 +1054,7 @@ struct BrowserWebView: NSViewRepresentable {
                 }
             }
         } else {
-            webView.load(request)
+            webView.load(Self.privacyRequest(request))
         }
         return webView
     }
@@ -1092,7 +1113,7 @@ struct BrowserWebView: NSViewRepresentable {
                     }
                 }
             } else {
-                nsView.load(request)
+                nsView.load(Self.privacyRequest(request))
             }
         }
     }
@@ -1107,17 +1128,7 @@ struct BrowserWebView: NSViewRepresentable {
         }
     }
 
-    static let scriptMessageHandlerNames = [
-        "notificationRequestPermission",
-        "notificationShow",
-        "installExtension",
-        "scrollObserver",
-        "balanceLocation",
-        "autofillRequest",
-        "printPage",
-        "webShare",
-        "balancePermissionsQuery"
-    ]
+    static let scriptMessageHandlerNames = pageScriptMessageHandlerNames + internalScriptMessageHandlerNames
 
     private static func configureContentBlockers(
         on webView: WKWebView,
@@ -1323,18 +1334,18 @@ struct BrowserWebView: NSViewRepresentable {
                             if let data = try? JSONSerialization.data(withJSONObject: credentialsArray),
                                let jsonStr = String(data: data, encoding: .utf8) {
                                 let js = "window.__balanceAutofill(\(jsonStr)[0], \(jsonStr)[1]);"
-                                self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: .page, completionHandler: { _ in })
+                                self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: BrowserWebView.internalContentWorld, completionHandler: { _ in })
                             }
                         },
                         onSelectAutofillData: { [weak self = self] autofillValue in
                             if let data = try? JSONSerialization.data(withJSONObject: [autofillValue]),
                                   let jsonStr = String(data: data, encoding: .utf8) {
                                 let js = "window.__balancePopulateActiveField(\(jsonStr)[0]);"
-                                self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: .page, completionHandler: { _ in })
+                                self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: BrowserWebView.internalContentWorld, completionHandler: { _ in })
                             }
                         },
                         onSavePassword: { [weak self = self] in
-                            self?.state.webView?.evaluateJavaScript("window.__balanceGetFormValues()", in: frameInfo, in: .page) { result in
+                            self?.state.webView?.evaluateJavaScript("window.__balanceGetFormValues()", in: frameInfo, in: BrowserWebView.internalContentWorld) { result in
                                 switch result {
                                 case .success(let res):
                                     if let dict = res as? [String: String], let u = dict["username"], let p = dict["password"] {
@@ -1685,6 +1696,15 @@ struct BrowserWebView: NSViewRepresentable {
             }
             
             if let url = navigationAction.request.url {
+                if navigationAction.targetFrame?.isMainFrame != false,
+                   ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
+                   Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") == true,
+                   navigationAction.request.value(forHTTPHeaderField: "Sec-GPC") != "1" {
+                    decisionHandler(.cancel, preferences)
+                    webView.load(BrowserWebView.privacyRequest(navigationAction.request))
+                    return
+                }
+
                 let httpsOnly = Config.sharedDefaults?.bool(forKey: "httpsOnly") ?? false
                 if httpsOnly && url.scheme == "http" {
                     let host = url.host ?? ""
@@ -2273,6 +2293,10 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
         contexts.removeAll { $0 === context }
         contextURLs.removeValue(forKey: context)
     }
+
+    func installationURL(for context: WKWebExtensionContext) -> URL? {
+        contextURLs[context]
+    }
     
     func unloadAll() {
         for context in contexts {
@@ -2377,7 +2401,11 @@ enum CRXInstaller {
     }
     
     // Install CRX (download already done)
-    static func install(from crxURL: URL, originalURL: URL? = nil) async throws {
+    static func install(
+        from crxURL: URL,
+        originalURL: URL? = nil,
+        replacing existingURL: URL? = nil
+    ) async throws {
         let extensionsDir = try ExtensionStorage.extensionsDirectory()
         
         var extID = UUID().uuidString
@@ -2391,19 +2419,17 @@ enum CRXInstaller {
             }
         }
         
-        let dest = extensionsDir.appendingPathComponent(extID)
-        
-        // Remove existing directory if re-installing
-        if FileManager.default.fileExists(atPath: dest.path) {
-            try FileManager.default.removeItem(at: dest)
-        }
-        
-        try FileManager.default.createDirectory(at: dest, withIntermediateDirectories: true)
+        let dest = existingURL ?? extensionsDir.appendingPathComponent(extID)
+        let staging = extensionsDir.appendingPathComponent(".install-\(UUID().uuidString)")
+        let backup = extensionsDir.appendingPathComponent(".backup-\(UUID().uuidString)")
+        let fileManager = FileManager.default
+
+        try fileManager.createDirectory(at: staging, withIntermediateDirectories: true)
         
         do {
-            try extractCRX(at: crxURL, to: dest)
+            try extractCRX(at: crxURL, to: staging)
             
-            let manifestURL = findManifest(in: dest)
+            let manifestURL = findManifest(in: staging)
             
             guard let manifestURL else {
                 throw NSError(domain: "Extension", code: 1, userInfo: [
@@ -2412,11 +2438,39 @@ enum CRXInstaller {
             }
             
             let root = manifestURL.deletingLastPathComponent()
-            let dirURL = URL(fileURLWithPath: root.path, isDirectory: true)
-            WebExtensionManager.shared.loadExtension(from: dirURL)
+            // Ask WebKit to parse the staged extension before touching the live copy.
+            _ = try await WKWebExtension(resourceBaseURL: root)
+            let hadExistingInstall = fileManager.fileExists(atPath: dest.path)
+
+            if hadExistingInstall {
+                try fileManager.moveItem(at: dest, to: backup)
+            }
+
+            do {
+                try fileManager.moveItem(at: root, to: dest)
+                if hadExistingInstall {
+                    try? fileManager.removeItem(at: backup)
+                }
+            } catch {
+                if hadExistingInstall, !fileManager.fileExists(atPath: dest.path) {
+                    try? fileManager.moveItem(at: backup, to: dest)
+                }
+                throw error
+            }
+
+            WebExtensionManager.shared.loadExtension(from: dest)
+
+            // When the manifest was nested, its parent staging directory remains.
+            if fileManager.fileExists(atPath: staging.path) {
+                try? fileManager.removeItem(at: staging)
+            }
         } catch {
-            // Clean up the empty/invalid directory so it doesn't appear as an empty extension
-            try? FileManager.default.removeItem(at: dest)
+            // A failed download/extraction never removes the currently installed copy.
+            try? fileManager.removeItem(at: staging)
+            if fileManager.fileExists(atPath: backup.path),
+               !fileManager.fileExists(atPath: dest.path) {
+                try? fileManager.moveItem(at: backup, to: dest)
+            }
             throw error
         }
     }

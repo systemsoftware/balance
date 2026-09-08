@@ -4,14 +4,22 @@ enum Config {
     static let appGroupIdentifier = "com.systemsoftware.balance"
 
     private static let didMigrateLegacyDefaults: Void = {
-        guard let legacyValues = UserDefaults.standard.persistentDomain(
+        let legacyValues = UserDefaults.standard.persistentDomain(
             forName: appGroupIdentifier
-        ) else { return }
+        ) ?? [:]
 
         let defaults = UserDefaults.standard
         for (key, value) in legacyValues where defaults.object(forKey: key) == nil {
             defaults.set(value, forKey: key)
         }
+
+        // DNT was replaced by Global Privacy Control. Preserve the user's
+        // existing opt-in, but do not continue advertising the obsolete signal.
+        if defaults.object(forKey: "globalPrivacyControl") == nil,
+           defaults.object(forKey: "doNotTrack") != nil {
+            defaults.set(defaults.bool(forKey: "doNotTrack"), forKey: "globalPrivacyControl")
+        }
+        defaults.removeObject(forKey: "doNotTrack")
     }()
 
     static var defaults: UserDefaults {
