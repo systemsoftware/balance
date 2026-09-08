@@ -896,7 +896,17 @@ struct ContentView: View {
                 }
             case .printPage: printCurrentPage()
             case .toggleReader: showReader.toggle()
-            case .findInPage: browserState.isFindBarVisible.toggle()
+            case .findInPage:
+                NSApp.keyWindow?.makeFirstResponder(nil)
+                Task { @MainActor in
+                    await Task.yield()
+                    if browserState.isFindBarVisible {
+                        browserState.findQuery = ""
+                        browserState.isFindBarVisible = false
+                    } else {
+                        browserState.isFindBarVisible = true
+                    }
+                }
             case .renameTab:
                 let alert = NSAlert()
                 alert.informativeText = "Enter new tab name:"

@@ -72,6 +72,8 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var isFindBarVisible: Bool = false
     @Published var findQuery: String = ""
     @Published var findMatchCount: Int = 0
+    @Published var findCurrentMatch: Int = 0
+    @Published var isCountingFindMatches: Bool = false
     @Published var isAudioMuted: Bool = false
     @Published var isSleeping: Bool = false
     var isPrivateBrowsing: Bool = false
@@ -84,10 +86,11 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     var restoredScrollY: Int?
     @Published var serverTrust: SecTrust?
     @Published var failedToLoad = false
-    var lastHighlightedQuery: String = ""
     private var pendingFindRequest: (query: String, forward: Bool)?
     private var isFindRequestInFlight = false
     private var findRequestGeneration: UInt = 0
+    private var findHighlightGeneration: UInt = 0
+    private var activeFindQuery = ""
 
     init(initialURL: URL? = nil) {
         self.url = initialURL
@@ -336,9 +339,11 @@ extension BrowserState {
             clearFind()
             return
         }
-        if query != lastHighlightedQuery {
+        if query != activeFindQuery {
+            activeFindQuery = query
+            findCurrentMatch = 0
+            findMatchCount = 0
             highlightAll(query)
-            lastHighlightedQuery = query
         }
         pendingFindRequest = (query, forward)
         performNextFindRequestIfNeeded()
@@ -367,7 +372,19 @@ extension BrowserState {
                 if generation == self.findRequestGeneration,
                    request.query == self.findQuery,
                    !self.hasCleanedUp {
-                    self.findMatchCount = result.matchFound ? 1 : 0
+                    if result.matchFound {
+                        if self.findCurrentMatch == 0 {
+                            self.findCurrentMatch = 1
+                        } else if self.findMatchCount > 0 {
+                            let offset = request.forward ? 1 : -1
+                            self.findCurrentMatch =
+                                (self.findCurrentMatch - 1 + offset + self.findMatchCount)
+                                % self.findMatchCount + 1
+                        }
+                    } else {
+                        self.findCurrentMatch = 0
+                        self.findMatchCount = 0
+                    }
                 }
                 self.performNextFindRequestIfNeeded()
             }
@@ -377,110 +394,108 @@ extension BrowserState {
 
     func clearFind() {
         findRequestGeneration &+= 1
+        findHighlightGeneration &+= 1
         pendingFindRequest = nil
+        activeFindQuery = ""
         findMatchCount = 0
-        lastHighlightedQuery = ""
+        findCurrentMatch = 0
+        isCountingFindMatches = false
         clearHighlights()
     }
-    
-    func highlightAll(_ query: String) {
-        guard !query.isEmpty else {
-            clearHighlights()
-            return
+
+    private func highlightAll(_ query: String) {
+        guard let webView else { return }
+
+        findHighlightGeneration &+= 1
+        let generation = findHighlightGeneration
+        isCountingFindMatches = true
+
+        let script = """
+        const normalizedQuery = query.toLocaleLowerCase();
+        const highlightName = '__find_highlight';
+        window.__balanceFindHighlightToken = token;
+
+        if (typeof CSS === 'undefined' || !CSS.highlights || !document.body) {
+            return 0;
         }
 
-        // JSON-encode the query string to produce a safe JS string literal,
-        // preventing injection when query contains quotes, backslashes, or newlines.
-        guard let queryData = try? JSONEncoder().encode(query),
-              let queryJSON = String(data: queryData, encoding: .utf8) else { return }
+        CSS.highlights.delete(highlightName);
+        let style = document.getElementById('__find_highlight_style');
+        if (!style) {
+            style = document.createElement('style');
+            style.id = '__find_highlight_style';
+            style.textContent = `::highlight(__find_highlight) {
+                background-color: #FFFFB3;
+                color: #000000;
+            }`;
+            (document.head || document.documentElement).appendChild(style);
+        }
 
-        let js = """
-        (function() {
-            const query = \(queryJSON);
-            if (!query) {
-                if (typeof CSS !== 'undefined' && CSS.highlights) {
-                    CSS.highlights.delete('__find_highlight');
-                }
-                return 0;
-            }
+        const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT);
+        const ranges = [];
+        const maxMatches = 5000;
+        const batchSize = 250;
+        let visited = 0;
+        let node;
 
-            if (typeof CSS === 'undefined' || !CSS.highlights) {
-                return 0;
-            }
+        while ((node = walker.nextNode())) {
+            if (window.__balanceFindHighlightToken !== token) return -1;
 
-            // Ensure our custom style rule is added to the document
-            const styleId = '__find_highlight_style';
-            let styleEl = document.getElementById(styleId);
-            if (!styleEl) {
-                styleEl = document.createElement('style');
-                styleEl.id = styleId;
-                styleEl.textContent = `
-                    ::highlight(__find_highlight) {
-                        background-color: #FFFFB3 !important;
-                        color: #000000 !important;
-                    }
-                    ::selection {
-                        background-color: #FFFF00 !important;
-                        color: #000000 !important;
-                    }
-                `;
-                (document.head || document.documentElement).appendChild(styleEl);
-            }
-
-            if (!document.body) return 0;
-
-            const walker = document.createTreeWalker(
-                document.body,
-                NodeFilter.SHOW_TEXT,
-                null
-            );
-
-            const ranges = [];
-            let node;
-            const queryLower = query.toLowerCase();
-            const queryLength = query.length;
-            const maxMatches = 5000;
-
-            while ((node = walker.nextNode())) {
-                const parentTagName = node.parentNode ? node.parentNode.tagName : '';
-                if (parentTagName === 'SCRIPT' || parentTagName === 'STYLE' || parentTagName === 'NOSCRIPT') {
-                    continue;
-                }
-
-                const text = node.nodeValue;
-                const lower = text.toLowerCase();
-                let idx = 0;
-                while ((idx = lower.indexOf(queryLower, idx)) !== -1) {
-                    if (ranges.length >= maxMatches) {
-                        break;
-                    }
+            const tag = node.parentElement?.tagName;
+            if (tag !== 'SCRIPT' && tag !== 'STYLE' && tag !== 'NOSCRIPT') {
+                const text = node.nodeValue || '';
+                const lower = text.toLocaleLowerCase();
+                let index = 0;
+                while ((index = lower.indexOf(normalizedQuery, index)) !== -1) {
                     const range = document.createRange();
-                    range.setStart(node, idx);
-                    range.setEnd(node, idx + queryLength);
+                    range.setStart(node, index);
+                    range.setEnd(node, index + normalizedQuery.length);
                     ranges.push(range);
-                    idx += queryLength;
-                }
-                if (ranges.length >= maxMatches) {
-                    break;
+                    if (ranges.length >= maxMatches) break;
+                    index += normalizedQuery.length;
                 }
             }
 
-            const highlight = new Highlight(...ranges);
-            CSS.highlights.set('__find_highlight', highlight);
-            return ranges.length;
-        })()
+            if (ranges.length >= maxMatches) break;
+            if (++visited % batchSize === 0) {
+                await new Promise(resolve => setTimeout(resolve, 0));
+            }
+        }
+
+        if (window.__balanceFindHighlightToken !== token) return -1;
+        CSS.highlights.set(highlightName, new Highlight(...ranges));
+        return ranges.length;
         """
 
-        webView?.evaluateJavaScript(js) { result, _ in
-            if let count = result as? Int {
-                print("Highlighted \(count) matches")
+        Task { @MainActor [weak self, weak webView] in
+            guard let webView else { return }
+            let value = try? await webView.callAsyncJavaScript(
+                script,
+                arguments: ["query": query, "token": generation],
+                in: nil,
+                contentWorld: .page
+            )
+            guard let self,
+                  generation == self.findHighlightGeneration,
+                  query == self.findQuery,
+                  !self.hasCleanedUp else { return }
+
+            self.isCountingFindMatches = false
+            let count = (value as? NSNumber)?.intValue ?? value as? Int
+            if let count, count >= 0 {
+                self.findMatchCount = count
+                if count == 0 {
+                    self.findCurrentMatch = 0
+                }
             }
         }
     }
 
     func clearHighlights() {
+        let cancellationToken = findHighlightGeneration
         let js = """
         (function() {
+            window.__balanceFindHighlightToken = \(cancellationToken);
             if (typeof CSS !== 'undefined' && CSS.highlights) {
                 CSS.highlights.delete('__find_highlight');
             }
@@ -488,11 +503,7 @@ extension BrowserState {
             if (styleEl) {
                 styleEl.remove();
             }
-            // Fallback: Clear any legacy DOM highlights if they existed
-            document.querySelectorAll('mark.__find_highlight').forEach(el => {
-                el.replaceWith(...el.childNodes);
-            });
-            document.normalize();
+            window.getSelection()?.removeAllRanges();
         })()
         """
         webView?.evaluateJavaScript(js, completionHandler: nil)
@@ -846,7 +857,10 @@ struct BrowserWebView: NSViewRepresentable {
         let extensionController = priv ? nil : manager.controller(for: extensionControllerKey)
         let extensionContext = request.url.flatMap { extensionController?.extensionContext(for: $0) }
         let config = extensionContext?.webViewConfiguration ?? WKWebViewConfiguration()
-        config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        
+        if UserDefaults.standard.bool(forKey: "developerMode") {
+            config.preferences.setValue(true, forKey: "developerExtrasEnabled")
+        }
         config.preferences.setValue(true, forKey: "fullScreenEnabled")
         if #available(macOS 12.3, *) {
             config.preferences.isElementFullscreenEnabled = true
@@ -1538,7 +1552,6 @@ struct BrowserWebView: NSViewRepresentable {
             state.isLoading = true
             state.serverTrust = webView.serverTrust
             state.failedToLoad = false
-            state.lastHighlightedQuery = ""
         }
 
         func webView(_ webView: WKWebView, didFailProvisionalNavigation navigation: WKNavigation!, withError error: Error) {

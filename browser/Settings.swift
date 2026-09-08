@@ -199,7 +199,7 @@ var Settings: [Setting] = [
     ),
     Setting(
         name: "Toolbar Position",
-        icon: "rectangle.3.offgrid",
+        icon: "rectangle.grid.1x2.fill",
         category: catBrowsing,
         type: "dropdown",
         appStorageKey: "toolbarLocation",
@@ -290,7 +290,7 @@ var Settings: [Setting] = [
     ),
     Setting(
         name: "Bookmark Bar",
-        icon: "bookmark",
+        icon: "inset.filled.topthird.rectangle",
         category: catBookmarks,
         type: "dropdown",
         appStorageKey: "bookmarkBar",
@@ -299,7 +299,7 @@ var Settings: [Setting] = [
     ),
     Setting(
         name: "Bookmark Bar Location",
-        icon: "bookmark",
+        icon: "inset.filled.tophalf.bottomhalf.rectangle",
         category: catBookmarks,
         type: "dropdown",
         appStorageKey: "bookmarkbarLocation",
@@ -513,6 +513,14 @@ var Settings: [Setting] = [
         action: {
             createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
         }
+    ),
+    Setting(
+        name: "Developer Tools",
+        icon: "chevron.left.forwardslash.chevron.right",
+        category: catAdvanced,
+        type: "toggle",
+        appStorageKey: "developerMode",
+        defaultValueBool: false
     ),
     Setting(
         name: "Use Favicons",

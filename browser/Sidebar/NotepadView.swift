@@ -8,6 +8,15 @@ enum NoteScope: String, CaseIterable, Identifiable {
     case domain = "Domain"
     
     var id: String { self.rawValue }
+    
+    var icon: String {
+        switch self {
+        case .global: return "globe"
+        case .currentTab: return "doc.text"
+        case .ephemeral: return "clock"
+        case .domain: return "network"
+        }
+    }
 }
 
 struct NoteView: View {
@@ -21,7 +30,7 @@ struct NoteView: View {
     @State var noteScope: NoteScope = .global
     
     var body: some View {
-        VStack{
+        VStack(spacing: 10) {
             HStack {
                 Text("Notepad")
                     .font(.system(.headline, design: .rounded))
@@ -43,31 +52,67 @@ struct NoteView: View {
                 .buttonStyle(.plain)
                 .font(.caption)
                 .foregroundColor(.secondary)
-            }.padding()
+            }.padding([.top, .horizontal])
 
-            
-            Picker("", selection: $noteScope) {
-                ForEach(
-                    NoteScope.allCases.filter {
-                        $0 != .domain || browserState.url?.domainID != nil
-                    }
-                ) { scope in
-                    let MAX_CHAR = 10
-                    if scope == .domain, let domain = browserState.url?.domainID {
-                        Text("\(domain.prefix(MAX_CHAR))\(domain.count > MAX_CHAR ? "..." : "")").tag(scope)
-                    } else {
-                        Text(scope.rawValue).tag(scope)
-                    }
-                }
-            }
-            .pickerStyle(.palette)
-            .padding(.horizontal)
-            .padding(.leading, -4)
-            
+            scopePicker
+                .padding(.horizontal, 12)
+
             noteEditor
                 .scrollContentBackground(.hidden)
-                .padding()
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8, style: .continuous)
+                        .fill(Color.secondary.opacity(0.08))
+                )
+                .padding([.horizontal, .bottom], 12)
+                .frame(maxWidth: .infinity, maxHeight: .infinity)
         }
+    }
+
+    private var availableScopes: [NoteScope] {
+        NoteScope.allCases.filter {
+            $0 != .domain || browserState.url?.domainID != nil
+        }
+    }
+    
+    private func label(for scope: NoteScope) -> String {
+        let MAX_CHAR = 16
+        if scope == .domain, let domain = browserState.url?.domainID {
+            return "\(domain.prefix(MAX_CHAR))\(domain.count > MAX_CHAR ? "…" : "")"
+        }
+        return scope.rawValue
+    }
+    
+    private var scopePicker: some View {
+        Menu {
+            ForEach(availableScopes) { scope in
+                Button {
+                    noteScope = scope
+                } label: {
+                    Label(label(for: scope), systemImage: scope.icon)
+                }
+            }
+        } label: {
+            HStack(spacing: 5) {
+                Image(systemName: noteScope.icon)
+                    .font(.caption)
+                Text(label(for: noteScope))
+                    .lineLimit(1)
+                    .truncationMode(.tail)
+                Image(systemName: "chevron.down")
+                    .font(.system(size: 9, weight: .semibold))
+                    .foregroundColor(.secondary)
+            }
+            .font(.caption)
+            .padding(.horizontal, 10)
+            .padding(.vertical, 6)
+            .background(
+                Capsule().fill(Color.secondary.opacity(0.12))
+            )
+        }
+        .menuStyle(.borderlessButton)
+        .fixedSize()
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
     
     @ViewBuilder

@@ -2,9 +2,8 @@ import SwiftUI
 
 struct CommandPaletteToolbarButton: View {
     
-    @State var showCommands = false
+    @Binding var showCommands: Bool
     @Binding var urlInput: String
-    @State var commandSearchText = ""
     
     var body: some View {
      
@@ -18,18 +17,6 @@ struct CommandPaletteToolbarButton: View {
         .buttonStyle(.plain)
         .frame(width: 40, height: 40)
         .glassEffect(.regular.interactive(), in:.circle)
-        .keyboardShortcut("k", modifiers: .command)
-        .sheet(isPresented: $showCommands) {
-            VStack(spacing: 0) {
-                CommandsView(searchText:$commandSearchText, searchQuery: $urlInput)
-                Button("Close") {
-                    showCommands = false
-                }
-                .padding()
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-            }
-        }
-        
+        .keyboardShortcut("k", modifiers: .command)        
     }
 }

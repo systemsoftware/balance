@@ -28,7 +28,15 @@ struct FindBarView: View {
             }
             .padding(Layout.controlPadding)
 
-            if !state.findQuery.isEmpty && state.findMatchCount == 0 {
+            if !state.findQuery.isEmpty && state.isCountingFindMatches {
+                ProgressView()
+                    .controlSize(.small)
+            } else if !state.findQuery.isEmpty && state.findMatchCount > 0 {
+                Text("\(max(state.findCurrentMatch, 1)) of \(state.findMatchCount)")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+            } else if !state.findQuery.isEmpty {
                 Text("No results")
                     .font(.caption)
                     .foregroundStyle(.secondary)
@@ -59,6 +67,8 @@ struct FindBarView: View {
         .glassEffectUnion(id: "find", namespace: glassNamespace)
         .onDisappear {
             pendingSearch?.cancel()
+            state.findQuery = ""
+            state.clearFind()
         }
     }
 

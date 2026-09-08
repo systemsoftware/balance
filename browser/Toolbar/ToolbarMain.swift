@@ -74,7 +74,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     var systemImage: String {
         switch self {
         case .clock: "clock"
-        case .navigation: "chevron.left.forwardslash.chevron.right"
+        case .navigation: "chevron.left.chevron.right"
         case .home: "house"
         case .share: "square.and.arrow.up"
         case .reload: "arrow.clockwise"
@@ -133,6 +133,8 @@ struct BrowserToolbar: View {
 
     @AppStorage("showToolbarDragHandle") private var showDrag = false
 
+    @State var showCommands = false
+    @State var commandSearchText = ""
     
     var body: some View {
         
@@ -154,6 +156,7 @@ struct BrowserToolbar: View {
                         showGoTo: $showGoTo,
                         showBoost: $showBoost,
                         splitURL: $splitURL,
+                        showCommands: $showCommands,
                         splitState: splitState,
                         focusAddressOnAppear: focusAddressOnAppear,
                         isPrivate: isPrivate,
@@ -197,6 +200,18 @@ struct BrowserToolbar: View {
                     .padding(Layout.controlPadding)
             }
         }
+        .sheet(isPresented: $showCommands) {
+            VStack(spacing: 0) {
+                CommandsView(searchText:$commandSearchText, searchQuery: $urlInput)
+                Button("Close") {
+                    showCommands = false
+                }
+                .padding()
+                .buttonStyle(.borderedProminent)
+                .tint(.red)
+            }
+        }
+
         .popover(isPresented: $showEdit) {
             VStack(alignment: .leading, spacing: 16) {
                 Text("Customize Toolbar")
@@ -309,6 +324,7 @@ struct BrowserToolbar: View {
         @Binding var showGoTo: Bool
         @Binding var showBoost: Bool
         @Binding var splitURL: String
+        @Binding var showCommands: Bool
         @ObservedObject var splitState: BrowserState
         let focusAddressOnAppear: Bool
         let isPrivate: Bool
@@ -446,6 +462,7 @@ struct BrowserToolbar: View {
                             showGoTo: $showGoTo,
                             showBoost: $showBoost,
                             splitURL: $splitURL,
+                            showCommands: $showCommands,
                             splitState: splitState,
                             focusAddressOnAppear: focusAddressOnAppear,
                             isPrivate: isPrivate,
@@ -459,7 +476,7 @@ struct BrowserToolbar: View {
                     )
                 }
             case .commandPalette:
-                CommandPaletteToolbarButton(urlInput: $urlInput)
+                CommandPaletteToolbarButton(showCommands: $showCommands, urlInput: $urlInput)
                 
             case .findInPage:
                 FindInPageToolbarButton(browserState: browserState)
