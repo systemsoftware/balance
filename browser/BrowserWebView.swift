@@ -497,6 +497,57 @@ extension BrowserState {
         """
         webView?.evaluateJavaScript(js, completionHandler: nil)
     }
+    
+    func tryGetFavicon() async -> URL {
+        guard let pageURL = self.url else {
+            return URL(string: "https://example.com")!
+        }
+
+        if let webView {
+            do {
+                let result = try await webView.evaluateJavaScript("""
+                    (() => {
+                        const selectors = [
+                            'link[rel="icon"]',
+                            'link[rel="shortcut icon"]',
+                            'link[rel="apple-touch-icon"]',
+                            'link[rel="apple-touch-icon-precomposed"]'
+                        ];
+
+                        for (const selector of selectors) {
+                            const link = document.querySelector(selector);
+
+                            if (link?.href) {
+                                return link.href;
+                            }
+                        }
+
+                        return null;
+                    })();
+                """)
+
+                if let faviconString = result as? String,
+                   !faviconString.isEmpty,
+                   let faviconURL = URL(string: faviconString, relativeTo: pageURL)?.absoluteURL {
+
+                    print("Got favicon from site: \(faviconURL)")
+                    return faviconURL
+                }
+            } catch {
+                print("Failed to read favicon from page: \(error)")
+            }
+        }
+
+        if let host = pageURL.host,
+           let fallbackURL = Favicon.full(host) {
+            print("Fell back to DDG: \(fallbackURL)")
+            return fallbackURL
+        }
+
+        print("No favicon available")
+        return URL(string: "https://example.com/favicon.ico")!
+    }
+    
 }
 
 final class BrowserWKWebView: WKWebView {
@@ -603,7 +654,7 @@ final class BrowserWKWebView: WKWebView {
             }
         }
     }
-    
+
  
     @objc func manualDownload(_ sender: NSMenuItem) {
         guard let pointValue = sender.representedObject as? NSValue else { return }

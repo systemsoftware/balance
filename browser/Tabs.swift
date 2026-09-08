@@ -467,7 +467,8 @@ private struct TabRow: View {
     let animateInsertion: Bool
     @EnvironmentObject var windowManager: WindowManager
     @State private var insertionFinished: Bool
-    
+    @State private var faviconURL: URL?
+
     var glass = false
     
     @AppStorage("tabMode", store:Config.sharedDefaults) var tabMode = 0
@@ -500,7 +501,11 @@ private struct TabRow: View {
                         .frame(width: 16, height: 16)
                 } else {
                     if let host = state.url?.host, !host.isEmpty {
-                        Favicon(host)
+                        CachedAsyncImage(url:faviconURL)
+                            .frame(width: 16, height: 16)
+                            .task {
+                                       faviconURL = await state.tryGetFavicon()
+                                   }
                     } else{
                         Image(systemName: "house")
                             .resizable()
