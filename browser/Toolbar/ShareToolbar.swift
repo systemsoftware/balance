@@ -13,7 +13,6 @@ struct ShareToolbarButton: View {
                 }
                 .frame(width: 40, height: 40)
                 .buttonStyle(.plain)
-                .glassEffect(.regular.interactive(), in: .circle)
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(!(location?.absoluteString.starts(with: "http") ?? false))
                 

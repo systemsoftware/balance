@@ -26,7 +26,6 @@ struct ReloadToolbarButton: View {
         }
         .frame(width: 40, height: 40)
         .buttonStyle(.plain)
-        .glassEffect(.regular.interactive(), in: .circle)
         .disabled(!(browserState.url?.absoluteString.starts(with: "http") ?? false))
     }
 }

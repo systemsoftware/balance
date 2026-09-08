@@ -17,7 +17,6 @@ struct ExtensionsToolbarButton: View {
             }
             .buttonStyle(.plain)
             .frame(width: 40, height: 40)
-            .glassEffect(.regular.interactive(), in: .circle)
             .keyboardShortcut("e", modifiers: [.command, .shift])
             .disabled(browserState.url == nil || browserState.url?.isFileURL == true)
             .popover(isPresented: $showExtensionsPopover, arrowEdge: .bottom) {

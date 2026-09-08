@@ -15,7 +15,6 @@ struct FindInPageToolbarButton: View {
                     .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
             }
             .frame(width: 40, height: 40)
-            .glassEffect(.regular.interactive(), in:.circle)
             .buttonStyle(.plain)
             .disabled(browserState.url == nil)
             

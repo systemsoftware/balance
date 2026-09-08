@@ -171,7 +171,7 @@ struct BrowserToolbar: View {
                     .padding(Layout.controlPadding)
                     .modifier(ToolbarDragSource(entry: entry, draggedItemID: $draggedItemID))
                     .onDrop(
-                        of: [.data],
+                        of: [.plainText],
                         delegate: ToolbarDropDelegate(
                             targetID: entry.id,
                             store: toolbarStore,
@@ -200,6 +200,15 @@ struct BrowserToolbar: View {
                     .padding(Layout.controlPadding)
             }
         }
+        
+   /*     .background {
+            RoundedRectangle(cornerRadius: 10, style: .continuous)
+                .fill(.clear)
+                .glassEffect(.regular, in: .rect(cornerRadius: 10))
+                .allowsHitTesting(false)
+                .padding(.horizontal, 5)
+        }
+    */
         .sheet(isPresented: $showCommands) {
             VStack(spacing: 0) {
                 CommandsView(searchText:$commandSearchText, searchQuery: $urlInput)
@@ -213,18 +222,19 @@ struct BrowserToolbar: View {
         }
 
         .popover(isPresented: $showEdit) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Customize Toolbar")
-                    .font(.headline)
-                
-                Picker("", selection: $editSection) {
-                    Text("Add").tag(0)
-                    Text("Remove").tag(1)
-                    Text("Options").tag(2)
-                }
-                .pickerStyle(.segmented)
-                
-                ScrollView {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Customize Toolbar")
+                        .font(.headline)
+                    
+                    Picker("", selection: $editSection.animation(.bouncy)) {
+                        Text("Add").tag(0)
+                        Text("Remove").tag(1)
+                        Text("Options").tag(2)
+                    }
+                    .pickerStyle(.segmented)
+                    
+                    //          ScrollView {
                     switch editSection {
                     case 0:
                         VStack(alignment: .leading, spacing: 4) {
@@ -284,19 +294,20 @@ struct BrowserToolbar: View {
                         
                     default:
                         Toggle(isOn: $showDrag) {
-                                                    Text("Show Address Bar Drag Handle")
-                                                }
-                                                .padding(.vertical, 4)
+                            Text("Show Address Bar Drag Handle")
+                        }
+                        .padding(.vertical, 4)
                     }
+                    //      }
+                    //          .animation(.bouncy, value: editSection)
+                    Text("Drag toolbar items to reorder them.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .frame(maxWidth: .infinity)
                 }
-                .animation(.bouncy, value: editSection)
-                Text("Drag toolbar items to reorder them.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(maxWidth: .infinity)
+                .padding(20)
             }
-            .padding(20)
-
+            .frame(height: 500)
         }
     }
 
@@ -336,165 +347,167 @@ struct BrowserToolbar: View {
         let submitURL: () -> Void
         let scanEvents: () async -> Void
         
+        @State var t = ""
+        
         @State var showSuggestions = false
         @AppStorage(AutofillPreferences.enabledKey, store: Config.sharedDefaults)
         private var autofillEnabled = true
         
         var body: some View {
-            switch item {
-            case .clock:
-                ClockView(timeOnly: true, fontSize: 14)
-                
-            case .navigation:
-                NavigationButtons(location: $location, browserState: browserState)
-                
-            case .home:
-                HomeToolbarButton(location: $location, urlInput: $urlInput)
-                
-            case .share:
-                ShareToolbarButton(location: $location)
-                
-            case .reload:
-                ReloadToolbarButton(browserState: browserState)
-                
-            case .addressBar:
-                AddressBar(
-                    browserState: browserState,
-                    location: $location,
-                    urlInput: $urlInput,
-                    showTrustInfo: $showTrustInfo,
-                    showTabSearch: $showTabSearch,
-                    showEventPopup: $showEventPopup,
-                    showGoTo: $showGoTo,
-                    focusOnAppear: focusAddressOnAppear,
-                    isPrivate: isPrivate,
-                    profileIcon: profileIcon,
-                    profileName: profileName,
-                    events: events,
-                    submitURL: submitURL
-                )
-                
-            case .search:
-                SearchToolbarButton(location: $location, submitURL: submitURL)
-                
-            case .autocomplete:
-                Button {
-                    showSuggestions.toggle()
-                } label: {
-                    Image(systemName: "character.cursor.ibeam")
-                        .font(.title2)
-                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
-                }
-                .frame(width: 40, height: 40)
-                .glassEffect(.regular.interactive(), in:.circle)
-                .buttonStyle(.plain)
-                .popover(isPresented: $showSuggestions) {
-                    AutoFillPopover(searchTerm: $urlInput)
-                }
-
-            case .autofill:
-                Button {
-                    autofillEnabled.toggle()
-                    if !autofillEnabled {
-                        AutofillPopoverManager.shared.hide()
+            HStack {
+                switch item {
+                case .clock:
+                    ClockView(timeOnly: true, fontSize: 14)
+                    
+                case .navigation:
+                    NavigationButtons(location: $location, browserState: browserState)
+                    
+                case .home:
+                    HomeToolbarButton(location: $location, urlInput: $urlInput)
+                    
+                case .share:
+                    ShareToolbarButton(location: $location)
+                    
+                case .reload:
+                    ReloadToolbarButton(browserState: browserState)
+                    
+                case .addressBar:
+                    AddressBar(
+                        browserState: browserState,
+                        location: $location,
+                        urlInput: $urlInput,
+                        showTrustInfo: $showTrustInfo,
+                        showTabSearch: $showTabSearch,
+                        showEventPopup: $showEventPopup,
+                        showGoTo: $showGoTo,
+                        focusOnAppear: focusAddressOnAppear,
+                        isPrivate: isPrivate,
+                        profileIcon: profileIcon,
+                        profileName: profileName,
+                        events: events,
+                        submitURL: submitURL
+                    )
+                    
+                case .search:
+                    SearchToolbarButton(location: $location, submitURL: submitURL)
+                    
+                case .autocomplete:
+                    Button {
+                        showSuggestions.toggle()
+                    } label: {
+                        Image(systemName: "character.cursor.ibeam")
+                            .font(.title2)
+                            .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
                     }
-                } label: {
-                    Image(systemName: "person.text.rectangle")
-                        .font(.title2)
-                        .foregroundStyle(autofillEnabled ? Color.primary : Color.secondary)
-                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
-                }
-                .frame(width: 40, height: 40)
-                .glassEffect(.regular.interactive(), in: .circle)
-                .buttonStyle(.plain)
-                .background(AutofillToolbarPopoverAnchor())
-                .help(autofillEnabled ? "Turn Off Autofill" : "Turn On Autofill")
-                .accessibilityLabel("Autofill")
-                .accessibilityValue(autofillEnabled ? "On" : "Off")
-                .disabled(location == nil)
-                
-            case .extensions:
-                ExtensionsToolbarButton(browserState: browserState, location: $location)
-                
-            case .saveTo:
-                SaveToToolbarButton(location: $location, sidebarStore: sidebarStore, bookmarkStore: bookmarkStore)
-                
-            case .splitView:
-                SplitViewToolbarButton(splitURL: $splitURL, splitState: splitState)
+                    .frame(width: 40, height: 40)
+                    .buttonStyle(.plain)
+                    .popover(isPresented: $showSuggestions) {
+                        AutoFillPopover(searchTerm: $urlInput)
+                    }
+                    
+                case .autofill:
+                    Button {
+                        autofillEnabled.toggle()
+                        if !autofillEnabled {
+                            AutofillPopoverManager.shared.hide()
+                        }
+                    } label: {
+                        Image(systemName: "person.text.rectangle")
+                            .font(.title2)
+                            .foregroundStyle(autofillEnabled ? Color.primary : Color.secondary)
+                            .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                    }
+                    .frame(width: 40, height: 40)
+                    .buttonStyle(.plain)
+                    .background(AutofillToolbarPopoverAnchor())
+                    .help(autofillEnabled ? "Turn Off Autofill" : "Turn On Autofill")
+                    .accessibilityLabel("Autofill")
+                    .accessibilityValue(autofillEnabled ? "On" : "Off")
                     .disabled(location == nil)
-                
-            case .reader:
-                Button {
-                    showReader.toggle()
-                } label: {
-                    Image(systemName: "eyeglasses")
-                        .font(.title2)
-                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
-                }
-                .glassEffect(.regular.interactive(), in:.circle)
-                .buttonStyle(.plain)
-                .disabled(location == nil)
-                
-            case .spacer:
-                Color.clear
-                    .frame(
-                        minWidth: Layout.toolbarButtonSize,
-                        maxWidth: Layout.toolbarButtonSize * 2
-                    )
-                    .frame(height: Layout.toolbarButtonSize)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel("Toolbar Spacer")
-                
-            case .more:
-                MoreMenuToolbar(items: inactiveItems) { inactiveItem in
-                    AnyView(
-                        BrowserToolbarItem(
-                            item: inactiveItem,
-                            inactiveItems: [],
-                            browserState: browserState,
-                            sidebarStore: sidebarStore,
-                            bookmarkStore: bookmarkStore,
-                            location: $location,
-                            urlInput: $urlInput,
-                            showTrustInfo: $showTrustInfo,
-                            showTabSearch: $showTabSearch,
-                            showEventPopup: $showEventPopup,
-                            showGoTo: $showGoTo,
-                            showBoost: $showBoost,
-                            splitURL: $splitURL,
-                            showCommands: $showCommands,
-                            splitState: splitState,
-                            focusAddressOnAppear: focusAddressOnAppear,
-                            isPrivate: isPrivate,
-                            profileIcon: profileIcon,
-                            profileName: profileName,
-                            events: events,
-                            showReader: $showReader,
-                            submitURL: submitURL,
-                            scanEvents: scanEvents
+                    
+                case .extensions:
+                    ExtensionsToolbarButton(browserState: browserState, location: $location)
+                    
+                case .saveTo:
+                    SaveToToolbarButton(location: $location, sidebarStore: sidebarStore, bookmarkStore: bookmarkStore)
+                    
+                case .splitView:
+                    SplitViewToolbarButton(splitURL: $splitURL, splitState: splitState)
+                        .disabled(location == nil)
+                    
+                case .reader:
+                    Button {
+                        showReader.toggle()
+                    } label: {
+                        Image(systemName: "eyeglasses")
+                            .font(.title2)
+                            .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(location == nil)
+                    
+                case .spacer:
+                    Color.clear
+                        .frame(
+                            minWidth: Layout.toolbarButtonSize,
+                            maxWidth: Layout.toolbarButtonSize * 2
                         )
-                    )
+                        .frame(height: Layout.toolbarButtonSize)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel("Toolbar Spacer")
+                    
+                case .more:
+                    MoreMenuToolbar(items: inactiveItems) { inactiveItem in
+                        AnyView(
+                            BrowserToolbarItem(
+                                item: inactiveItem,
+                                inactiveItems: [],
+                                browserState: browserState,
+                                sidebarStore: sidebarStore,
+                                bookmarkStore: bookmarkStore,
+                                location: $location,
+                                urlInput: $urlInput,
+                                showTrustInfo: $showTrustInfo,
+                                showTabSearch: $showTabSearch,
+                                showEventPopup: $showEventPopup,
+                                showGoTo: $showGoTo,
+                                showBoost: $showBoost,
+                                splitURL: $splitURL,
+                                showCommands: $showCommands,
+                                splitState: splitState,
+                                focusAddressOnAppear: focusAddressOnAppear,
+                                isPrivate: isPrivate,
+                                profileIcon: profileIcon,
+                                profileName: profileName,
+                                events: events,
+                                showReader: $showReader,
+                                submitURL: submitURL,
+                                scanEvents: scanEvents
+                            )
+                        )
+                    }
+                case .commandPalette:
+                    CommandPaletteToolbarButton(showCommands: $showCommands, urlInput: $urlInput)
+                    
+                case .findInPage:
+                    FindInPageToolbarButton(browserState: browserState)
+                    
+                case .ai:
+                    AIMenuToolbar(browserState: browserState, location: $location, scanEvents: scanEvents)
+                case .restyle:
+                    RestyleToolbarButton(showBoost: $showBoost)
+                        .disabled(location == nil)
+                case .mute:
+                    MuteToolbar(location: $location, browserState: browserState)
+                case .duplicate:
+                    DuplicateToolbarButton(location: $location)
+                case .rename:
+                    RenameToolbar(location: $location, browserState: browserState)
+                case .zoom:
+                    ZoomToolbar(location: $location, browserState: browserState)
                 }
-            case .commandPalette:
-                CommandPaletteToolbarButton(showCommands: $showCommands, urlInput: $urlInput)
-                
-            case .findInPage:
-                FindInPageToolbarButton(browserState: browserState)
-                
-            case .ai:
-                AIMenuToolbar(browserState: browserState, location: $location, scanEvents: scanEvents)
-            case .restyle:
-                RestyleToolbarButton(showBoost: $showBoost)
-                    .disabled(location == nil)
-            case .mute:
-                MuteToolbar(location: $location, browserState: browserState)
-            case .duplicate:
-                DuplicateToolbarButton(location: $location)
-            case .rename:
-                RenameToolbar(location: $location, browserState: browserState)
-            case .zoom:
-                ZoomToolbar(location: $location, browserState: browserState)
             }
+            .glassEffect(.regular.interactive())
         }
         
         
@@ -527,14 +540,6 @@ private struct ToolbarDragSource: ViewModifier {
 
     private func dragProvider() -> NSItemProvider {
         draggedItemID = entry.id
-        let provider = NSItemProvider()
-        provider.registerDataRepresentation(
-            forTypeIdentifier: UTType.data.identifier,
-            visibility: .ownProcess
-        ) { completion in
-            completion(entry.id.uuidString.data(using: .utf8), nil)
-            return nil
-        }
-        return provider
+        return NSItemProvider(object: entry.id.uuidString as NSString)
     }
 }

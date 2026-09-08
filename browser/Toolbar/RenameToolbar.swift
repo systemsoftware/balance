@@ -43,7 +43,6 @@ struct RenameToolbar: View {
             }
         .buttonStyle(.plain)
         .frame(width: 40, height: 40)
-        .glassEffect(.regular.interactive(), in: .circle)
         .keyboardShortcut("m", modifiers: [.command, .shift])
         .disabled(location == nil)
     }

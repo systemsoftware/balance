@@ -3,13 +3,10 @@ import WebKit
 
 struct NavigationButtons: View {
     
-    @Namespace private var backforwardNamespace
-
     @Binding var location: URL?
     @ObservedObject var browserState: BrowserState
     
     var body: some View {
-            GlassEffectContainer {
                 HStack(spacing: 0) {
                         Button(action: {
                             browserState.webView?.goBack()
@@ -21,8 +18,6 @@ struct NavigationButtons: View {
                         .padding(8)
                         .frame(height: 40)
                         .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive())
-                        .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
                         .keyboardShortcut(.leftArrow, modifiers: .command)
                         .disabled(location == nil ||  !browserState.canGoBack)
                         .contextMenu {
@@ -48,8 +43,6 @@ struct NavigationButtons: View {
                         .padding(8)
                         .frame(height: 40)
                         .buttonStyle(.plain)
-                        .glassEffect(.regular.interactive())
-                        .glassEffectUnion(id: "backforward", namespace: backforwardNamespace)
                         .keyboardShortcut(.rightArrow, modifiers: .command)
                         .disabled(location == nil || !browserState.canGoForward)
                         .contextMenu {
@@ -62,7 +55,6 @@ struct NavigationButtons: View {
                                 }
                             }
                         }
-                }
             }
         }
 }

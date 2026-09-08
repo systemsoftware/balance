@@ -34,7 +34,6 @@ struct ZoomToolbar: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: 40, height: 40)
-        .glassEffect(.regular.interactive(), in: .circle)
         .disabled(!(location?.absoluteString.starts(with: "http") ?? false))
     }
 }

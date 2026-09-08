@@ -24,7 +24,6 @@ struct MoreMenuToolbar: View {
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: 40, height: 40)
-        .glassEffect(.regular.interactive(), in: .circle)
         .accessibilityLabel("More")
     }
 }

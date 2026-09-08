@@ -45,7 +45,7 @@ struct AddressBar: View {
                     .padding(.trailing, 10)
             }
         }
-        .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
+    //    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
         .sheet(isPresented: $showTabSearch) {
             TabSearchView(isPopover: true)
             Button("Close") { showTabSearch = false }

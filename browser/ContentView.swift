@@ -337,7 +337,7 @@ struct ContentView: View {
             // MARK: - Address Bar
 
             if leftSidebarMode == 0 && !MemoryStorage.shared.focusMode {
-                Tabs(browserState: browserState, profile: bProfile)
+                Tabs(browserState: browserState)
                     .frame(height:50)
                     .frame(maxWidth: .infinity)
                     .padding(
@@ -403,7 +403,7 @@ struct ContentView: View {
                 // MARK: - Web Content Area
                 
                 if leftSidebarMode == 2 && !MemoryStorage.shared.focusMode {
-                    Tabs(browserState: browserState, profile: bProfile)
+                    Tabs(browserState: browserState)
                         .frame(width: CGFloat(leftSidebarWidth))
                         .frame(maxHeight: .infinity)
                 }
@@ -466,7 +466,7 @@ struct ContentView: View {
                                     .frame(maxHeight: .infinity)
                                 
                                 if isSlideOverVisible {
-                                    Tabs(browserState: browserState, profile: bProfile)
+                                    Tabs(browserState: browserState)
                                         .frame(width: CGFloat(leftSidebarWidth))
                                         .frame(maxHeight: .infinity)
                                         .glassEffect(.regular, in: .rect(cornerRadius: 15))
@@ -724,7 +724,7 @@ struct ContentView: View {
             
             
             if leftSidebarMode == 4 && !MemoryStorage.shared.focusMode {
-                Tabs(browserState: browserState, profile: bProfile)
+                Tabs(browserState: browserState)
                     .frame(height:50)
                     .frame(maxWidth: .infinity)
                     .padding(

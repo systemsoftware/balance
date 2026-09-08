@@ -31,7 +31,6 @@ struct DuplicateToolbarButton: View {
         .menuIndicator(.hidden)
         .frame(width: 40, height: 40)
         .frame(width: 40, height: 40)
-        .glassEffect(.regular.interactive(), in: .circle)
         .disabled(!(location?.absoluteString.starts(with: "http") ?? false))
     }
 }

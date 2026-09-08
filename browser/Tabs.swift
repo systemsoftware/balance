@@ -8,7 +8,7 @@ internal import UniformTypeIdentifiers
 struct Tabs: View {
 
     var browserState: BrowserState
-    var profile: String
+    var alignsWithTitlebar = false
 
     @StateObject private var store = PinStore()
     @EnvironmentObject var windowManager: WindowManager
@@ -56,7 +56,7 @@ struct Tabs: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(.secondary.opacity(0.15), in:RoundedRectangle(cornerRadius: 10))
+                                .background(.secondary.opacity(0.15), in:.capsule)
                         }
                         .padding(.horizontal, 14)
                         .padding(.top, 14)
@@ -312,14 +312,14 @@ struct Tabs: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 0.7)
                     .background {
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                        Capsule()
                             .fill(.clear)
-                            .glassEffect(in: .rect(cornerRadius: 10))
+                            .glassEffect()
                             .allowsHitTesting(false)
                     }
                 }
                 .padding(.horizontal, 0)
-                .padding(.top)
+                .padding(.top, alignsWithTitlebar ? 0 : 16)
             }
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -563,27 +563,27 @@ private struct TabRow: View {
         .padding(.vertical, 9)
         .background {
             if isActive {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                Capsule()
                     .fill(.tint)
                     .opacity(glass ? 0.0 : 0.18)
                     .glassEffect(
                         glass ? .regular : .identity,
-                        in: .rect(cornerRadius: 10)
+                        in: .capsule
                     )
                     .overlay(
-                        RoundedRectangle(cornerRadius: 10, style: .continuous)
+                       Capsule()
                             .strokeBorder(.tint, lineWidth: 1)
                             .opacity(glass ? 0.0 : 0.35)
                     )
             } else if isHovered {
-                RoundedRectangle(cornerRadius: 10, style: .continuous)
+                Capsule()
                     .fill(.secondary)
                     .opacity(0.1)
             } else {
                 Color.clear
             }
         }
-        .contentShape(RoundedRectangle(cornerRadius: 9))
+        .contentShape(Capsule())
         .offset(
             x: insertionFinished || tabMode != 0 ? 0 : 80,
             y: insertionFinished || tabMode == 0 ? 0 : 24

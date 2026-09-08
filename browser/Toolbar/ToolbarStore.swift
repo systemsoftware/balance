@@ -96,8 +96,21 @@ struct ToolbarDropDelegate: DropDelegate {
     let targetID: UUID
     let store: ToolbarStore
     @Binding var draggedItemID: UUID?
+
+    func validateDrop(info: DropInfo) -> Bool {
+        draggedItemID != nil &&
+            info.hasItemsConforming(to: [UTType.plainText.identifier])
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        guard validateDrop(info: info) else {
+            return DropProposal(operation: .forbidden)
+        }
+        return DropProposal(operation: .move)
+    }
     
     func performDrop(info: DropInfo) -> Bool {
+        guard validateDrop(info: info) else { return false }
         draggedItemID = nil
         store.save()
         return true
