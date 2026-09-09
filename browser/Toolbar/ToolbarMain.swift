@@ -81,7 +81,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .addressBar: "link"
         case .search: "arrow.turn.down.right"
         case .autocomplete: "character.cursor.ibeam"
-        case .autofill: "person.text.rectangle"
+        case .autofill: "rectangle.and.pencil.and.ellipsis"
         case .extensions: "puzzlepiece.extension"
         case .saveTo: "star"
         case .splitView: "rectangle.split.2x1"
@@ -412,7 +412,7 @@ struct BrowserToolbar: View {
                             AutofillPopoverManager.shared.hide()
                         }
                     } label: {
-                        Image(systemName: "person.text.rectangle")
+                        Image(systemName: "rectangle.and.pencil.and.ellipsis")
                             .font(.title2)
                             .foregroundStyle(autofillEnabled ? Color.primary : Color.secondary)
                             .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)

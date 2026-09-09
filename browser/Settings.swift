@@ -1083,7 +1083,7 @@ struct SettingsSectionContent: View {
             }
 
             if def.id == "autofill" {
-                SettingsCustomCardRow(title: "Autofill Type", icon: "person.text.rectangle", accentColor: def.color) {
+                SettingsCustomCardRow(title: "AutoFill Type", icon: "rectangle.and.pencil.and.ellipsis", accentColor: def.color) {
                     Picker("",selection:$autofillType.animation()) {
                         Text("Form").tag(0)
                         Text("Passwords").tag(1)

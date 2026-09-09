@@ -3,6 +3,7 @@ import SwiftData
 import AuthenticationServices
 import WebKit
 internal import Combine
+import AppIntents
 
 func switchToTab(tabID: String) {
     WindowManager.shared.selectTab(tabID)
@@ -242,6 +243,9 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         for url in queued {
             createNewTab(with: url)
         }
+
+        // Re-register App Shortcuts after full launch so Spotlight can index them.
+        BrowserAppShortcuts.updateAppShortcutParameters()
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

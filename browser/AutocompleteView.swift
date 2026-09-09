@@ -205,3 +205,72 @@ struct AutocompleteView: View {
     }
     
 }
+
+
+
+struct AutocompleteStandalone {
+    
+    static var result: GoogleSuggestions?
+    
+    static var activeQuery: String = ""
+    
+    static var cache: [String: [String]] = [:]
+    
+    static func loadData(for query: String) async throws -> GoogleSuggestions? {
+        
+        let eng = "https://ac.duckduckgo.com/ac/?type=list&t=balance&q="
+   
+        guard
+            let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed),
+            let url = URL(string:"\(eng)\(encoded)")
+        else {
+            return nil
+        }
+        
+        let (data, response) = try await URLSession.shared.data(from: url)
+        
+        if let httpResponse = response as? HTTPURLResponse  {
+            let statusCode = httpResponse.statusCode
+            print("HTTP Status Code: \(statusCode)")
+        }
+        
+        return try JSONDecoder().decode(GoogleSuggestions.self, from: data)
+        
+    }
+    
+    static func fetchSuggestions(for query: String) async {
+        activeQuery = query
+
+        guard !query.isEmpty else {
+            result = nil
+            return
+        }
+        
+        if let cached = cache[query] {
+            if activeQuery == query {
+                result = GoogleSuggestions(query: query, suggestions: cached)
+            }
+            return
+        }
+        
+                
+        do {
+            let response = try await loadData(for: query)
+            
+            if !Task.isCancelled && activeQuery == query {
+                result = response
+                
+                if let suggestions = response?.suggestions {
+                    cache[query] = suggestions
+                }
+            }
+        } catch {
+            print("error:", error)
+            if !Task.isCancelled && activeQuery == query {
+                result = nil
+            }
+        }
+    }
+
+    
+}

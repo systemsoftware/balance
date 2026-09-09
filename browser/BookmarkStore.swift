@@ -1,6 +1,7 @@
 import Foundation
 internal import Combine
 import SwiftUI
+import AppIntents
 
 final class BookmarkStore: ObservableObject {
     @Published private(set) var items: [Bookmark] = []
@@ -34,6 +35,7 @@ final class BookmarkStore: ObservableObject {
 
     func add(_ bookmark: Bookmark) {
         items.append(bookmark)
+        BrowserAppShortcuts.updateAppShortcutParameters()
         save()
     }
 

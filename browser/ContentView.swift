@@ -1371,6 +1371,7 @@ struct ContentView: View {
     
     
     private func handleTitleChange(to newTitle: String) {
+
         if priv == true { return }
         
         if recordHistory == true, let newURL = browserState.url, newURL.absoluteString != homepage {

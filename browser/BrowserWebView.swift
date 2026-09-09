@@ -1661,7 +1661,7 @@ struct BrowserWebView: NSViewRepresentable {
                      decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
             
             if let url = navigationAction.request.url {
-                print("decidePolicyFor:", url.absoluteString)
+        //        print("decidePolicyFor:", url.absoluteString)
 
                 if url.scheme == ErrorPageBuilder.retryScheme {
                     decisionHandler(.cancel, preferences)
