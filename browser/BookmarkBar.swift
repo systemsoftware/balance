@@ -28,7 +28,7 @@ struct BookmarkBar: View {
                 }
             }
         }
-        .glassEffect(.regular.interactive(), in:RoundedRectangle(cornerRadius: 8))
+        .glassEffect(.regular.interactive(), in:.capsule)
         .padding(.horizontal, Layout.outerPadding+5)
     }
     

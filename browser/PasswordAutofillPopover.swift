@@ -1,6 +1,5 @@
 import SwiftUI
 import LocalAuthentication
-import AppKit
 
 func autofillIconAndColor(for type: String, label: String?) -> (icon: String, color: Color) {
     let lowerType = type.lowercased()
@@ -221,6 +220,7 @@ struct AutofillRowButton: View {
     }
 }
 
+#if canImport(AppKit)
 class AutofillPopoverManager {
     static let shared = AutofillPopoverManager()
     private var popover: NSPopover?
@@ -332,3 +332,84 @@ private extension NSView {
         return false
     }
 }
+#else
+class AutofillPopoverManager {
+    static let shared = AutofillPopoverManager()
+    private weak var presentedViewController: UIViewController?
+
+    func show(relativeTo rect: CGRect, in view: UIView, domain: String,
+              inputType: String = "text", inputLabel: String = "", currentValue: String = "",
+              credentials: [SavedCredential] = [], autofillItems: [AutoFillItem] = [],
+              onSelectCredential: @escaping (SavedCredential) -> Void = { _ in },
+              onSelectAutofillData: @escaping (String) -> Void = { _ in },
+              onSavePassword: @escaping () -> Void = {},
+              onSaveAutofill: @escaping (String, String, String) -> Void = { _, _, _ in }) {
+        guard presentedViewController == nil,
+              view.window != nil,
+              let presenter = topViewController(from: view.window?.rootViewController) else { return }
+
+        let content = AutofillPopoverView(
+            domain: domain,
+            inputType: inputType,
+            inputLabel: inputLabel,
+            currentValue: currentValue,
+            credentials: credentials,
+            autofillItems: autofillItems,
+            onSelectCredential: { [weak self] credential in
+                self?.hide()
+                onSelectCredential(credential)
+            },
+            onSelectAutofillData: { [weak self] value in
+                self?.hide()
+                onSelectAutofillData(value)
+            },
+            onSavePassword: { [weak self] in
+                self?.hide()
+                onSavePassword()
+            },
+            onSaveAutofill: { [weak self] value, type, label in
+                self?.hide()
+                onSaveAutofill(value, type, label)
+            }
+        )
+
+        let controller = UIHostingController(rootView: content)
+        controller.modalPresentationStyle = .popover
+        controller.preferredContentSize = CGSize(width: 340, height: 360)
+        if let popover = controller.popoverPresentationController {
+            popover.sourceView = view
+            popover.sourceRect = rect.intersection(view.bounds).isNull ? view.bounds : rect.intersection(view.bounds)
+            popover.permittedArrowDirections = [.up, .down]
+        }
+        presentedViewController = controller
+        presenter.present(controller, animated: true)
+    }
+
+    func hide() {
+        hide(animated: true)
+    }
+
+    private func hide(animated: Bool) {
+        presentedViewController?.dismiss(animated: animated)
+        presentedViewController = nil
+    }
+
+    private func topViewController(from root: UIViewController?) -> UIViewController? {
+        if let presented = root?.presentedViewController {
+            return topViewController(from: presented)
+        }
+        if let navigation = root as? UINavigationController {
+            return topViewController(from: navigation.visibleViewController)
+        }
+        if let tabs = root as? UITabBarController {
+            return topViewController(from: tabs.selectedViewController)
+        }
+        return root
+    }
+}
+
+struct AutofillToolbarPopoverAnchor: UIViewRepresentable {
+    func makeUIView(context: Context) -> UIView { UIView(frame: .zero) }
+    func updateUIView(_ uiView: UIView, context: Context) {}
+}
+#endif

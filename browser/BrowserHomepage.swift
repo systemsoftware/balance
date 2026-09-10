@@ -635,6 +635,22 @@ struct BrowserHomepage: View {
                 .ignoresSafeArea()
             
             ScrollView {
+                
+                #if os(iOS)
+                HStack {
+                    Text("Hello, iOS user! This browser was originally designed for macOS, so some features may not work as expected on iOS.")
+                        .font(.system(size: 13))
+                        .foregroundColor(.secondary)
+                    Button("If you find any issues, please, report an issue on GitHub") {
+                        createNewTab(with: URL(string:"https://github.com/systemsoftware/balance/issues"))
+                    }
+                    .underline()
+                }
+                    .font(.system(size: 13))
+                    .foregroundColor(.secondary)
+                    
+                #endif
+                
                 VStack(spacing: 50) {
                     
                     if showClock {
@@ -684,7 +700,7 @@ struct BrowserHomepage: View {
                             
                             EmailView(profile: profile, home:true)
                                 .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 500)
-                                .background(Color(NSColor.controlBackgroundColor).opacity(0.8))
+                                .background(Color.platformControlBackground.opacity(0.8))
                                 .cornerRadius(12)
                         }
                         .padding(.horizontal, 40)
@@ -868,9 +884,9 @@ struct BackgroundImage: View {
 
         } else if
             let url = URL(string: homeBackground),
-            let image = NSImage(contentsOf: url) {
+            let image = UniversalImage.load(contentsOf: url) {
 
-            Image(nsImage: image)
+            Image(universalImage: image)
                 .resizable()
                 .scaledToFill()
 

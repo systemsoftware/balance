@@ -1,7 +1,7 @@
 import SwiftUI
 import WebKit
 import SwiftData
-import AppKit
+
 internal import UniformTypeIdentifiers
 
 enum CommandSection: String, CaseIterable, Identifiable, Codable {
@@ -464,7 +464,7 @@ struct CommandsView: View {
     }
 
     private func dismissAfterFocusResigns() {
-        NSApp.keyWindow?.makeFirstResponder(nil)
+        PlatformApplication.dismissKeyboard()
         Task { @MainActor in
             await Task.yield()
             dismiss()
@@ -472,7 +472,7 @@ struct CommandsView: View {
     }
 
     private func transition(to newScreen: Screen) {
-        NSApp.keyWindow?.makeFirstResponder(nil)
+        PlatformApplication.dismissKeyboard()
         Task { @MainActor in
             await Task.yield()
             screen = newScreen

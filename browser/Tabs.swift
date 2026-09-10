@@ -22,6 +22,8 @@ struct Tabs: View {
     @AppStorage("tabMode", store:Config.sharedDefaults) var tabMode = 0
     
     @AppStorage("showSpaces", store:Config.sharedDefaults) var showSpaces = true
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    private var isCompact: Bool { horizontalSizeClass == .compact }
 
     private var currentWindowTabs: [BrowserState] {
         let tabs = windowManager.tabs(inSameWindowAs: browserState.tabID)
@@ -167,6 +169,16 @@ struct Tabs: View {
                                     .background(tabFrameReader(for: tab))
                                     .simultaneousGesture(tabReorderGesture(for: tab))
                                 }
+                                Spacer()
+                                Button {
+                                    createNewTab()
+                                } label: {
+                                    Label("New Tab", systemImage: "plus")
+                                .frame(maxWidth: .infinity)
+                                }
+                                .padding(.horizontal)
+                                .padding(7)
+                                .glassEffect()
                             }
                         }
                         .padding(.bottom, 10)
@@ -188,19 +200,7 @@ struct Tabs: View {
                                     }
                                     .contextMenu {
                                         Button("Rename Space") {
-                                            let alert = NSAlert()
-                                            alert.informativeText = "Enter new space name:"
-                                            alert.addButton(withTitle: "Rename")
-                                            alert.addButton(withTitle: "Cancel")
-                                            
-                                            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-                                            input.stringValue = spaceName
-                                            alert.accessoryView = input
-                                            alert.window.initialFirstResponder = input
-                                            
-                                            if alert.runModal() == .alertFirstButtonReturn {
-                                                windowManager.renameSpace(at: index, to: input.stringValue)
-                                            }
+                                            promptRenameSpace(at: index)
                                         }
                                         if windowManager.spaceNames.count > 1 {
                                             Button("Remove Space", role: .destructive) {
@@ -255,6 +255,14 @@ struct Tabs: View {
                                     windowManager.currentSpaceIndex = windowManager.spaceNames.count - 1
                                 }
                             }
+                            Button("Rename Space") {
+                                promptRenameSpace(at: windowManager.currentSpaceIndex)
+                            }
+                            if windowManager.spaceNames.count > 1 {
+                                Button("Remove Space", role: .destructive) {
+                                    windowManager.removeSpace(at: windowManager.currentSpaceIndex)
+                                }
+                            }
                         } label: {
                             Image(systemName: "rectangle.on.rectangle.angled")
                         }
@@ -263,21 +271,7 @@ struct Tabs: View {
                             Toggle("Show Spaces", isOn: $showSpaces)
                             
                             Button("Rename Space") {
-                                let index = windowManager.currentSpaceIndex
-                                let alert = NSAlert()
-                                alert.informativeText = "Enter new space name:"
-                                alert.addButton(withTitle: "Rename")
-                                alert.addButton(withTitle: "Cancel")
-                                
-                                let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-                                guard windowManager.spaceNames.indices.contains(index) else { return }
-                                input.stringValue = windowManager.spaceNames[index]
-                                alert.accessoryView = input
-                                alert.window.initialFirstResponder = input
-                                
-                                if alert.runModal() == .alertFirstButtonReturn {
-                                    windowManager.renameSpace(at: index, to: input.stringValue)
-                                }
+                                promptRenameSpace(at: windowManager.currentSpaceIndex)
                             }
                             
                             if windowManager.spaceNames.count > 1 {
@@ -290,24 +284,37 @@ struct Tabs: View {
                         }
                         Spacer()
                     }
-                    HStack {
-                        ForEach(filteredTabs, id: \.self) { tab in
-                            TabRow(
-                                state: tab,
-                                isActive: tab === browserState,
-                                isHovered: hoveredID == ObjectIdentifier(tab),
-                                pinStore: store,
-                                showURL:false,
-                                animateInsertion: tab.shouldAnimateTabInsertion
-                            )
-                            .onHover { over in
-                                withAnimation(.easeInOut(duration: 0.12)) {
-                                    hoveredID = over ? ObjectIdentifier(tab) : nil
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: isCompact ? 4 : 6) {
+                            ForEach(filteredTabs, id: \.self) { tab in
+                                TabRow(
+                                    state: tab,
+                                    isActive: tab === browserState,
+                                    isHovered: hoveredID == ObjectIdentifier(tab),
+                                    pinStore: store,
+                                    showURL:false,
+                                    animateInsertion: tab.shouldAnimateTabInsertion
+                                )
+                                .frame(minWidth: isCompact ? 90 : 120, maxWidth: isCompact ? 160 : 220)
+                                .onHover { over in
+                                    withAnimation(.easeInOut(duration: 0.12)) {
+                                        hoveredID = over ? ObjectIdentifier(tab) : nil
+                                    }
                                 }
+                                .background(tabFrameReader(for: tab))
+                                .simultaneousGesture(tabReorderGesture(for: tab))
                             }
-                            .background(tabFrameReader(for: tab))
-                            .simultaneousGesture(tabReorderGesture(for: tab))
+                            
+                            Button {
+                                createNewTab()
+                            } label: {
+                                Image(systemName: "plus")
+                            }
+                            .buttonStyle(.plain)
+                            .foregroundStyle(.primary)
+                            .padding(7)
                         }
+                        .padding(.horizontal, 4)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 0.7)
@@ -360,6 +367,37 @@ struct Tabs: View {
                 : abs(rhsFrame.midY - location.y)
             return lhsDistance < rhsDistance
         }
+    }
+
+    private func promptRenameSpace(at index: Int) {
+        guard windowManager.spaceNames.indices.contains(index) else { return }
+        let currentName = windowManager.spaceNames[index]
+#if canImport(AppKit)
+        let alert = NSAlert()
+        alert.informativeText = "Enter new space name:"
+        alert.addButton(withTitle: "Rename")
+        alert.addButton(withTitle: "Cancel")
+        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
+        input.stringValue = currentName
+        alert.accessoryView = input
+        alert.window.initialFirstResponder = input
+        if alert.runModal() == .alertFirstButtonReturn {
+            let val = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+            windowManager.renameSpace(at: index, to: val)
+        }
+#else
+        SwiftUIPresentationCenter.shared.prompt(
+            "Rename Space",
+            message: "Enter a new space name.",
+            placeholder: currentName,
+            initialText: currentName,
+            primaryTitle: "Rename"
+        ) { value in
+            guard let value else { return }
+            let val = value.trimmingCharacters(in: .whitespacesAndNewlines)
+            windowManager.renameSpace(at: index, to: val)
+        }
+#endif
     }
 }
 
@@ -631,8 +669,7 @@ private struct TabRow: View {
 
             Button("Copy URL") {
                 if let url = state.url?.absoluteString {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url, forType: .string)
+                    PlatformApplication.copy(url)
                 }
             }
             

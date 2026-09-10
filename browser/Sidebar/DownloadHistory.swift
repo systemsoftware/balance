@@ -1,4 +1,7 @@
 import SwiftUI
+#if canImport(UIKit)
+import UIKit
+#endif
 
 struct Download: Codable, Identifiable {
     var id = UUID()
@@ -51,7 +54,7 @@ struct DownloadRow: View {
             }
             .padding(.vertical, 10)
             .padding(.horizontal, 14)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+            .background(Color.platformWindowBackground.opacity(0.5))
             .cornerRadius(12)
             .overlay(
                 RoundedRectangle(cornerRadius: 12)
@@ -153,11 +156,19 @@ struct DownloadsView: View {
         }
 
         guard FileManager.default.fileExists(atPath: url.path) else {
+            #if canImport(AppKit)
             NSSound.beep()
+            #else
+            UINotificationFeedbackGenerator().notificationOccurred(.error)
+            #endif
             return
         }
 
+        #if canImport(AppKit)
         NSWorkspace.shared.activateFileViewerSelecting([url])
+        #else
+        UIApplication.shared.open(url)
+        #endif
     }
 }
 

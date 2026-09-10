@@ -2,15 +2,39 @@ import SwiftUI
 internal import Combine
 import WebKit
 
+#if canImport(AppKit)
+import AppKit
+#elseif canImport(UIKit)
+import UIKit
+#endif
+
+// MARK: - Color <-> Hex
+
 extension Color {
     func toHex() -> String? {
+        let red: Int
+        let green: Int
+        let blue: Int
+
+        #if canImport(AppKit)
         guard let nsColor = NSColor(self).usingColorSpace(.deviceRGB) else { return nil }
-        let red = Int(round(nsColor.redComponent * 255))
-        let green = Int(round(nsColor.greenComponent * 255))
-        let blue = Int(round(nsColor.blueComponent * 255))
+        red = Int(round(nsColor.redComponent * 255))
+        green = Int(round(nsColor.greenComponent * 255))
+        blue = Int(round(nsColor.blueComponent * 255))
+        #else
+        var redF: CGFloat = 0
+        var greenF: CGFloat = 0
+        var blueF: CGFloat = 0
+        var alphaF: CGFloat = 0
+        guard UIColor(self).getRed(&redF, green: &greenF, blue: &blueF, alpha: &alphaF) else { return nil }
+        red = Int(round(redF * 255))
+        green = Int(round(greenF * 255))
+        blue = Int(round(blueF * 255))
+        #endif
+
         return String(format: "#%02X%02X%02X", red, green, blue)
     }
-    
+
     init?(hex: String) {
         var hexSanitized = hex.trimmingCharacters(in: .whitespacesAndNewlines)
         hexSanitized = hexSanitized.replacingOccurrences(of: "#", with: "")
@@ -26,6 +50,8 @@ extension Color {
     }
 }
 
+// MARK: - Boost View
+
 struct BoostView: View {
     @State private var selectedColor = Color.blue
     @State private var isResetting = false
@@ -33,24 +59,24 @@ struct BoostView: View {
     @State private var useCustomFont = false
     @State private var customCSS: String = ""
     @StateObject private var fontManager = FontManager.shared
-    
+
     @Environment(\.dismiss) var dismiss
-    
+
     var browserState: BrowserState
     var profile: String
-    
+
     private var host: String {
         browserState.url?.host ?? "default"
     }
-    
+
     private var settingsKey: String {
         let p = profile.isEmpty ? "default" : profile
         return "boost_\(p)_\(host)"
     }
-    
+
     var body: some View {
         VStack(spacing: 20) {
-            
+
             Text("Restyle Page")
                 .font(.headline)
 
@@ -93,7 +119,7 @@ struct BoostView: View {
                         }
                         .buttonStyle(.bordered)
                         .controlSize(.small)
-                        
+
                         Button("Default") {
                             useCustomFont = false
                         }
@@ -107,15 +133,15 @@ struct BoostView: View {
                         .controlSize(.small)
                     }
                 }
-                
+
                 Divider()
-                
+
                 DisclosureGroup() {
                     TextEditor(text: $customCSS)
                         .font(.system(.body, design: .monospaced))
                         .frame(height: 80)
                         .padding(4)
-                        .background(Color(NSColor.textBackgroundColor))
+                        .background(Color.platformTextBackground)
                         .cornerRadius(8)
                         .overlay(
                             RoundedRectangle(cornerRadius: 8)
@@ -125,9 +151,9 @@ struct BoostView: View {
                     Text("Custom CSS")
                         .font(.subheadline)
                         .foregroundStyle(.primary)
-                    
+
                 }
-                
+
             }
             .padding(16)
             .background(
@@ -135,6 +161,7 @@ struct BoostView: View {
                     .fill(.ultraThinMaterial)
             )
 
+            #if os(macOS)
             VStack(spacing: 12) {
 
                 Text("Preview")
@@ -152,7 +179,8 @@ struct BoostView: View {
                     )
                     .shadow(color: useCustomBackground ? selectedColor.opacity(0.3) : .clear, radius: 12, x: 0, y: 6)
             }
-            
+            #endif
+
             HStack {
                 Button("Apply") {
                     updateWebViewStyle()
@@ -160,7 +188,7 @@ struct BoostView: View {
                     dismiss()
                 }
                 .buttonStyle(.borderedProminent)
-                
+
                 Button("Reset") {
                     resetSettings()
                 }
@@ -197,48 +225,53 @@ struct BoostView: View {
             updateWebViewStyle()
             saveSettings()
         }
+        #if canImport(UIKit) && !canImport(AppKit)
+        .sheet(isPresented: $fontManager.isPickerPresented) {
+            FontPickerView(selectedFontName: $fontManager.selectedFontName)
+        }
+        #endif
     }
-    
+
     private func updateWebViewStyle() {
         guard let webView = browserState.webView else { return }
-        
+
         var css = ""
-        
+
         if useCustomBackground {
             let hexColor = selectedColor.toHex() ?? "#0000FF"
             css += "body { background-color: \(hexColor) !important; }\n"
         }
-        
+
         if useCustomFont {
             let fontName = fontManager.selectedFontName
             css += "* { font-family: \"\(fontName)\", -apple-system, sans-serif !important; }\n"
         }
-        
+
         if !customCSS.isEmpty {
             css += customCSS + "\n"
         }
-        
+
         guard let data = try? JSONEncoder().encode(css),
               let jsCSSString = String(data: data, encoding: .utf8) else { return }
-        
+
         let jsCode = """
         (function() {
             var styleId = 'app-boost-style-override';
             var styleElement = document.getElementById(styleId);
-            
+
             if (!styleElement) {
                 styleElement = document.createElement('style');
                 styleElement.id = styleId;
                 document.head.appendChild(styleElement);
             }
-            
+
             styleElement.textContent = \(jsCSSString);
         })();
         """
-        
+
         webView.evaluateJavaScript(jsCode, completionHandler: nil)
     }
-    
+
     private func loadSettings() {
         if let hex = Config.sharedDefaults?.string(forKey: "\(settingsKey)_color"),
            let color = Color(hex: hex) {
@@ -247,55 +280,55 @@ struct BoostView: View {
         } else {
             useCustomBackground = false
         }
-        
+
         if let font = Config.sharedDefaults?.string(forKey: "\(settingsKey)_font") {
             fontManager.selectedFontName = font
             useCustomFont = true
         } else {
             useCustomFont = false
         }
-        
+
         if let css = Config.sharedDefaults?.string(forKey: "\(settingsKey)_css") {
             customCSS = css
         }
     }
-    
+
     private func saveSettings() {
         if useCustomBackground, let hex = selectedColor.toHex() {
             Config.sharedDefaults?.set(hex, forKey: "\(settingsKey)_color")
         } else {
             Config.sharedDefaults?.removeObject(forKey: "\(settingsKey)_color")
         }
-        
+
         if useCustomFont {
             Config.sharedDefaults?.set(fontManager.selectedFontName, forKey: "\(settingsKey)_font")
         } else {
             Config.sharedDefaults?.removeObject(forKey: "\(settingsKey)_font")
         }
-        
+
         if !customCSS.isEmpty {
             Config.sharedDefaults?.set(customCSS, forKey: "\(settingsKey)_css")
         } else {
             Config.sharedDefaults?.removeObject(forKey: "\(settingsKey)_css")
         }
     }
-    
+
     private func resetSettings() {
         isResetting = true
-        
+
         Config.sharedDefaults?.removeObject(forKey: "\(settingsKey)_color")
         Config.sharedDefaults?.removeObject(forKey: "\(settingsKey)_font")
         Config.sharedDefaults?.removeObject(forKey: "\(settingsKey)_css")
-        
+
         selectedColor = .blue
         fontManager.selectedFontName = "-apple-system"
         useCustomBackground = false
         useCustomFont = false
         customCSS = ""
-        
-        guard let webView = browserState.webView else { 
+
+        guard let webView = browserState.webView else {
             DispatchQueue.main.async { self.isResetting = false }
-            return 
+            return
         }
         let jsCode = """
         (function() {
@@ -306,32 +339,83 @@ struct BoostView: View {
         })();
         """
         webView.evaluateJavaScript(jsCode, completionHandler: nil)
-        
+
         DispatchQueue.main.async {
             self.isResetting = false
         }
     }
 }
 
-class FontManager: NSObject, ObservableObject {
-    @Published var selectedFontName: String = "-apple-system"
-    
+// MARK: - Font Manager
+
+final class FontManager: NSObject, ObservableObject {
     static let shared = FontManager()
 
+    @Published var selectedFontName: String = "-apple-system"
+
+    #if canImport(UIKit) && !canImport(AppKit)
+    @Published var isPickerPresented = false
+    #endif
+
     func openFontPicker() {
+        #if canImport(AppKit)
         let fontManager = NSFontManager.shared
         let fontPanel = NSFontPanel.shared
-        fontPanel.setPanelFont(NSFont(name: "Helvetica", size: 16)!, isMultiple: false)
+        let starterFont = NSFont(name: selectedFontName, size: 16) ?? NSFont(name: "Helvetica", size: 16)!
+        fontPanel.setPanelFont(starterFont, isMultiple: false)
         fontManager.target = self
         fontManager.action = #selector(changeFont(_:))
         fontPanel.orderFront(nil)
+        #elseif canImport(UIKit)
+        isPickerPresented = true
+        #endif
     }
 
+    #if canImport(AppKit)
     @objc func changeFont(_ sender: Any?) {
         let fontManager = NSFontManager.shared
-        let dummyFont = NSFont(name: "Helvetica", size: 16)!
+        let dummyFont = NSFont(name: selectedFontName, size: 16) ?? NSFont(name: "Helvetica", size: 16)!
         let newFont = fontManager.convert(dummyFont)
-        
+
         self.selectedFontName = newFont.familyName ?? newFont.fontName
     }
+    #endif
 }
+
+// MARK: - iOS Font Picker
+
+#if canImport(UIKit) && !canImport(AppKit)
+private struct FontPickerView: UIViewControllerRepresentable {
+    @Binding var selectedFontName: String
+    @Environment(\.dismiss) private var dismiss
+
+    func makeCoordinator() -> Coordinator {
+        Coordinator(self)
+    }
+
+    func makeUIViewController(context: Context) -> UIFontPickerViewController {
+        let picker = UIFontPickerViewController()
+        picker.delegate = context.coordinator
+        return picker
+    }
+
+    func updateUIViewController(_ uiViewController: UIFontPickerViewController, context: Context) {}
+
+    final class Coordinator: NSObject, UIFontPickerViewControllerDelegate {
+        let parent: FontPickerView
+        init(_ parent: FontPickerView) { self.parent = parent }
+
+        func fontPickerViewControllerDidPickFont(_ viewController: UIFontPickerViewController) {
+            if let descriptor = viewController.selectedFontDescriptor {
+                let familyName = descriptor.object(forKey: .family) as? String
+                parent.selectedFontName = familyName ?? UIFont(descriptor: descriptor, size: 16).familyName
+            }
+            parent.dismiss()
+        }
+
+        func fontPickerViewControllerDidCancel(_ viewController: UIFontPickerViewController) {
+            parent.dismiss()
+        }
+    }
+}
+#endif

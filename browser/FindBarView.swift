@@ -80,7 +80,7 @@ struct FindBarView: View {
     private func dismissFindBar() {
         // The native search field may still be AppKit's first responder. Removing
         // its hosting view synchronously can corrupt the key-view loop.
-        NSApp.keyWindow?.makeFirstResponder(nil)
+        PlatformApplication.dismissKeyboard()
         Task { @MainActor in
             await Task.yield()
             state.findQuery = ""

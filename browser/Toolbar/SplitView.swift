@@ -4,26 +4,15 @@ import SwiftUI
 struct SplitViewToolbarButton: View {
     @Binding var splitURL: String
     @ObservedObject var splitState: BrowserState
+    @State private var isEditingURL = false
+    @State private var draftURL = ""
     
     var body: some View {
         Menu() {
             if(splitURL.isEmpty) {
                 Button() {
-                    let alert = NSAlert()
-                    alert.informativeText = "Enter split view URL:"
-                    alert.addButton(withTitle: "Go")
-                    alert.addButton(withTitle: "Cancel")
-                    
-                    let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                    input.placeholderString = "https://example.com"
-                    alert.accessoryView = input
-                    alert.window.initialFirstResponder = input
-                    
-                    if alert.runModal() == .alertFirstButtonReturn {
-                        
-                        splitURL = input.stringValue
-                        
-                    }
+                    draftURL = ""
+                    isEditingURL = true
                 } label: {
                     Label("Open", systemImage: "plus")
                 }
@@ -38,23 +27,8 @@ struct SplitViewToolbarButton: View {
                 Divider()
                 
                 Button() {
-                    splitURL = ""
-                    
-                    let alert = NSAlert()
-                    alert.informativeText = "Enter split view URL:"
-                    alert.addButton(withTitle: "Go")
-                    alert.addButton(withTitle: "Cancel")
-                    
-                    let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                    input.placeholderString = "https://example.com"
-                    alert.accessoryView = input
-                    alert.window.initialFirstResponder = input
-                    
-                    if alert.runModal() == .alertFirstButtonReturn {
-                        splitURL = input.stringValue
-                        
-                    }
-                    
+                    draftURL = splitURL
+                    isEditingURL = true
                 } label: {
                     Label("Change", systemImage: "link.badge.plus")
                 }
@@ -81,5 +55,15 @@ struct SplitViewToolbarButton: View {
         }
         .frame(width: 40, height: 40)
         .buttonStyle(.plain)
+        .alert("Split View URL", isPresented: $isEditingURL) {
+            TextField("https://example.com", text: $draftURL)
+            Button("Cancel", role: .cancel) {}
+            Button("Go") {
+                splitURL = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
+            }
+            .disabled(draftURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("Enter the URL to show beside the current page.")
+        }
     }
 }

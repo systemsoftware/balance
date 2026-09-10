@@ -4,6 +4,9 @@ import Security
 import CommonCrypto
 import SwiftData
 internal import Combine
+#if canImport(AppKit)
+import AppKit
+#endif
 
 // MARK: - Browser Import Types
 
@@ -36,7 +39,7 @@ enum ImportBrowser: String, CaseIterable, Identifiable {
         if let pw = getpwuid(getuid()), let dir = pw.pointee.pw_dir {
             home = String(cString: dir)
         } else {
-            home = FileManager.default.homeDirectoryForCurrentUser.path
+            home = NSHomeDirectory()
         }
 
         print("PROFILE PATH SELF:", self)
@@ -77,7 +80,11 @@ enum ImportBrowser: String, CaseIterable, Identifiable {
     /// Launch Services lookups aren't gated the same way, so this works
     /// pre-grant.
     var isInstalled: Bool {
+        #if canImport(AppKit)
         NSWorkspace.shared.urlForApplication(withBundleIdentifier: bundleIdentifier) != nil
+        #else
+        false
+        #endif
     }
     
     var keychainService: String {
@@ -586,10 +593,14 @@ struct SetupView: View {
             .animation(.spring(response: 0.4, dampingFraction: 0.85), value: currentStep)
         }
         .frame(width: 640, height: 540)
+        #if canImport(AppKit)
         .background(
             VisualEffectView(material: .sidebar, blendingMode: .behindWindow)
                 .ignoresSafeArea()
         )
+        #else
+        .background(.regularMaterial)
+        #endif
     }
     
     // MARK: - Step Indicator
@@ -611,7 +622,7 @@ struct SetupView: View {
                 Circle()
                     .fill(index <= currentStep
                           ? Color.accentColor.opacity(0.15)
-                          : Color(NSColor.controlBackgroundColor).opacity(0.5))
+                          : Color.platformControlBackground.opacity(0.5))
                     .frame(width: 36, height: 36)
                 
                 if index < currentStep {
@@ -633,7 +644,7 @@ struct SetupView: View {
     
     private func stepConnector(after index: Int) -> some View {
         Rectangle()
-            .fill(index < currentStep ? Color.accentColor.opacity(0.4) : Color(NSColor.separatorColor).opacity(0.3))
+            .fill(index < currentStep ? Color.accentColor.opacity(0.4) : Color.platformSeparator.opacity(0.3))
             .frame(height: 2)
             .frame(maxWidth: 60)
             .offset(y: -10)
@@ -645,10 +656,7 @@ struct SetupView: View {
         VStack(spacing: 24) {
             Spacer()
             
-            Image(nsImage: NSApp.applicationIconImage)
-                .resizable()
-                .frame(width: 100, height: 100)
-                .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+            setupIcon
             
             VStack(spacing: 8) {
                 Text("Welcome to Balance")
@@ -678,6 +686,18 @@ struct SetupView: View {
             .controlSize(.large)
             .padding(.bottom, 32)
         }
+    }
+
+    @ViewBuilder
+    private var setupIcon: some View {
+        #if canImport(AppKit)
+        Image(nsImage: NSApp.applicationIconImage)
+            .resizable()
+            .frame(width: 100, height: 100)
+            .shadow(color: .black.opacity(0.15), radius: 12, y: 6)
+        #else
+        EmptyView()
+        #endif
     }
     
     // MARK: - Step 2: Import
@@ -802,7 +822,7 @@ struct SetupView: View {
         .padding(.vertical, 12)
         .background(
             RoundedRectangle(cornerRadius: 12)
-                .fill(Color(NSColor.controlBackgroundColor).opacity(0.5))
+                .fill(Color.platformControlBackground.opacity(0.5))
         )
         .overlay(
             RoundedRectangle(cornerRadius: 12)
@@ -859,6 +879,7 @@ struct SetupView: View {
 
 // MARK: - Visual Effect View (for window background)
 
+#if canImport(AppKit)
 struct VisualEffectView: NSViewRepresentable {
     let material: NSVisualEffectView.Material
     let blendingMode: NSVisualEffectView.BlendingMode
@@ -937,3 +958,10 @@ class SetupWindowManager {
         hiddenWindows = []
     }
 }
+#else
+class SetupWindowManager {
+    static let shared = SetupWindowManager()
+    func showSetupWindow() {}
+    func dismissSetupWindow() {}
+}
+#endif

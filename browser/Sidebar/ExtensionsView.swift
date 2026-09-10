@@ -11,6 +11,9 @@ struct ExtensionsView: View {
     
     @State private var errorMessage: String?
     @State private var isInstalling: Bool = false
+    @State private var isChoosingFile = false
+    @State private var isEnteringURL = false
+    @State private var draftURL = ""
     
     var isSettings = false
     
@@ -122,49 +125,51 @@ struct ExtensionsView: View {
         }
         .padding(.vertical)
         .frame(maxWidth: isSettings ? .infinity : CGFloat(sidebarWidth))
+        .fileImporter(isPresented: $isChoosingFile, allowedContentTypes: [.data]) { result in
+            if case .success(let url) = result { installFile(at: url) }
+            if case .failure(let error) = result { errorMessage = error.localizedDescription }
+        }
+        .alert("Install Extension from URL", isPresented: $isEnteringURL) {
+            TextField("https://example.com/extension.crx", text: $draftURL)
+            Button("Cancel", role: .cancel) {}
+            Button("Install") { installFromURL(draftURL) }
+        } message: {
+            Text("Enter the URL of a .crx extension file.")
+        }
     }
     
     // MARK: - Actions
     
     private func installFromFile() {
-        let panel = NSOpenPanel()
-        panel.title = "Choose a .crx Extension"
-        panel.allowedContentTypes = [.data]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        
-        if panel.runModal() == .OK, let url = panel.url {
+        isChoosingFile = true
+    }
+
+    private func installFile(at url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
             isInstalling = true
             errorMessage = nil
             Task {
                 do {
                     try await CRXInstaller.install(from: url)
+                    if scoped { url.stopAccessingSecurityScopedResource() }
                     await MainActor.run { isInstalling = false }
                 } catch {
                     await MainActor.run {
                         errorMessage = error.localizedDescription
                         isInstalling = false
+                        if scoped { url.stopAccessingSecurityScopedResource() }
                     }
                 }
             }
-        }
     }
     
     private func installFromURL() {
-        let alert = NSAlert()
-        alert.messageText = "Install Extension from URL"
-        alert.informativeText = "Enter the URL of a .crx extension file:"
-        alert.addButton(withTitle: "Install")
-        alert.addButton(withTitle: "Cancel")
-        
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        input.placeholderString = "https://example.com/extension.crx"
-        alert.accessoryView = input
-        alert.window.initialFirstResponder = input
-        
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        
-        let urlString = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
+        draftURL = ""
+        isEnteringURL = true
+    }
+
+    private func installFromURL(_ value: String) {
+        let urlString = value.trimmingCharacters(in: .whitespacesAndNewlines)
         guard let url = URL(string: urlString), !urlString.isEmpty else {
             errorMessage = "Invalid URL"
             return
@@ -335,7 +340,7 @@ struct ExtensionRow: View {
                     .frame(width: 36, height: 36)
                 
                 if let icon = context.webExtension.icon(for: CGSize(width:20,height: 20)) {
-                    Image(nsImage: icon)
+                    Image(universalImage: icon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 20, height: 20)
@@ -394,7 +399,7 @@ struct ExtensionRow: View {
             }
         }
         .padding()
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .background(Color.platformWindowBackground.opacity(0.5))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)

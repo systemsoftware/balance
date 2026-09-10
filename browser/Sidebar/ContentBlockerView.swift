@@ -9,6 +9,9 @@ struct ContentBlockerView: View {
     @State private var errorMessage: String?
     @State private var isInstalling: Bool = false
     @State private var contentBlockers: [URL] = []
+    @State private var isChoosingFile = false
+    @State private var isEnteringURL = false
+    @State private var draftURL = ""
     
     var isSettings = false
     
@@ -86,7 +89,7 @@ struct ContentBlockerView: View {
                                 .padding(.vertical, 10)
                                 .background(
                                     RoundedRectangle(cornerRadius: 10)
-                                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
+                                        .fill(Color.platformControlBackground.opacity(0.4))
                                 )
                                 .overlay(
                                     RoundedRectangle(cornerRadius: 10)
@@ -125,6 +128,17 @@ struct ContentBlockerView: View {
         .onAppear {
             loadContentBlockers()
         }
+        .fileImporter(isPresented: $isChoosingFile, allowedContentTypes: [.json]) { result in
+            if case .success(let url) = result { installFile(at: url) }
+            if case .failure(let error) = result { errorMessage = error.localizedDescription }
+        }
+        .alert("Add Content Blocker from URL", isPresented: $isEnteringURL) {
+            TextField("https://example.com/rules.json", text: $draftURL)
+            Button("Cancel", role: .cancel) {}
+            Button("Add") { installFromURL(urlStr: draftURL, filename: "") }
+        } message: {
+            Text("Enter the URL of a .json rule list.")
+        }
     }
     
     // MARK: - Actions
@@ -155,13 +169,12 @@ struct ContentBlockerView: View {
     }
     
     private func installFromFile() {
-        let panel = NSOpenPanel()
-        panel.title = "Choose a .json Content Blocker Rule List"
-        panel.allowedContentTypes = [.json]
-        panel.allowsMultipleSelection = false
-        panel.canChooseDirectories = false
-        
-        if panel.runModal() == .OK, let url = panel.url {
+        isChoosingFile = true
+    }
+
+    private func installFile(at url: URL) {
+        let scoped = url.startAccessingSecurityScopedResource()
+        defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             isInstalling = true
             errorMessage = nil
             
@@ -184,7 +197,6 @@ struct ContentBlockerView: View {
                 errorMessage = error.localizedDescription
                 isInstalling = false
             }
-        }
     }
     
     private func installFromURL(urlStr: String, filename: String) {
@@ -192,21 +204,9 @@ struct ContentBlockerView: View {
         var urlString = ""
         
         if(urlStr.isEmpty) {
-            let alert = NSAlert()
-            alert.messageText = "Add Content Blocker from URL"
-            alert.informativeText = "Enter the URL of a .json rule list:"
-            alert.addButton(withTitle: "Add")
-            alert.addButton(withTitle: "Cancel")
-            
-            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-            input.placeholderString = "https://example.com/rules.json"
-            alert.accessoryView = input
-            alert.window.initialFirstResponder = input
-            
-            guard alert.runModal() == .alertFirstButtonReturn else { return }
-            
-            urlString = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            
+            draftURL = ""
+            isEnteringURL = true
+            return
         } else {
             urlString = urlStr
         }

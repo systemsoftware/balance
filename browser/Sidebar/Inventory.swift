@@ -1,7 +1,9 @@
-import AppKit
 import ImageIO
 import SwiftUI
 import WebKit
+#if canImport(UIKit)
+import UIKit
+#endif
 import SwiftData
 
 internal import UniformTypeIdentifiers
@@ -159,7 +161,7 @@ struct InventorySidebar: View {
         .padding(10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(Color.platformControlBackground)
         )
         .onDrag {
             dragProvider(for: item)
@@ -178,10 +180,10 @@ struct InventorySidebar: View {
             if item.url.scheme == "http" || item.url.scheme == "https" {
                 createNewTab(with: item.url)
             } else {
-                NSWorkspace.shared.open(item.url)
+                PlatformApplication.open(item.url)
             }
         } else {
-            NSWorkspace.shared.open(item.url)
+            PlatformApplication.open(item.url)
         }
     }
 
@@ -190,24 +192,28 @@ struct InventorySidebar: View {
     }
 
     private func copy(_ item: InventoryItem) {
-        let pasteboard = NSPasteboard.general
-        pasteboard.clearContents()
-
         if item.isRemoteLink {
-            pasteboard.setString(item.url.absoluteString, forType: .string)
+            PlatformApplication.copy(item.url.absoluteString)
             return
         }
+
+        #if canImport(AppKit)
+        let pasteboard = NSPasteboard.general
+        pasteboard.clearContents()
 
         guard item.mime.lowercased().contains("image") else { return }
 
         let url = item.url
         Task {
-            let image = await Task.detached(priority: .userInitiated) {
-                NSImage(contentsOf: url)
-            }.value
+            let image = UniversalImage.load(contentsOf: url)
             guard let image else { return }
             pasteboard.writeObjects([image])
         }
+        #else
+        guard item.mime.lowercased().contains("image"),
+              let image = UniversalImage.load(contentsOf: item.url) else { return }
+        UIPasteboard.general.image = image
+        #endif
     }
 
     private func iconName(for item: InventoryItem) -> String {
@@ -261,11 +267,11 @@ struct InventorySidebar: View {
                 continue
             }
 
-            if provider.canLoadObject(ofClass: NSImage.self) {
-                provider.loadObject(ofClass: NSImage.self) { object, error in
+            if provider.canLoadObject(ofClass: UniversalImage.self) {
+                provider.loadObject(ofClass: UniversalImage.self) { object, error in
                     guard
                         error == nil,
-                        let image = object as? NSImage
+                        let image = object as? UniversalImage
                     else { return }
 
                     Task { @MainActor in
@@ -432,17 +438,8 @@ struct InventorySidebar: View {
     }
 
     @MainActor
-    private func saveImage(_ image: NSImage) {
-        guard
-            let tiff = image.tiffRepresentation,
-            let bitmap = NSBitmapImageRep(data: tiff),
-            let data = bitmap.representation(
-                using: .png,
-                properties: [:]
-            )
-        else {
-            return
-        }
+    private func saveImage(_ image: UniversalImage) {
+        guard let data = image.pngData else { return }
 
         let url = inventoryDirectory
             .appendingPathComponent(UUID().uuidString)
@@ -512,13 +509,13 @@ struct InventorySidebar: View {
 
 private struct InventoryThumbnail: View {
     let url: URL
-    @State private var image: NSImage?
+    @State private var image: UniversalImage?
     @State private var failed = false
 
     var body: some View {
         Group {
             if let image {
-                Image(nsImage: image)
+                Image(universalImage: image)
                     .resizable()
                     .scaledToFit()
             } else if failed {
@@ -540,7 +537,7 @@ private struct InventoryThumbnail: View {
         }
     }
 
-    nonisolated private static func loadThumbnail(at url: URL) -> NSImage? {
+    nonisolated private static func loadThumbnail(at url: URL) -> UniversalImage? {
         guard let source = CGImageSourceCreateWithURL(url as CFURL, nil) else { return nil }
         let options: [CFString: Any] = [
             kCGImageSourceCreateThumbnailFromImageAlways: true,
@@ -551,6 +548,10 @@ private struct InventoryThumbnail: View {
         guard let image = CGImageSourceCreateThumbnailAtIndex(source, 0, options as CFDictionary) else {
             return nil
         }
+        #if canImport(UIKit)
+        return UIImage(cgImage: image)
+        #else
         return NSImage(cgImage: image, size: .zero)
+        #endif
     }
 }

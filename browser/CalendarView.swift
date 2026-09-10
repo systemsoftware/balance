@@ -102,7 +102,7 @@ struct FullCalendarView: View {
         }
         .padding()
         .frame(minWidth: 300, minHeight: 320)
-        .background(Color(nsColor: .windowBackgroundColor))
+   //     .background(Color(nsColor: .windowBackgroundColor))
         .clipShape(RoundedRectangle(cornerRadius: 12))
     }
     
@@ -137,7 +137,7 @@ struct DayCell: View {
         } else if isToday {
             Color.accentColor.opacity(0.15)
         } else {
-            Color(nsColor: .controlBackgroundColor)
+    //        Color(nsColor: .controlBackgroundColor)
         }
     }
     

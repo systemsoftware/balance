@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import AppKit
 internal import Combine
 
 final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
@@ -231,7 +230,7 @@ final class WindowManager: ObservableObject {
         // its SwiftUI hierarchy becomes transparent. Resign it before changing
         // the active tab so keyboard input cannot be trapped in a hidden field.
         if !openInBackground {
-            tabWindow(for: window)?.makeFirstResponder(nil)
+            PlatformApplication.dismissKeyboard()
         }
         window.tabs.append(tab)
         if !openInBackground {
@@ -244,7 +243,7 @@ final class WindowManager: ObservableObject {
     func selectTab(_ tabID: String) {
         guard let window = browserWindows.first(where: { $0.tabs.contains(where: { $0.id == tabID }) }) else { return }
         guard window.activeTabID != tabID || activeWindowID != window.id else { return }
-        tabWindow(for: window)?.makeFirstResponder(nil)
+        PlatformApplication.dismissKeyboard()
         window.activeTabID = tabID
         let wasNotActive = activeWindowID != window.id
         activeWindowID = window.id
@@ -265,7 +264,7 @@ final class WindowManager: ObservableObject {
         // still exists. AppKit can then repair the key-view loop before SwiftUI
         // removes the active tab's hosting views.
         if window.activeTabID == tabID {
-            tabWindow(for: window)?.makeFirstResponder(nil)
+            PlatformApplication.dismissKeyboard()
         }
 
         // Determine next active tab BEFORE removing the current one to prevent SwiftUI from rendering a gray window
@@ -314,7 +313,7 @@ final class WindowManager: ObservableObject {
 
     func closeWindow(_ windowID: String) {
         guard let index = browserWindows.firstIndex(where: { $0.id == windowID }) else { return }
-        tabWindow(for: browserWindows[index])?.makeFirstResponder(nil)
+        PlatformApplication.dismissKeyboard()
         let window = browserWindows.remove(at: index)
         for tab in window.tabs {
             if !tab.isPrivate, let state = TabRegistry.shared.states[tab.id] {
@@ -421,6 +420,7 @@ final class WindowManager: ObservableObject {
         WebExtensionManager.shared.activeTab = activeState?.isPrivateBrowsing == true ? nil : activeState
     }
 
+    #if canImport(AppKit)
     private func tabWindow(for window: BrowserWindowModel) -> NSWindow? {
         for tab in window.tabs {
             if let nsWindow = tab.browserState.webView?.window {
@@ -429,6 +429,7 @@ final class WindowManager: ObservableObject {
         }
         return NSApp.keyWindow
     }
+    #endif
 
     private func scheduleCleanup(for tab: BrowserTabModel) {
         pendingTabCleanup[tab.id] = tab
@@ -459,7 +460,7 @@ final class WindowManager: ObservableObject {
 struct BrowserWindowHost: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.controlActiveState) private var controlActiveState
+    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var windowManager: WindowManager
     let windowID: String
 
@@ -469,7 +470,7 @@ struct BrowserWindowHost: View {
                 BrowserWindowContent(window: window)
             } else {
                 ProgressView()
-                    .frame(width: 800, height: 800)
+                    .frame(maxWidth: .infinity, maxHeight: .infinity)
                     .onAppear {
                         windowManager.bindOrCreateWindow(for: windowID)
                     }
@@ -491,8 +492,8 @@ struct BrowserWindowHost: View {
                     dismiss()
                 }
             }
-            .onChange(of: controlActiveState) { _, newState in
-                if newState == .key {
+            .onChange(of: scenePhase) { _, newState in
+                if newState == .active {
                     windowManager.activeWindowID = windowID
                 }
             }
@@ -500,6 +501,7 @@ struct BrowserWindowHost: View {
 }
 
 
+#if canImport(AppKit)
 private struct WindowCloseObserver: NSViewRepresentable {
     let onClose: () -> Void
 
@@ -560,6 +562,12 @@ private struct WindowCloseObserver: NSViewRepresentable {
         }
     }
 }
+#else
+private struct WindowCloseObserver: View {
+    let onClose: () -> Void
+    var body: some View { Color.clear }
+}
+#endif
 
 private struct BrowserWindowContent: View {
     @ObservedObject var window: BrowserWindowModel
@@ -582,7 +590,9 @@ private struct BrowserWindowContent: View {
                 ActiveTabTitleObserver(state: activeTab.browserState)
             }
         }
+#if canImport(AppKit)
         .frame(minWidth: 640, minHeight: 480)
+#endif
     }
 }
 

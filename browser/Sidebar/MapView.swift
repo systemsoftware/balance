@@ -94,7 +94,7 @@ struct MapView: View {
                             .padding(.trailing, 8)
                         }
                         .padding(4)
-                        .background(Color(NSColor.windowBackgroundColor))
+                        .background(Color.platformWindowBackground)
                         .clipShape(Capsule())
                         .overlay(
                             Capsule().stroke(Color.primary.opacity(0.1), lineWidth: 1)
@@ -104,7 +104,7 @@ struct MapView: View {
                             .resizable()
                             .frame(width: 14, height: 7)
                             .rotationEffect(.degrees(180))
-                            .foregroundColor(Color(NSColor.windowBackgroundColor))
+                            .foregroundColor(Color.platformWindowBackground)
                     }
                     .compositingGroup()
                     .shadow(color: Color.black.opacity(0.15), radius: 8, x: 0, y: 4)
@@ -238,7 +238,7 @@ struct MapView: View {
             .padding()
         }
         .onChange(of: selectedResult) { old, new in
-            NSApp.keyWindow?.makeFirstResponder(nil)
+            PlatformApplication.dismissKeyboard()
             completerManager.completerResults = []
             
             if let selected = new {

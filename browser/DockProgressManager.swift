@@ -1,5 +1,7 @@
-import Cocoa
 import WebKit
+
+#if canImport(AppKit)
+import AppKit
 
 class DockProgressManager {
     static let shared = DockProgressManager()
@@ -81,3 +83,13 @@ class DockProgressManager {
         NSApp.dockTile.display()
     }
 }
+#else
+/// iOS has no Dock tile. Keep download call sites platform-neutral while the
+/// in-app Downloads UI continues to report progress.
+final class DockProgressManager {
+    static let shared = DockProgressManager()
+    private init() {}
+    func add(download: WKDownload) {}
+    func remove(download: WKDownload) {}
+}
+#endif

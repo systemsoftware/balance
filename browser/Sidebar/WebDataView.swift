@@ -118,12 +118,15 @@ struct WebDataView: View {
                         .frame(maxWidth:.infinity)
                 }
                 .foregroundStyle(.red)
+                .buttonStyle(.bordered)
+
                 Button(role:.cancel) {
                     confirmDeleteEverything = false
                 } label: {
                     Text("Cancel")
                         .frame(maxWidth:.infinity)
                 }
+                .buttonStyle(.bordered)
             }
             .padding()
         }
@@ -157,6 +160,7 @@ struct WebDataView: View {
                             Text("Delete")
                         }
                         .foregroundStyle(type.contains("Cache") ? .yellow : .red)
+                        .buttonStyle(.bordered)
                     }
                 }
                 
@@ -177,6 +181,7 @@ struct WebDataView: View {
                     Text("Delete Cache")
                         .frame(maxWidth: .infinity)
                 }
+                .buttonStyle(.bordered)
                 .foregroundStyle(.yellow)
 
                 Button {
@@ -195,6 +200,7 @@ struct WebDataView: View {
                         .frame(maxWidth:.infinity)
                 }
             }
+            .buttonStyle(.bordered)
             .padding(20)
             .presentationSizing(.fitted)
         }
@@ -396,7 +402,7 @@ struct WebDataRow: View {
                 .buttonStyle(.borderedProminent)
             }
             .padding()
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformControlBackground.opacity(0.5)))
         }
         .popover(isPresented: $showPopover) {
             VStack(alignment: .leading, spacing: 12) {
@@ -430,6 +436,8 @@ struct WebDataRow: View {
                         } label: {
                             Text("Delete")
                         }
+                        .buttonStyle(.bordered)
+
                     }
                 }
                 Button(role: .destructive) {
@@ -445,11 +453,12 @@ struct WebDataRow: View {
                         .frame(maxWidth:.infinity)
                 }
             }
+            .buttonStyle(.bordered)
             .padding()
             .frame(minWidth: 280)
         }
         .buttonStyle(.plain)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .background(Color.platformWindowBackground.opacity(0.5))
         .cornerRadius(12)
         .task {
             forgetManager.load()

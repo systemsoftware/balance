@@ -67,7 +67,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var progress: Double = 0.0
     @Published var canGoBack: Bool = false
     @Published var canGoForward: Bool = false
-    @Published var favicon: NSImage?
+    @Published var favicon: UniversalImage?
     var preloadedWebView: WKWebView?
     @Published var isFindBarVisible: Bool = false
     @Published var findQuery: String = ""
@@ -197,14 +197,14 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     }
 
     @MainActor
-    func getBackground() async -> NSColor {
+    func getBackground() async -> UniversalColor {
         do {
             let result = try await webView?.evaluateJavaScript("window.getComputedStyle(document.body).backgroundColor")
             guard let rgbString = result as? String,
-                  let nsColor = NSColor.from(rgbString: rgbString) else {
+                  let nsColor = UniversalColor.from(rgbString: rgbString) else {
                 return .gray
             }
-            return nsColor.alphaComponent == 0 ? NSColor.white : nsColor
+            return nsColor.isTransparent ? .white : nsColor
         } catch {
             return .gray
         }
@@ -286,6 +286,20 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
 // MARK: - Browser Window
 
 final class BrowserWindow: NSObject, WKWebExtensionWindow {
+#if canImport(UIKit)
+    private var activeWindow: UIWindow? {
+        let windowScenes = UIApplication.shared.connectedScenes
+            .compactMap { $0 as? UIWindowScene }
+
+        return windowScenes
+            .flatMap(\.windows)
+            .first(where: \.isKeyWindow)
+            ?? windowScenes
+                .first(where: { $0.activationState == .foregroundActive })?
+                .windows.first
+    }
+#endif
+
     func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] {
         WebExtensionManager.shared.allTabs.filter { !$0.isPrivateBrowsing }
     }
@@ -300,16 +314,26 @@ final class BrowserWindow: NSObject, WKWebExtensionWindow {
     func isPrivate(for context: WKWebExtensionContext) -> Bool { false }
     
     func screenFrame(for context: WKWebExtensionContext) -> CGRect {
+#if canImport(AppKit)
         NSScreen.main?.frame ?? .zero
+#else
+        activeWindow?.windowScene?.screen.bounds ?? .zero
+#endif
     }
     
     func frame(for context: WKWebExtensionContext) -> CGRect {
+#if canImport(AppKit)
         NSApp.mainWindow?.frame ?? .zero
+#else
+        activeWindow?.frame ?? .zero
+#endif
     }
     
     func setFrame(_ frame: CGRect, for context: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) { completionHandler(nil) }
     func focus(for context: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {
+#if canImport(AppKit)
         NSApp.mainWindow?.makeKeyAndOrderFront(nil)
+#endif
         completionHandler(nil)
     }
     func close(for context: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) { completionHandler(nil) }
@@ -581,6 +605,7 @@ final class BrowserWKWebView: WKWebView {
     
     deinit { print("🗑️ BrowserWKWebView deinit") }
 
+    #if canImport(AppKit)
     override func willOpenMenu(_ menu: NSMenu, with event: NSEvent) {
             print("custom menu is finally firing!")
         
@@ -696,6 +721,7 @@ final class BrowserWKWebView: WKWebView {
             }
         }
     }
+    #endif
         
     @objc func goBackAction() { goBack() }
     @objc func goForwardAction() { goForward() }
@@ -718,7 +744,7 @@ enum BrowserErrorKind {
 }
 
 
-struct BrowserWebView: NSViewRepresentable {
+struct BrowserWebView: PlatformViewRepresentable {
     static let internalContentWorld = WKContentWorld.world(name: "BalanceInternal")
     static let pageScriptMessageHandlerNames = [
         "notificationRequestPermission", "notificationShow", "balanceLocation",
@@ -769,7 +795,7 @@ struct BrowserWebView: NSViewRepresentable {
         return Coordinator(state: state, profile: profile, isPrivate: priv)
     }
 
-    func makeNSView(context: Context) -> WKWebView {
+    private func makeWebView(context: Context) -> WKWebView {
         if let webView = state.webView,
            webView.navigationDelegate === context.coordinator {
             return webView
@@ -1073,7 +1099,8 @@ struct BrowserWebView: NSViewRepresentable {
         return webView
     }
 
-    func updateNSView(_ nsView: WKWebView, context: Context) {
+    private func updateWebView(_ webView: WKWebView, context: Context) {
+        let nsView = webView
         let host = nsView.url?.host ?? request.url?.host ?? "default"
         
         let siteZoom = SitePermissionStore.shared.zoomLevel(for: host)
@@ -1132,7 +1159,7 @@ struct BrowserWebView: NSViewRepresentable {
         }
     }
 
-    static func dismantleNSView(_ nsView: WKWebView, coordinator: Coordinator) {
+    private static func dismantleWebView(_ nsView: WKWebView, coordinator: Coordinator) {
         let state = coordinator.state
         guard !state.hasCleanedUp else { return }
 
@@ -1141,6 +1168,20 @@ struct BrowserWebView: NSViewRepresentable {
             state.webView = nsView
         }
     }
+
+    #if canImport(AppKit)
+    func makeNSView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateNSView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    static func dismantleNSView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantleWebView(webView, coordinator: coordinator)
+    }
+    #else
+    func makeUIView(context: Context) -> WKWebView { makeWebView(context: context) }
+    func updateUIView(_ webView: WKWebView, context: Context) { updateWebView(webView, context: context) }
+    static func dismantleUIView(_ webView: WKWebView, coordinator: Coordinator) {
+        dismantleWebView(webView, coordinator: coordinator)
+    }
+    #endif
 
     static let scriptMessageHandlerNames = pageScriptMessageHandlerNames + internalScriptMessageHandlerNames
 
@@ -1231,7 +1272,9 @@ struct BrowserWebView: NSViewRepresentable {
         var lastFailedURL: URL?
         var contentBlockersEnabled: Bool?
         let profile: String
+        #if canImport(AppKit)
         var activeShareDelegates: [NSSharingServicePicker: WebShareDelegate] = [:]
+        #endif
 
         func syncNotificationPermission(in webView: WKWebView) {
             guard let host = webView.url?.host else { return }
@@ -1322,12 +1365,13 @@ struct BrowserWebView: NSViewRepresentable {
                     let host = (message.frameInfo.securityOrigin.host.isEmpty ? webView.url?.host : message.frameInfo.securityOrigin.host)?.lowercased() ?? "default"
                     
                     let zoom = webView.pageZoom
-                    let rect = NSRect(x: x * zoom, y: y * zoom, width: width * zoom, height: height * zoom)
+                    let rect = CGRect(x: x * zoom, y: y * zoom, width: width * zoom, height: height * zoom)
                     let credentials = (hasPassword || isPasswordField) ? PasswordManager.shared.credentials(for: host) : []
                     let autofillItems = AutoFillStore.getMatching(type: inputType, label: inputLabel.isEmpty ? nil : inputLabel)
                     
-                    // Show popover only when we have matching credentials or matching autofill items
-                    guard !credentials.isEmpty || !autofillItems.isEmpty else {
+                    // Password fields must still offer "Save Current Password"
+                    // when this site has no credentials yet.
+                    guard hasPassword || isPasswordField || !credentials.isEmpty || !autofillItems.isEmpty else {
                         return
                     }
                     
@@ -1421,12 +1465,18 @@ struct BrowserWebView: NSViewRepresentable {
                         
                         let currentState = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
                         if currentState == .ask {
+#if canImport(AppKit)
                             let alert = NSAlert()
                             alert.messageText = "Allow \"\(host)\" to show notifications?"
                             alert.addButton(withTitle: "Allow")
                             alert.addButton(withTitle: "Deny")
                             let result = alert.runModal()
                             handleResult(result == .alertFirstButtonReturn ? .allow : .deny)
+#else
+                            SwiftUIPresentationCenter.shared.confirm("Allow \"\(host)\" to show notifications?") {
+                                handleResult($0 ? .allow : .deny)
+                            }
+#endif
                         } else {
                             handleResult(currentState)
                         }
@@ -1456,6 +1506,7 @@ struct BrowserWebView: NSViewRepresentable {
                     }
                 }
             } else if message.name == "printPage" {
+                #if canImport(AppKit)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     guard let webView = self.state.webView ?? (message.webView as? BrowserWKWebView) ?? message.webView else { return }
@@ -1475,7 +1526,11 @@ struct BrowserWebView: NSViewRepresentable {
                         operation.run()
                     }
                 }
+                #else
+                state.webView?.evaluateJavaScript("window.print()")
+                #endif
             } else if message.name == "webShare", let dict = message.body as? [String: Any], let id = dict["id"] as? String {
+                #if canImport(AppKit)
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
                     guard let webView = self.state.webView ?? (message.webView as? BrowserWKWebView) ?? message.webView else { return }
@@ -1509,6 +1564,9 @@ struct BrowserWebView: NSViewRepresentable {
                     let targetRect = NSRect(x: bounds.midX, y: bounds.midY, width: 1, height: 1)
                     picker.show(relativeTo: targetRect, of: webView, preferredEdge: .minY)
                 }
+                #else
+                state.webView?.evaluateJavaScript("if (window['__balanceShareCallback_\(id)']) { window['__balanceShareCallback_\(id)'](false, 'Use the Share menu'); }")
+                #endif
             } else if message.name == "balancePermissionsQuery", let dict = message.body as? [String: Any], let id = dict["id"] as? String, let name = dict["name"] as? String {
                 DispatchQueue.main.async { [weak self] in
                     guard let self = self else { return }
@@ -1685,6 +1743,7 @@ struct BrowserWebView: NSViewRepresentable {
                 if let scheme = url.scheme?.lowercased(),
                    !["http", "https", "file", "about", "data", "blob", "webkit-extension", "chrome-extension"].contains(scheme) {
 
+#if canImport(AppKit)
                     if let appURL = NSWorkspace.shared.urlForApplication(toOpen: url) {
                         let appName = appURL.deletingPathExtension().lastPathComponent
 
@@ -1701,10 +1760,17 @@ struct BrowserWebView: NSViewRepresentable {
                             return
                         }
 
-                        NSWorkspace.shared.open(url)
+                        PlatformApplication.open(url)
                         decisionHandler(.cancel, preferences)
                         return
                     }
+#else
+                    decisionHandler(.cancel, preferences)
+                    SwiftUIPresentationCenter.shared.confirm("Open this URL in another app?", message: url.absoluteString, primaryTitle: "Open") { allowed in
+                        if allowed { PlatformApplication.open(url) }
+                    }
+                    return
+#endif
                 }
             }
             
@@ -1800,6 +1866,7 @@ struct BrowserWebView: NSViewRepresentable {
             downloadTitles[download] = filename
             downloadFrom[download] = response.url?.absoluteString
 
+#if canImport(AppKit)
             let panel = NSSavePanel()
             panel.nameFieldStringValue = filename
 
@@ -1822,6 +1889,12 @@ struct BrowserWebView: NSViewRepresentable {
                     completionHandler(nil)
                 }
             }
+#else
+            let temporaryURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
+            downloadTo[download] = temporaryURL.path
+            downloadTemporaryURLs[download] = temporaryURL
+            completionHandler(temporaryURL)
+#endif
         }
 
                 func downloadDidFinish(_ download: WKDownload) {
@@ -1942,6 +2015,7 @@ struct BrowserWebView: NSViewRepresentable {
                 return
             }
             
+#if canImport(AppKit)
             let alert = NSAlert()
             var messageText = "The website \"\(host)\" would like to access your "
             if type == .camera {
@@ -1996,6 +2070,22 @@ struct BrowserWebView: NSViewRepresentable {
                     decisionHandler(.deny)
                 }
             }
+#else
+            let accessName = type == .camera ? "camera" : (type == .microphone ? "microphone" : "camera and microphone")
+            SwiftUIPresentationCenter.shared.confirm(
+                "Allow \"\(host)\" to access your \(accessName)?",
+                message: "You can change this later in site settings."
+            ) { allowed in
+                let state: PermissionState = allowed ? .allow : .deny
+                if type == .camera || type == .cameraAndMicrophone {
+                    SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: state)
+                }
+                if type == .microphone || type == .cameraAndMicrophone {
+                    SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: state)
+                }
+                decisionHandler(allowed ? .grant : .deny)
+            }
+#endif
         }
 
         func webView(_ webView: WKWebView,
@@ -2003,9 +2093,13 @@ struct BrowserWebView: NSViewRepresentable {
                      initiatedByFrame frame: WKFrameInfo,
                      completionHandler: @escaping () -> Void) {
 
+#if canImport(AppKit)
             let alert = NSAlert()
             alert.messageText = message
             alert.runModal()
+#else
+            SwiftUIPresentationCenter.shared.message(message)
+#endif
             completionHandler()
         }
 
@@ -2014,11 +2108,15 @@ struct BrowserWebView: NSViewRepresentable {
                      initiatedByFrame frame: WKFrameInfo,
                      completionHandler: @escaping (Bool) -> Void) {
 
+#if canImport(AppKit)
             let alert = NSAlert()
             alert.messageText = message
             alert.addButton(withTitle: "OK")
             alert.addButton(withTitle: "Cancel")
             completionHandler(alert.runModal() == .alertFirstButtonReturn)
+#else
+            SwiftUIPresentationCenter.shared.confirm(message, primaryTitle: "OK", completion: completionHandler)
+#endif
         }
 
         func webView(_ webView: WKWebView,
@@ -2042,6 +2140,7 @@ struct BrowserWebView: NSViewRepresentable {
                     }
                     
                     if state == .ask {
+#if canImport(AppKit)
                         let alert = NSAlert()
                         alert.messageText = "Allow \"\(host)\" to use your location?"
                         alert.addButton(withTitle: "Allow")
@@ -2054,6 +2153,14 @@ struct BrowserWebView: NSViewRepresentable {
                             handleAllow()
                         }
                         completionHandler(newState.rawValue)
+#else
+                        SwiftUIPresentationCenter.shared.confirm("Allow \"\(host)\" to use your location?") { allowed in
+                            let newState: PermissionState = allowed ? .allow : .deny
+                            SitePermissionStore.shared.setMediaPermission(for: host, type: "location", state: newState)
+                            if allowed { handleAllow() }
+                            completionHandler(newState.rawValue)
+                        }
+#endif
                     } else {
                         if state == .allow {
                             handleAllow()
@@ -2066,6 +2173,7 @@ struct BrowserWebView: NSViewRepresentable {
                 return
             }
 
+#if canImport(AppKit)
             let alert = NSAlert()
             alert.messageText = prompt
 
@@ -2078,6 +2186,9 @@ struct BrowserWebView: NSViewRepresentable {
 
             let result = alert.runModal()
             completionHandler(result == .alertFirstButtonReturn ? input.stringValue : nil)
+#else
+            SwiftUIPresentationCenter.shared.prompt(prompt, placeholder: prompt, initialText: defaultText ?? "", completion: completionHandler)
+#endif
         }
         
         func webView(_ webView: WKWebView,
@@ -2085,6 +2196,7 @@ struct BrowserWebView: NSViewRepresentable {
                      initiatedByFrame frame: WKFrameInfo,
                      completionHandler: @escaping ([URL]?) -> Void) {
             
+#if canImport(AppKit)
             let openPanel = NSOpenPanel()
             openPanel.canChooseFiles = true
             openPanel.canChooseDirectories = parameters.allowsDirectories
@@ -2097,11 +2209,15 @@ struct BrowserWebView: NSViewRepresentable {
                     completionHandler(nil)
                 }
             }
+#else
+            completionHandler(nil)
+#endif
         }
 
     }
 }
 
+#if canImport(AppKit)
 final class WebShareDelegate: NSObject, NSSharingServicePickerDelegate {
     let onComplete: (Bool) -> Void
     init(onComplete: @escaping (Bool) -> Void) {
@@ -2111,6 +2227,7 @@ final class WebShareDelegate: NSObject, NSSharingServicePickerDelegate {
         onComplete(service != nil)
     }
 }
+#endif
 
 // MARK: - Manager
 
@@ -2200,12 +2317,16 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
             details += "\n• …and \(requestedItems.count - visibleItems.count) more"
         }
 
+#if canImport(AppKit)
         let alert = NSAlert()
         alert.messageText = "Allow \"\(extensionName)\" additional access?"
         alert.informativeText = details
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Deny")
         return alert.runModal() == .alertFirstButtonReturn
+#else
+        return false
+#endif
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {

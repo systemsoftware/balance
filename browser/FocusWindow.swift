@@ -3,6 +3,8 @@ import WebKit
 
 // TO BE REMOVED SOON
 
+#if canImport(AppKit)
+
 func createFocusWindow(with url: URL) {
     let window = NSWindow(
         contentRect: NSScreen.main?.visibleFrame ?? NSRect(x: 0, y: 0, width: 800, height: 600),
@@ -17,7 +19,15 @@ func createFocusWindow(with url: URL) {
     window.contentView = NSHostingView(rootView: focusView)
     window.makeKeyAndOrderFront(nil)
 }
+#else
+/// iPhone and iPad do not expose an AppKit-style floating window. Preserve the
+/// navigation outcome by opening the requested page as a normal browser tab.
+func createFocusWindow(with url: URL) {
+    createNewTab(with: url)
+}
+#endif
 
+#if canImport(AppKit)
 struct FocusWebView: View {
     let url: URL
     @AppStorage("userAgent", store:Config.sharedDefaults)
@@ -55,3 +65,4 @@ struct FocusWebView: View {
             }
     }
 }
+#endif

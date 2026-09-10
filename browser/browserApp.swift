@@ -10,7 +10,9 @@ func switchToTab(tabID: String) {
 }
 
 func handleDeepLink(_ url: URL) {
+    #if canImport(AppKit)
     NSApp.activate(ignoringOtherApps: true)
+    #endif
     guard let scheme = url.scheme else { return }
 
     if scheme.lowercased() == "http" || scheme.lowercased() == "https" || scheme.lowercased() == "file" {
@@ -50,7 +52,11 @@ func handleDeepLink(_ url: URL) {
 
 @main
 struct browserApp: App {
+    #if canImport(AppKit)
     @NSApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    #else
+    @UIApplicationDelegateAdaptor(AppDelegate.self) var appDelegate
+    #endif
     
     @AppStorage("clearHistoryOnClose", store:Config.sharedDefaults)
     var clearHistoryOnClose: Bool = false
@@ -73,10 +79,13 @@ struct browserApp: App {
     var downloadStore = DownloadStore()
     
     init () {
+        #if canImport(AppKit)
         NSWindow.allowsAutomaticWindowTabbing = false
+        #endif
     }
     
     private func applyTheme(_ theme: String) {
+        #if canImport(AppKit)
         switch theme {
         case "dark":
             NSApp.appearance = NSAppearance(named: .darkAqua)
@@ -85,19 +94,20 @@ struct browserApp: App {
         default:
             NSApp.appearance = nil
         }
-        
         if theme != "match" {
             for window in NSApplication.shared.windows {
                 window.backgroundColor = .windowBackgroundColor
                 window.appearance = nil
             }
         }
+        #endif
     }
     
    
     
 
     
+    #if canImport(AppKit)
     var body: some Scene {
         WindowGroup(for: String.self) { $windowID in
             BrowserWindowHost(windowID: windowID)
@@ -161,6 +171,31 @@ struct browserApp: App {
                 .frame(minWidth: 450, minHeight: 530)
         }
     }
+    #else
+    var body: some Scene {
+        WindowGroup(for: String.self) { $windowID in
+            BrowserWindowHost(windowID: windowID)
+                .onOpenURL(perform: openURL)
+        } defaultValue: {
+            WindowManager.shared.initialWindowID
+        }
+        .modelContainer(HistoryManager.sharedContainer)
+        .environmentObject(WindowManager.shared)
+    }
+
+    private func openURL(_ url: URL) {
+        if url.isFileURL, url.pathExtension == "bpage",
+           let content = try? String(contentsOf: url, encoding: .utf8),
+           let parsedURL = URL(string: content.trimmingCharacters(in: .whitespacesAndNewlines)) {
+            createNewTab(with: parsedURL)
+        } else if url.isFileURL {
+            LocalFileAccessManager.shared.registerPowerboxURL(url)
+            createNewTab(with: url)
+        } else {
+            handleDeepLink(url)
+        }
+    }
+    #endif
 }
 
 func createNewWindow(with url: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String? = "") {
@@ -174,6 +209,68 @@ func createNewTab(with url: URL? = nil, inBackground: Bool = false, browserState
     WindowManager.shared.createTab(initialURL: url, inBackground: inBackground, providedState: browserState)
 }
 
+@MainActor
+private func performCloseCleanup() async {
+    SessionManager.shared.saveSession()
+
+    let defaults = Config.sharedDefaults ?? UserDefaults.standard
+    let clearCache = defaults.bool(forKey: "clearCacheOnClose")
+    let clearCookies = defaults.bool(forKey: "clearCookiesOnClose")
+    let clearHistory = defaults.bool(forKey: "clearHistoryOnClose")
+    let clearDownloadHistory = defaults.bool(forKey: "clearDownloadHistoryOnClose")
+
+    if clearHistory {
+        HistoryManager.clearAllHistory()
+    } else {
+        HistoryManager.flushPending()
+    }
+    if clearDownloadHistory {
+        let downloadStore = DownloadStore()
+        for download in downloadStore.items {
+            downloadStore.remove(id: download.id)
+        }
+    }
+    cleanTemporaryDirectory()
+
+    for site in ForgetManager.shared.list {
+        await ForgetManager.shared.forget(site: site)
+    }
+
+    var types = Set<String>()
+    if clearCache {
+        types.formUnion([
+            WKWebsiteDataTypeDiskCache,
+            WKWebsiteDataTypeMemoryCache,
+            WKWebsiteDataTypeFetchCache,
+            WKWebsiteDataTypeServiceWorkerRegistrations
+        ])
+        await CleanupButtonView.cleanTmp()
+    }
+    if clearCookies {
+        types.insert(WKWebsiteDataTypeCookies)
+    }
+
+    if !types.isEmpty {
+        var stores = [WKWebsiteDataStore.default()]
+        if let profilesJSON = defaults.string(forKey: "profiles"),
+           let data = profilesJSON.data(using: .utf8),
+           let profiles = try? JSONDecoder().decode([Profile].self, from: data) {
+            stores.append(contentsOf: profiles.map { WKWebsiteDataStore(forIdentifier: $0.id) })
+        }
+        for store in stores {
+            await store.removeData(ofTypes: types, modifiedSince: Date.distantPast)
+        }
+        if clearCache {
+            if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
+                let webKitCache = cacheURL.appendingPathComponent("WebKit")
+                try? FileManager.default.removeItem(at: webKitCache)
+            }
+            URLCache.shared.removeAllCachedResponses()
+        }
+    }
+}
+
+#if canImport(AppKit)
 class AppDelegate: NSObject, NSApplicationDelegate {
     // URLs queued before launch is complete (e.g. Finder double-click cold launch).
     var pendingFileURLs: [URL] = []
@@ -265,63 +362,8 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         // WebKit cleanup should not be able to leave the app stuck quitting forever.
         DispatchQueue.main.asyncAfter(deadline: .now() + 5, execute: finishTermination)
 
-        SessionManager.shared.saveSession()
-        
-        let defaults = Config.sharedDefaults ?? UserDefaults.standard
-        let clearCache = defaults.bool(forKey: "clearCacheOnClose")
-        let clearCookies = defaults.bool(forKey: "clearCookiesOnClose")
-        let clearHistory = defaults.bool(forKey: "clearHistoryOnClose")
-        let clearDownloadHistory = defaults.bool(forKey: "clearDownloadHistoryOnClose")
-
         Task { @MainActor in
-            if clearHistory {
-                HistoryManager.clearAllHistory()
-            } else {
-                HistoryManager.flushPending()
-            }
-            if clearDownloadHistory {
-                let downloadStore = DownloadStore()
-                for download in downloadStore.items {
-                    downloadStore.remove(id: download.id)
-                }
-            }
-            cleanTemporaryDirectory()
-
-            for site in ForgetManager.shared.list {
-                await ForgetManager.shared.forget(site: site)
-            }
-
-            var types = Set<String>()
-            if clearCache {
-                types.formUnion([WKWebsiteDataTypeDiskCache, WKWebsiteDataTypeMemoryCache, WKWebsiteDataTypeFetchCache, WKWebsiteDataTypeServiceWorkerRegistrations])
-                Task {
-                    print("Cleaning cache on exit...")
-                    await CleanupButtonView.cleanTmp()
-                }
-            }
-            if clearCookies {
-                types.insert(WKWebsiteDataTypeCookies)
-            }
-
-            if !types.isEmpty {
-                var stores = [WKWebsiteDataStore.default()]
-                if let profilesJSON = defaults.string(forKey: "profiles"),
-                   let data = profilesJSON.data(using: .utf8),
-                   let profiles = try? JSONDecoder().decode([Profile].self, from: data) {
-                    stores.append(contentsOf: profiles.map { WKWebsiteDataStore(forIdentifier: $0.id) })
-                }
-                for store in stores {
-                    await store.removeData(ofTypes: types, modifiedSince: Date.distantPast)
-                }
-                if clearCache {
-                    if let cacheURL = FileManager.default.urls(for: .cachesDirectory, in: .userDomainMask).first {
-                        let webKitCache = cacheURL.appendingPathComponent("WebKit")
-                        try? FileManager.default.removeItem(at: webKitCache)
-                    }
-                    URLCache.shared.removeAllCachedResponses()
-                }
-            }
-
+            await performCloseCleanup()
             finishTermination()
         }
 
@@ -364,6 +406,50 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         createNewTab()
     }
 }
+#else
+class AppDelegate: NSObject, UIApplicationDelegate {
+    var pendingFileURLs: [URL] = []
+    var didFinishLaunching = false
+    private var closeCleanupTask: Task<Void, Never>?
+    private var backgroundTaskID: UIBackgroundTaskIdentifier = .invalid
+
+    func application(_ application: UIApplication,
+                     didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        WindowManager.shared.restoreSavedSessionIfNeeded()
+        didFinishLaunching = true
+        BrowserAppShortcuts.updateAppShortcutParameters()
+        return true
+    }
+
+    func applicationWillTerminate(_ application: UIApplication) {
+        SessionManager.shared.saveSession()
+    }
+
+    func applicationDidEnterBackground(_ application: UIApplication) {
+        guard closeCleanupTask == nil else { return }
+
+        backgroundTaskID = application.beginBackgroundTask(withName: "Clear browsing data") { [weak self, weak application] in
+            guard let self else { return }
+            self.closeCleanupTask?.cancel()
+            self.closeCleanupTask = nil
+            if self.backgroundTaskID != .invalid {
+                application?.endBackgroundTask(self.backgroundTaskID)
+                self.backgroundTaskID = .invalid
+            }
+        }
+
+        closeCleanupTask = Task { @MainActor [weak self, weak application] in
+            await performCloseCleanup()
+            guard let self else { return }
+            self.closeCleanupTask = nil
+            if self.backgroundTaskID != .invalid {
+                application?.endBackgroundTask(self.backgroundTaskID)
+                self.backgroundTaskID = .invalid
+            }
+        }
+    }
+}
+#endif
 
 enum MenuBarSection: String, CaseIterable {
     case browser = "Browser"
@@ -538,7 +624,9 @@ struct CommandButton: View {
             if let dispatch = dispatch {
                 dispatch(command)
             } else if command == .closeTab {
+                #if canImport(AppKit)
                 NSApp.keyWindow?.performClose(nil)
+                #endif
             }
         }
         .keyboardShortcut(command.shortcut)

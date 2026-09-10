@@ -1,24 +1,33 @@
 import SwiftUI
 import WebKit
 
-struct ExtensionPopupWebView: NSViewRepresentable {
+struct ExtensionPopupWebView: PlatformViewRepresentable {
     let action: WKWebExtension.Action
     
-    func makeNSView(context: Context) -> WKWebView {
+    private func makeWebView() -> WKWebView {
         let webView = action.popupWebView ?? WKWebView(frame: .zero)
-        
+
+        #if canImport(AppKit)
         webView.setValue(false, forKey: "drawsBackground")
         if let scrollView = webView.enclosingScrollView {
             scrollView.hasVerticalScroller = false
             scrollView.hasHorizontalScroller = false
         }
-        
+        #endif
         return webView
     }
-    
-    func updateNSView(_ nsView: WKWebView, context: Context) {
+
+    #if canImport(AppKit)
+    func makeNSView(context: Context) -> WKWebView { makeWebView() }
+    func updateNSView(_ webView: WKWebView, context: Context) {
         // No updates needed, the WKWebExtensionController manages the web view content
     }
+    #else
+    func makeUIView(context: Context) -> WKWebView { makeWebView() }
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        // No updates needed, the WKWebExtensionController manages the web view content
+    }
+    #endif
 }
 
 struct ExtensionActionPopupView: View {

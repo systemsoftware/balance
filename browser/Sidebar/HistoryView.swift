@@ -243,8 +243,7 @@ struct HistoryView: View {
                                     modelContext.delete(item)
                                 }
                                 Button("Copy URL") {
-                                    NSPasteboard.general.clearContents()
-                                    NSPasteboard.general.setString(item.url, forType: .string)
+                                    PlatformApplication.copy(item.url)
                                 }
                             }
                         }
@@ -301,10 +300,10 @@ struct HistoryRow: View {
                 Spacer()
             }
             .padding()
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformControlBackground.opacity(0.5)))
         }
         .buttonStyle(.plain)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .background(Color.platformWindowBackground.opacity(0.5))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)

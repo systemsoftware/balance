@@ -27,7 +27,7 @@ struct FindInPageToolbarButton: View {
 
 
     private func presentFindBar() {
-        NSApp.keyWindow?.makeFirstResponder(nil)
+        PlatformApplication.dismissKeyboard()
         Task { @MainActor in
             await Task.yield()
             browserState.isFindBarVisible = true

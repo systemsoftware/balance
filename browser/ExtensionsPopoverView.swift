@@ -95,7 +95,7 @@ struct ExtensionActionRow: View {
     let onAction: (WKWebExtension.Action) -> Void
     @ObservedObject private var manager = WebExtensionManager.shared
     
-    @State private var icon: NSImage?
+    @State private var icon: UniversalImage?
     @State private var title: String = ""
     @State private var isHovered = false
     
@@ -107,7 +107,7 @@ struct ExtensionActionRow: View {
         }) {
             HStack(spacing: 12) {
                 if let icon = icon {
-                    Image(nsImage: icon)
+                    Image(universalImage: icon)
                         .resizable()
                         .aspectRatio(contentMode: .fit)
                         .frame(width: 20, height: 20)

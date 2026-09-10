@@ -1,6 +1,5 @@
 import Foundation
 import SwiftUI
-import AppKit
 
 class MacCalendarManager {
     
@@ -43,7 +42,7 @@ class MacCalendarManager {
         
         do {
             try icsString.write(to: fileURL, atomically: true, encoding: .utf8)
-            NSWorkspace.shared.open(fileURL)
+            PlatformApplication.open(fileURL)
         } catch {
             print("Error saving event file: \(error.localizedDescription)")
         }

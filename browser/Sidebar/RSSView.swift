@@ -25,6 +25,8 @@ struct RSSView: View {
     @State var searchText = ""
     
     @State var url = ""
+    @State private var isAddingFeed = false
+    @State private var newFeedURL = ""
         
     var body: some View {
         VStack(spacing: 0) {
@@ -35,7 +37,8 @@ struct RSSView: View {
                 Spacer()
                 
                 Button() {
-                    installFromURL(urlStr: "", filename: "")
+                    newFeedURL = ""
+                    isAddingFeed = true
                 } label: {
                     Label("Add Feed", systemImage: "link")
                 }
@@ -81,6 +84,14 @@ struct RSSView: View {
             }
         }
         .padding()
+        .alert("Add RSS Feed", isPresented: $isAddingFeed) {
+            TextField("https://example.com/feed", text: $newFeedURL)
+            Button("Cancel", role: .cancel) {}
+            Button("Add") { addFeed(newFeedURL) }
+                .disabled(newFeedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+        } message: {
+            Text("Enter the URL of an RSS feed")
+        }
     }
     
     private func deleteFeed(_ feedURL: String) {
@@ -89,24 +100,12 @@ struct RSSView: View {
         saveFeeds(feeds)
     }
     
-    private func installFromURL(urlStr: String, filename: String) {
-        let alert = NSAlert()
-        alert.messageText = "Add RSS Feed"
-        alert.informativeText = "Enter the URL of a RSS feed"
-        alert.addButton(withTitle: "Add")
-        alert.addButton(withTitle: "Cancel")
-        
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-        input.placeholderString = "https://example.com/feed"
-        alert.accessoryView = input
-        alert.window.initialFirstResponder = input
-        
-        guard alert.runModal() == .alertFirstButtonReturn else { return }
-        
+    private func addFeed(_ value: String) {
+        let value = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !value.isEmpty else { return }
         var feeds = loadFeeds()
-        feeds.append(input.stringValue)
+        feeds.append(value)
         saveFeeds(feeds)
-        
     }
     
     
@@ -151,7 +150,7 @@ struct DisclosureRow: View {
                     }
                     .padding()
                     .frame(maxWidth: .infinity, alignment: .leading)
-                    .background(Color(NSColor.controlBackgroundColor))
+                    .background(Color.platformControlBackground)
                     .cornerRadius(8)
                     .shadow(color: Color.black.opacity(0.1), radius: 2, x: 0, y: 1)
                 }

@@ -60,7 +60,6 @@ enum BookmarkBarMode: Int, CaseIterable {
     }
 }
 
-
 enum BackgroundType: Int {
     case system = 0
     case light = 1
@@ -79,18 +78,22 @@ struct AutoFillPopover: View {
             AutocompleteView(searchTerm: $searchTerm, loadQuery: {})
         }
         .listStyle(.inset)
-        .frame(width: 500, height:300)
+        .frame(minWidth: 260, idealWidth: 350, maxWidth: 500, minHeight: 200, maxHeight: 300)
     }
 }
 
-struct ExtensionPopupView: NSViewRepresentable {
+struct ExtensionPopupView: PlatformViewRepresentable {
     let webView: WKWebView
-    
+
+    #if canImport(AppKit)
     func makeNSView(context: Context) -> WKWebView {
         return webView
     }
-    
     func updateNSView(_ nsView: WKWebView, context: Context) {}
+    #else
+    func makeUIView(context: Context) -> WKWebView { webView }
+    func updateUIView(_ uiView: WKWebView, context: Context) {}
+    #endif
 }
 
 struct ContentView: View {
@@ -106,6 +109,10 @@ struct ContentView: View {
     @StateObject private var sidebarStore: SidebarStore
     
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
+    private var isCompact: Bool { horizontalSizeClass == .compact }
+    private var hasCompactHeight: Bool { verticalSizeClass == .compact }
 
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
     private var sidebarWidth: Int = 345
@@ -338,13 +345,13 @@ struct ContentView: View {
 
             if leftSidebarMode == 0 && !MemoryStorage.shared.focusMode {
                 Tabs(browserState: browserState)
-                    .frame(height:50)
+                    .frame(height: isCompact ? 44 : 50)
                     .frame(maxWidth: .infinity)
                     .padding(
                         .horizontal,
-                        Layout.outerPadding + Layout.controlPadding + 5
+                        (isCompact ? 3 : Layout.outerPadding) + Layout.controlPadding + (isCompact ? 2 : 5)
                     )
-                    .padding(toolbarLocation == 1 ? 8 : 0)
+                    .padding(toolbarLocation == 1 ? (isCompact ? 4 : 8) : 0)
             }
             
             if toolbarLocation == 0 && !MemoryStorage.shared.focusMode {
@@ -370,8 +377,8 @@ struct ContentView: View {
                     scanEvents: scanEvents,
                     showReader: $showReader
                 )
-                .padding(.horizontal, Layout.outerPadding)
-                .padding(.vertical, 8)
+                .padding(.horizontal, isCompact ? 3 : Layout.outerPadding)
+                .padding(.vertical, isCompact ? 4 : 8)
                 .frame(maxWidth: .infinity)
             }
             
@@ -404,7 +411,7 @@ struct ContentView: View {
                 
                 if leftSidebarMode == 2 && !MemoryStorage.shared.focusMode {
                     Tabs(browserState: browserState)
-                        .frame(width: CGFloat(leftSidebarWidth))
+                        .frame(width: isCompact ? min(CGFloat(leftSidebarWidth), 160) : CGFloat(leftSidebarWidth))
                         .frame(maxHeight: .infinity)
                 }
                 
@@ -417,7 +424,7 @@ struct ContentView: View {
                                 .zIndex(100)
                         }
                         
-                        HStack(spacing: 8) {
+                        HStack(spacing: isCompact ? 4 : 8) {
                             
                             
                           
@@ -425,12 +432,15 @@ struct ContentView: View {
                                 BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
                                     .id(browserState.webViewIdentity)
                                     .roundedBorderStyleNoFrame(enabled: showPageShine)
-                                    .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
+                                    .clipShape(RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius))
                                     .onChange(of: browserState.url) { oldValue, newValue in
                                         handleURLChange(from: oldValue, to: newValue)
                                     }
                                     .onChange(of: browserState.title) { _, newTitle in
                                         handleTitleChange(to: newTitle)
+                                    }
+                                    .onTapGesture(count: 3) {
+                                        MemoryStorage.shared.focusMode.toggle()
                                     }
                                     
 
@@ -446,12 +456,12 @@ struct ContentView: View {
                                 BrowserWebView(request: URLRequest(url: splitState.url ?? URL(string: "about:blank")!), state: splitState, priv: priv, profile: bProfile, userAgent: userAgent)
                                     .id(splitState.webViewIdentity)
                                     .roundedBorderStyleNoFrame()
-                                    .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
+                                    .clipShape(RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius))
                             }
                         }
                     } else {
                         BrowserHomepage(profile: bProfile, state:browserState)
-                            .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
+                            .clipShape(RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius))
                             .task {
                                 browserState.title = "Balance"
                             }
@@ -462,12 +472,12 @@ struct ContentView: View {
                         HStack(spacing: 0) {
                             ZStack(alignment: .leading) {
                                 Color.clear
-                                    .frame(width: isSlideOverVisible ? CGFloat(leftSidebarWidth) + 10 : 15)
+                                    .frame(width: isSlideOverVisible ? (isCompact ? min(CGFloat(leftSidebarWidth), 180) : CGFloat(leftSidebarWidth)) + 10 : 15)
                                     .frame(maxHeight: .infinity)
                                 
                                 if isSlideOverVisible {
                                     Tabs(browserState: browserState)
-                                        .frame(width: CGFloat(leftSidebarWidth))
+                                        .frame(width: isCompact ? min(CGFloat(leftSidebarWidth), 180) : CGFloat(leftSidebarWidth))
                                         .frame(maxHeight: .infinity)
                                         .glassEffect(.regular, in: .rect(cornerRadius: 15))
                                         .transition(.move(edge: .leading))
@@ -484,8 +494,23 @@ struct ContentView: View {
                         }
                         .zIndex(200)
                     }
+
+                    if isCompact, let sidebarURL {
+                            Color.black.opacity(0.35)
+                            VStack(spacing: 0) {
+                                sidebarDetailView(for: sidebarURL)
+                                    .frame(maxWidth: .infinity, maxHeight: .infinity)
+                                    .glassEffect(in:.rect(cornerRadius: 20))
+                            }
+                            .frame(maxWidth: .infinity)
+                            .padding(.leading, 32)
+                            .padding(.vertical, 6)
+                            .padding(.trailing, 2)
+                            .transition(.move(edge: .trailing).combined(with: .opacity))
+                        .zIndex(300)
+                    }
                 }
-                .padding(Layout.outerPadding)
+                .padding(isCompact ? 3 : Layout.outerPadding)
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
                 .task {
                     var descriptor = FetchDescriptor<HistoryItem>(
@@ -500,112 +525,35 @@ struct ContentView: View {
                 // MARK: - Sidebar
 
                 
-                HStack(spacing: 8) {
-                    if let sidebarURL {
-                        if sidebarURL.absoluteString.contains(".view") {
-                            
-                            switch sidebarURL.absoluteString {
-                            case let str where str.contains("Chat"):
-                                ChatView(browserState: browserState)
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Bookmark"):
-                                BookmarksView(showAddBookmark:$falseBinding)
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Settings"):
-                                SettingsView(activeProfile: bProfile)
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Password"):
-                                PasswordsView()
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Note"):
-                                NoteView(tabID: tabID, browserState:browserState)
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("History"):
-                                HistoryView(profile: bProfile)
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Download"):
-                                DownloadsView(profile: bProfile)
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Extension"):
-                                ExtensionsView()
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("ContentBlocker"):
-                                ContentBlockerView()
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Map"):
-                                MapView(browserState: browserState)
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("RSS"):
-                                RSSView()
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Calendar"):
-                                CalendarSidebarView()
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Email"):
-                                EmailView(profile: bProfile)
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("Weather"):
-                                WeatherSidebarView()
-                                    .roundedBorderStyle()
-                                
-                                
-                            case let str where str.contains("Inventory"):
-                                InventorySidebar()
-                                    .roundedBorderStyle()
-                                
-                            case let str where str.contains("WebData"):
-                                WebDataView(profile: bProfile)
-                                    .roundedBorderStyle()
-
-                            default:
-                                EmptyView()
-                            }
-                            
-                        } else {
-                            WebView(sidebarPage)
-                                .frame(width: CGFloat(sidebarWidth))
-                                .overlay(
-                                    RoundedRectangle(cornerRadius: Layout.cornerRadius)
-                                        .stroke(Color.gray, lineWidth: 1)
-                                )
-                                .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
-                        }
+                HStack(spacing: isCompact ? 4 : 8) {
+                    if !isCompact, let sidebarURL {
+                        sidebarDetailView(for: sidebarURL)
+                            .glassEffect(in:.rect(cornerRadius: 20))
+                            .frame(width: CGFloat(sidebarWidth))
+                            .clipShape(RoundedRectangle(cornerRadius: 20))
                     }
                     // MARK: Sidebar Items
                     if showSidebar && !MemoryStorage.shared.focusMode {
-                        VStack(spacing: Layout.sidebarItemSpacing) {
-             //               GlassEffectContainer {
+                        ScrollView(.vertical, showsIndicators: true) {
+                            VStack(spacing: isCompact ? 4 : Layout.sidebarItemSpacing) {
                                 ForEach(sidebarStore.items) { item in
                                     Button(action: {
                                         toggleSidebar(sidebarTargetURL(for: item))
                                     }) {
                                         if item.icon.starts(with: "https") {
-                                            Favicon(item.icon, width: Layout.sidebarIconSize, height: Layout.sidebarIconSize)
-                                                .padding(Layout.sidebarIconPadding)
+                                            Favicon(item.icon, width: isCompact ? 17 : Layout.sidebarIconSize, height: isCompact ? 17 : Layout.sidebarIconSize)
+                                                .padding(isCompact ? 7 : Layout.sidebarIconPadding)
                                         } else {
                                             Image(systemName: item.icon)
-                                                .font(.system(size: Layout.sidebarIconSize, weight: .regular))
-                                                .frame(width: Layout.sidebarIconSize, height: Layout.sidebarIconSize)
-                                                .padding(Layout.sidebarIconPadding)
+                                                .font(.system(size: isCompact ? 17 : Layout.sidebarIconSize, weight: .regular))
+                                                .frame(width: isCompact ? 17 : Layout.sidebarIconSize, height: isCompact ? 17 : Layout.sidebarIconSize)
+                                                .padding(isCompact ? 7 : Layout.sidebarIconPadding)
                                         }
                                     }
                                     .glassEffect(sidebarBackground == 2 ? .regular : .identity)
                                     .padding(1)
                                     .buttonStyle(.plain)
-                                    .padding(.horizontal, 5)
+                                    .padding(.horizontal, isCompact ? 2 : 5)
                                     .onDrag {
                                         draggedSidebarItem = item
                                         return NSItemProvider(object: item.id.uuidString as NSString)
@@ -628,110 +576,42 @@ struct ContentView: View {
                                         }
                                     }
                                     .id(item.id)
-         //                       }
+                                }
                             }
                         }
+                        .scrollBounceBehavior(.basedOnSize)
                         .background {
-                            RoundedRectangle(cornerRadius: 10, style: .continuous)
-                                .fill(.clear)
-                                .glassEffect(sidebarBackground == 1 ? .regular : .identity, in: .capsule)
-                                .allowsHitTesting(false)
-                                .padding(.horizontal, 5)
-                        }
-                        .popover(isPresented: $showAddPopover,   attachmentAnchor: .rect(.bounds),
-                                 arrowEdge: .trailing) {
-                            VStack(alignment: .leading, spacing: 16) {
-                                Text("Add Sidebar Item")
-                                    .font(.headline)
-
-                                Picker("", selection: $addIndex.animation(.bouncy)) {
-                                    Text("Built-in").tag(0)
-                                    Text("Remote page").tag(1)
-                                }
-                                .pickerStyle(.segmented)
-
-                                if addIndex == 0 {
-                                    VStack(alignment: .leading, spacing: 4) {
-                                        ForEach(builtInSidebar.filter({ i in
-                                                !sidebarStore.items.contains(where: { $0.view == i.view })
-                                        })) { builtIn in
-                                            let rawTitle = builtIn.view?.replacingOccurrences(of: "View", with: "") ?? builtIn.icon
-
-                                            let title = rawTitle.replacingOccurrences(
-                                                of: "([a-z])([A-Z])",
-                                                with: "$1 $2",
-                                                options: .regularExpression
-                                            )
-                                            
-                                            Button {
-                                                guard let view = builtIn.view else { return }
-                                                withAnimation(.bouncy) {
-                                                    sidebarStore.add(SidebarItem(icon: builtIn.icon, view: view))
-                                                }
-                                                showAddPopover = false
-                                            } label: {
-                                                HStack {
-                                                    Image(systemName: builtIn.icon)
-                                                        .frame(width: 20)
-                                                        .foregroundStyle(.secondary)
-                                                    Text(title)
-                                                    Spacer()
-                                                }
-                                                .contentShape(Rectangle())
-                                            }
-                                            .buttonStyle(.plain)
-                                            .padding(.vertical, 6)
-                                            .padding(.horizontal, 8)
-                                            .background(Color.primary.opacity(0.001)) // keeps hover/click area
-                                            .cornerRadius(6)
-                                        }
-                                    }
-                                } else {
-                                    VStack(alignment: .leading, spacing: 10) {
-                                        TextField("https://example.com", text: $userInput)
-                                            .textFieldStyle(.roundedBorder)
-
-                                        HStack {
-                                            Spacer()
-                                            Button("Cancel", role: .cancel) {
-                                                showAddPopover = false
-                                            }
-                                            Button("Add") {
-                                                let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput)
-                                                sidebarStore.add(SidebarItem(
-                                                    icon: userInput,
-                                                    url: sidebarItemURL
-                                                ))
-                                                showAddPopover = false
-                                            }
-                                            .buttonStyle(.borderedProminent)
-                                            .disabled(userInput.isEmpty)
-                                        }
-                                    }
-                                }
+                            if sidebarBackground == 1 {
+                                Capsule()
+                                    .fill(.clear)
+                                    .glassEffect(.regular, in: .capsule)
+                                    .allowsHitTesting(false)
+                                    .padding(.horizontal, isCompact ? 2 : 5)
                             }
-                            .padding(20)
-                //            .frame(width: 280)
+                        }
+                        .popover(isPresented: $showAddPopover, attachmentAnchor: .rect(.bounds),
+                                 arrowEdge: .trailing) {
+                            addSidebarPopover
                         }
                         .frame(maxHeight: .infinity)
-                        .padding(.vertical, Layout.outerPadding)
+                        .padding(.vertical, isCompact ? 2 : Layout.outerPadding)
                     }
-                    }
-                        .padding(.trailing, Layout.outerPadding)
-                        .padding(.vertical, Layout.outerPadding)
                 }
+                .padding(.trailing, isCompact ? 3 : Layout.outerPadding)
+                .padding(.vertical, isCompact ? 3 : Layout.outerPadding)
+            }
             
             
             
             if leftSidebarMode == 4 && !MemoryStorage.shared.focusMode {
                 Tabs(browserState: browserState)
-                    .frame(height:50)
+                    .frame(height: isCompact ? 44 : 50)
                     .frame(maxWidth: .infinity)
                     .padding(
                         .horizontal,
-                        Layout.outerPadding + Layout.controlPadding + 5
+                        (isCompact ? 3 : Layout.outerPadding) + Layout.controlPadding + (isCompact ? 2 : 5)
                     )
-                    .padding(.bottom, toolbarLocation == 0 ? 10 : 0)
+                    .padding(.bottom, toolbarLocation == 0 ? (isCompact ? 6 : 10) : 0)
             }
             
             if toolbarLocation == 1 && !MemoryStorage.shared.focusMode {
@@ -757,15 +637,15 @@ struct ContentView: View {
                     scanEvents: scanEvents,
                     showReader: $showReader
                 )
-                .padding(.horizontal, Layout.outerPadding)
-                .padding(.vertical, 8)
+                .padding(.horizontal, isCompact ? 3 : Layout.outerPadding)
+                .padding(.vertical, isCompact ? 4 : 8)
                 .frame(maxWidth: .infinity)
             }
             
             
             if shouldShowBookmarks && bookmarkBarLoc == 1 {
                 BookmarkBar(bookmarkStore: bookmarkStore)
-                    .padding(.vertical, Layout.outerPadding)
+                    .padding(.vertical, isCompact ? 3 : Layout.outerPadding)
                     .padding(.bottom, 5)
             }
             
@@ -810,6 +690,7 @@ struct ContentView: View {
         .onAppear {
             sidebarPage.customUserAgent = userAgent
         }
+        .swiftUIPresentationHost()
         .onChange(of: windowManager.activeWindowID) { _, _ in
             guard windowManager.isActiveTab(tabID) else { return }
             if enableHandoff, let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
@@ -874,8 +755,7 @@ struct ContentView: View {
             case .openInFocus: withAnimation(.bouncy) { toggleFocusMode() }
             case .copyURL:
                 if let url = location {
-                    NSPasteboard.general.clearContents()
-                    NSPasteboard.general.setString(url.absoluteString, forType: .string)
+                    PlatformApplication.copy(url.absoluteString)
                 }
             case .addToBookmarks:
                 if let url = location,
@@ -897,7 +777,7 @@ struct ContentView: View {
             case .printPage: printCurrentPage()
             case .toggleReader: showReader.toggle()
             case .findInPage:
-                NSApp.keyWindow?.makeFirstResponder(nil)
+                PlatformApplication.dismissKeyboard()
                 Task { @MainActor in
                     await Task.yield()
                     if browserState.isFindBarVisible {
@@ -908,6 +788,7 @@ struct ContentView: View {
                     }
                 }
             case .renameTab:
+#if canImport(AppKit)
                 let alert = NSAlert()
                 alert.informativeText = "Enter new tab name:"
                 alert.addButton(withTitle: "Rename")
@@ -927,6 +808,20 @@ struct ContentView: View {
                         browserState.title = newTitle
                     }
                 }
+#else
+                SwiftUIPresentationCenter.shared.prompt(
+                    "Rename Tab",
+                    message: "Enter a new tab name.",
+                    placeholder: browserState.webView?.title ?? "Page",
+                    initialText: browserState.customTitle ?? browserState.title,
+                    primaryTitle: "Rename"
+                ) { value in
+                    guard let value else { return }
+                    let newTitle = value.trimmingCharacters(in: .whitespacesAndNewlines)
+                    browserState.customTitle = newTitle.isEmpty ? nil : newTitle
+                    browserState.title = newTitle.isEmpty ? (browserState.webView?.title ?? "Page") : newTitle
+                }
+#endif
             case .summarize: Task { summarizing = true; await createSummaryWindow(state: browserState); summarizing = false }
             case .addEvents: Task { await scanEvents() }
             case .cite: Task { await cite() }
@@ -937,6 +832,7 @@ struct ContentView: View {
                 let targetURL = URL(string: "HistoryView.view")!
                 toggleSidebar(targetURL)
             case .savePage:
+#if canImport(AppKit)
                 let panel = NSSavePanel()
                 let accessoryView = NSView(frame: NSRect(x: 0, y: 0, width: 250, height: 44))
                 let label = NSTextField(labelWithString: "Format:")
@@ -983,6 +879,7 @@ struct ContentView: View {
                         }
                     }
                 }
+#endif
             case .reopenLastTab:
                 if let urlStr = SessionManager.shared.lastClosedURL, let url = URL(string: urlStr) {
                     createNewTab(with:url)
@@ -1012,6 +909,7 @@ struct ContentView: View {
 
                 }
             case .shortcut:
+#if canImport(AppKit)
                 let savePanel = NSSavePanel()
                     savePanel.title = "Save Page"
                     savePanel.nameFieldStringValue = "\(location?.host ?? "page")"
@@ -1029,6 +927,7 @@ struct ContentView: View {
                             }
                         }
                     }
+#endif
             case .goTo:
                 showGoTo = true
             }
@@ -1037,6 +936,170 @@ struct ContentView: View {
     @AppStorage("searchURL", store:Config.sharedDefaults) var searchURL = "https://www.google.com/search?q="
 
     // MARK: - Helper Methods
+
+    
+    @ViewBuilder
+    private var addSidebarPopover: some View {
+        VStack(alignment: .center, spacing: 16) {
+            Text("Add Sidebar Item")
+                .font(.headline)
+
+            Picker("", selection: $addIndex.animation(.bouncy)) {
+                Text("Built-in").tag(0)
+                Text("Remote page").tag(1)
+            }
+            .pickerStyle(.segmented)
+
+            if addIndex == 0 {
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 4) {
+                        ForEach(availableBuiltInSidebar) { builtIn in
+                            builtInSidebarButton(for: builtIn)
+                        }
+                    }
+                }
+                .scrollIndicators(.visible)
+            } else {
+                remoteSidebarItemForm
+            }
+        }
+        .padding(.horizontal, 16)
+        .padding(.vertical, 20)
+        .fittedMenuPopover(
+            minHeight: hasCompactHeight ? 220 : 340,
+            idealHeight: hasCompactHeight ? 300 : 440,
+            maxHeight: hasCompactHeight ? 340 : 520
+        )
+    }
+
+    private var availableBuiltInSidebar: [SidebarItem] {
+        builtInSidebar.filter { candidate in
+            !sidebarStore.items.contains { $0.view == candidate.view }
+        }
+    }
+
+    private func builtInSidebarButton(for item: SidebarItem) -> some View {
+        let rawTitle = item.view?.replacingOccurrences(of: "View", with: "") ?? item.icon
+        let title = rawTitle.replacingOccurrences(
+            of: "([a-z])([A-Z])",
+            with: "$1 $2",
+            options: .regularExpression
+        )
+
+        return Button {
+            guard let view = item.view else { return }
+            withAnimation(.bouncy) {
+                sidebarStore.add(SidebarItem(icon: item.icon, view: view))
+            }
+            showAddPopover = false
+        } label: {
+            HStack {
+                Image(systemName: item.icon)
+                    .frame(width: 20)
+                    .foregroundStyle(.secondary)
+                Text(title)
+                Spacer()
+            }
+            .contentShape(Rectangle())
+        }
+        .buttonStyle(.plain)
+        .padding(.vertical, 6)
+        .padding(.horizontal, 8)
+        .background(Color.primary.opacity(0.001))
+        .cornerRadius(6)
+    }
+
+    private var remoteSidebarItemForm: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            TextField("https://example.com", text: $userInput)
+                .autocorrectionDisabled()
+#if os(iOS)
+                .textInputAutocapitalization(.never)
+#endif
+                .textFieldStyle(.roundedBorder)
+
+            HStack {
+                Spacer()
+                Button("Cancel", role: .cancel) {
+                    showAddPopover = false
+                }
+                Button("Add") {
+                    let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput)
+                    sidebarStore.add(SidebarItem(icon: userInput, url: sidebarItemURL))
+                    showAddPopover = false
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(userInput.isEmpty)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func sidebarDetailView(for sidebarURL: URL) -> some View {
+        if sidebarURL.absoluteString.contains(".view") {
+            switch sidebarURL.absoluteString {
+            case let str where str.contains("Chat"):
+                ChatView(browserState: browserState)
+                
+            case let str where str.contains("Bookmark"):
+                BookmarksView(showAddBookmark: $falseBinding)
+                
+            case let str where str.contains("Settings"):
+                SettingsView(activeProfile: bProfile)
+                    .frame(maxWidth: .infinity)
+                
+            case let str where str.contains("Password"):
+                PasswordsView()
+                
+            case let str where str.contains("Note"):
+                NoteView(tabID: tabID, browserState: browserState)
+                
+            case let str where str.contains("History"):
+                HistoryView(profile: bProfile)
+                
+            case let str where str.contains("Download"):
+                DownloadsView(profile: bProfile)
+                
+            case let str where str.contains("Extension"):
+                ExtensionsView()
+                
+            case let str where str.contains("ContentBlocker"):
+                ContentBlockerView()
+                
+            case let str where str.contains("Map"):
+                MapView(browserState: browserState)
+                
+            case let str where str.contains("RSS"):
+                RSSView()
+                
+            case let str where str.contains("Calendar"):
+                CalendarSidebarView()
+                
+            case let str where str.contains("Email"):
+                EmailView(profile: bProfile)
+                
+            case let str where str.contains("Weather"):
+                WeatherSidebarView()
+                
+            case let str where str.contains("Inventory"):
+                InventorySidebar()
+                
+            case let str where str.contains("WebData"):
+                WebDataView(profile: bProfile)
+
+            default:
+                EmptyView()
+            }
+        } else {
+            WebView(sidebarPage)
+                .frame(width: isCompact ? nil : CGFloat(sidebarWidth))
+                .overlay(
+                    RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius)
+                        .stroke(Color.gray, lineWidth: 1)
+                )
+                .clipShape(RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius))
+        }
+    }
 
     private func sidebarTargetURL(for item: SidebarItem) -> URL? {
         if let url = item.url {
@@ -1067,6 +1130,7 @@ struct ContentView: View {
     }
     
     private func setupWindow() {
+        #if canImport(AppKit)
         let window = NSWindow(
             contentRect: NSRect(x: 0, y: 0, width: 640, height: 540),
             styleMask: [.titled, .closable, .fullSizeContentView],
@@ -1090,6 +1154,7 @@ struct ContentView: View {
         
         window.contentView = NSHostingView(rootView: setupView)
         window.makeKeyAndOrderFront(nil)
+        #endif
     }
     
     private func submitURL() {
@@ -1121,7 +1186,7 @@ struct ContentView: View {
 
         // Repair the key-view loop while the current hierarchy still exists.
         // Changing focus mode removes or inserts several focusable controls.
-        (browserState.webView?.window ?? NSApp.keyWindow)?.makeFirstResponder(nil)
+        PlatformApplication.dismissKeyboard()
         Task { @MainActor in
             await Task.yield()
             MemoryStorage.shared.focusMode.toggle()
@@ -1130,7 +1195,7 @@ struct ContentView: View {
 
     private func toggleSidebar(_ targetURL: URL?) {
         let nextURL = sidebarURL == targetURL ? nil : targetURL
-        (browserState.webView?.window ?? NSApp.keyWindow)?.makeFirstResponder(nil)
+        PlatformApplication.dismissKeyboard()
         Task { @MainActor in
             await Task.yield()
             withAnimation(.spring(response: 0.4, dampingFraction: 0.8)) {
@@ -1143,6 +1208,7 @@ struct ContentView: View {
     private func printCurrentPage() {
         guard let webView = browserState.webView else { return }
 
+#if canImport(AppKit)
         let printInfo = NSPrintInfo()
 
         let operation = webView.printOperation(with: printInfo)
@@ -1159,10 +1225,14 @@ struct ContentView: View {
         } else {
             operation.run()
         }
+#else
+        webView.evaluateJavaScript("window.print()", completionHandler: nil)
+#endif
     }
     
     
     private func cite() async {
+#if canImport(AppKit)
         let style: String? = await withCheckedContinuation { continuation in
             DispatchQueue.main.async {
                 let alert = NSAlert()
@@ -1184,6 +1254,19 @@ struct ContentView: View {
                 }
             }
         }
+#else
+        let style: String? = await withCheckedContinuation { continuation in
+            SwiftUIPresentationCenter.shared.prompt(
+                "Citation Style",
+                message: "Enter a citation style (for example APA, MLA, or Chicago).",
+                placeholder: "APA",
+                initialText: "APA",
+                primaryTitle: "Generate"
+            ) { value in
+                continuation.resume(returning: value)
+            }
+        }
+#endif
         
         guard let citationStyle = style else { return }
         
@@ -1205,6 +1288,7 @@ struct ContentView: View {
             let result = try await session.respond(to: prompt).content
             
             await MainActor.run {
+#if canImport(AppKit)
                 let successAlert = NSAlert()
                 successAlert.messageText = "Citation Generated"
                 successAlert.informativeText = "\(result) \n\n Note: this was generated by AI and may contain errors. Please verify and cite accordingly."
@@ -1217,17 +1301,25 @@ struct ContentView: View {
                     pasteboard.clearContents()
                     pasteboard.setString(result, forType: .string)
                 }
+#else
+                PlatformApplication.copy(result)
+                windowAlert(message: "Citation generated and copied to the clipboard.")
+#endif
             }
             
         } catch {
             print(error)
             await MainActor.run {
+#if canImport(AppKit)
                 let errorAlert = NSAlert()
                 errorAlert.messageText = "Citation Error"
                 errorAlert.informativeText = "Failed to generate citation: \(error.localizedDescription)"
                 errorAlert.alertStyle = .critical
                 errorAlert.addButton(withTitle: "OK")
                 errorAlert.runModal()
+#else
+                windowAlert(message: "Failed to generate citation: \(error.localizedDescription)")
+#endif
             }
         }
         
@@ -1380,6 +1472,7 @@ struct ContentView: View {
             
             if themePreference == "match" {
                 showPageShine = false
+#if canImport(AppKit)
                 Task {
                     let clr = await browserState.getBackground()
                     if let window = NSApplication.shared.keyWindow {
@@ -1387,6 +1480,7 @@ struct ContentView: View {
                         window.appearance = NSAppearance(named: clr.isLight ? .aqua : .darkAqua)
                     }
                 }
+#endif
             } else {
                 showPageShine = true
             }
@@ -1402,6 +1496,7 @@ struct ContentView: View {
     
 }
 
+#if canImport(AppKit)
 class SavePanelAccessoryDelegate: NSObject {
     let panel: NSSavePanel
     
@@ -1418,3 +1513,4 @@ class SavePanelAccessoryDelegate: NSObject {
         }
     }
 }
+#endif

@@ -275,7 +275,7 @@ struct AutoFillSettingsView: View {
             }
             .padding(.top, 0)
         }
-        .frame(minWidth: 400, minHeight: 300)
+        .frame(maxWidth: .infinity, minHeight: 200)
         .onAppear {
             reloadItems()
         }

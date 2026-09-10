@@ -1,5 +1,8 @@
 import SwiftUI
 import WebKit
+#if canImport(UIKit)
+import UIKit
+#endif
 
 // MARK: - Category Definitions
 struct CategoryDef: Equatable {
@@ -112,6 +115,413 @@ let categoryDefs: [CategoryDef] = [
     catBrowsing, catSidebar, catAI, catAutofill, catPalette, catBookmarks, catProfiles, catPrivacy, catContetBlocker, catExt, catAdvanced, catLearnMore
 ]
 
+let Settings: [Setting] = {
+    var s: [Setting] = [
+        Setting(
+            name: "Browsing History",
+            icon: "clock",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "recordHistory",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Search Engine",
+            icon: "magnifyingglass",
+            category: catBrowsing,
+            type: "dropdownString",
+            appStorageKey: "searchURL",
+            defaultValueString: "https://google.com/search?q=",
+            dropdownOptions: .staticTaggedOptions([
+                "https://google.com/search?q=": "Google",
+                "https://www.bing.com/search?q=": "Bing",
+                "https://duckduckgo.com/?q=": "DuckDuckGo",
+                "https://www.perplexity.ai/search/new?q=": "Perplexity",
+                "https://en.wikipedia.org/wiki/": "Wikipedia",
+                "https://search.yahoo.com/search?p=": "Yahoo",
+                "https://chatgpt.com/?q=":"ChatGPT"
+            ])
+        ),
+        Setting(
+            name: "Autocomplete Engine",
+            icon: "text.cursor",
+            category: catAdvanced,
+            type: "text",
+            appStorageKey: "autofillEngine",
+            defaultValueString: "",
+        ),
+        Setting(
+            name: "Show Autocomplete When Typing",
+            icon: "text.cursor",
+            category: catBrowsing,
+            type: "toggle",
+            appStorageKey: "showAddressBarAutofill",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Homepage",
+            icon: "house",
+            category: catBrowsing,
+            type: "text",
+            appStorageKey: "homepage",
+            defaultValueString: "default-home"
+        ),
+        Setting(
+            name: "Tabs",
+            icon: "rectangle.on.rectangle",
+            category: catBrowsing,
+            type: "dropdown",
+            appStorageKey: "tabMode",
+            defaultValueInt: 0,
+            dropdownOptions: .staticOptions([0: "Top", 1: "Slide Over", 2: "Vertical", 3:"Hidden", 4: "Bottom"])
+        ),
+        Setting(
+            name: "Toolbar Position",
+            icon: "rectangle.grid.1x2.fill",
+            category: catBrowsing,
+            type: "dropdown",
+            appStorageKey: "toolbarLocation",
+            defaultValueInt: 0,
+            dropdownOptions: .staticOptions([0: "Top", 1: "Bottom"])
+        ),
+        Setting(
+            name: "Spaces",
+            icon: "rectangle.on.rectangle.angled",
+            category: catBrowsing,
+            type: "toggle",
+            appStorageKey: "showSpaces",
+            defaultValueBool: true,
+        ),
+        Setting(
+            name: "Vertical Tabs Width",
+            icon: "arrow.left.and.right",
+            category: catSidebar,
+            type: "slider",
+            appStorageKey: "leftSidebarWidth",
+            sliderMax: 600,
+            sliderMin: 100,
+            defaultValueInt: 200
+        ),
+        Setting(
+            name: "Right Sidebar Background",
+            icon: "sidebar.right",
+            category: catSidebar,
+            type: "dropdown",
+            appStorageKey: "sidebarBackgroundType",
+            defaultValueInt: 1,
+            dropdownOptions: .staticOptions([0: "None", 1:"Unified", 2: "Individual"])
+        ),
+        Setting(
+            name: "Right Sidebar Width",
+            icon: "arrow.left.and.right",
+            category: catSidebar,
+            type: "slider",
+            appStorageKey: "sidebarWidth",
+            sliderMax: 600,
+            sliderMin: 100,
+            defaultValueInt: 345
+        ),
+        Setting(
+            name: "Temperature",
+            icon: "thermometer",
+            category: catAI,
+            type: "doubleSlider",
+            appStorageKey: "temp",
+            sliderMax: 1,
+            sliderMin: 0,
+            defaultValueDouble: 0.7
+        ),
+        Setting(
+            name: "Max Tokens",
+            icon: "number",
+            category: catAI,
+            type: "slider",
+            appStorageKey: "maxTokens",
+            sliderMax: 1000,
+            sliderMin: 10,
+            defaultValueInt: 1000
+        ),
+        Setting(
+            name: "Page Character Cutoff",
+            icon: "scissors",
+            category: catAI,
+            type: "slider",
+            appStorageKey: "pageCutoff",
+            sliderMax: 15000,
+            sliderMin: 0,
+            defaultValueInt: 12000
+        ),
+        Setting(
+            name: "Instructions",
+            icon: "text.quote",
+            category: catAI,
+            type: "text",
+            appStorageKey: "instructions"
+        ),
+        Setting(
+            name: "Bookmark Bar",
+            icon: "inset.filled.topthird.rectangle",
+            category: catBookmarks,
+            type: "dropdown",
+            appStorageKey: "bookmarkBar",
+            defaultValueInt: 0,
+            dropdownOptions: .staticOptions(Dictionary(uniqueKeysWithValues: BookmarkBarMode.allCases.map { ($0.rawValue, $0.name) }))
+        ),
+        Setting(
+            name: "Bookmark Bar Location",
+            icon: "inset.filled.tophalf.bottomhalf.rectangle",
+            category: catBookmarks,
+            type: "dropdown",
+            appStorageKey: "bookmarkbarLocation",
+            defaultValueInt: 0,
+            dropdownOptions: .staticOptions([0:"Top", 1:"Bottom"])
+        ),
+        Setting(
+            name: "Clear Browsing History On Close",
+            icon: "clock.badge.xmark",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "clearHistoryOnClose",
+            defaultValueBool: false
+        ),
+        Setting(
+            name: "Clear Download History On Close",
+            icon: "arrow.down.circle.badge.xmark",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "clearDownloadHistoryOnClose",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Clear Cache On Close",
+            icon: "trash.circle",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "clearCacheOnClose",
+            defaultValueBool: false
+        ),
+        Setting(
+            name: "Clear Cookies On Close",
+            icon: "xmark.bin",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "clearCookiesOnClose",
+            defaultValueBool: false
+        ),
+        Setting(
+            name: "Tabs",
+            icon: "square.on.square",
+            category: catPalette,
+            type: "toggle",
+            appStorageKey: "paletteShowTabs",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Bookmarks",
+            icon: "bookmark",
+            category: catPalette,
+            type: "toggle",
+            appStorageKey: "paletteShowBookmarks",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Search",
+            icon: "magnifyingglass.circle",
+            category: catPalette,
+            type: "toggle",
+            appStorageKey: "paletteShowSearch",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Commands",
+            icon: "terminal",
+            category: catPalette,
+            type: "toggle",
+            appStorageKey: "paletteShowCommands",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "History",
+            icon: "clock.arrow.circlepath",
+            category: catPalette,
+            type: "toggle",
+            appStorageKey: "paletteShowHistory",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Enable Handoff",
+            icon: "hand.point.up.left",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "enableHandoff",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "User Agent",
+            icon: "person.crop.rectangle",
+            category: catAdvanced,
+            type: "text",
+            appStorageKey: "userAgent"
+        ),
+        Setting(
+            name: "Preserve On Close",
+            icon: "archivebox",
+            category: catAdvanced,
+            type: "toggle",
+            appStorageKey: "preserveOnClose",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Use PDFKit",
+            icon: "doc.richtext",
+            category: catAdvanced,
+            type: "toggle",
+            appStorageKey: "usePDFKit",
+            defaultValueBool: true
+        ),
+        Setting(
+            name: "Default Page Zoom (%)",
+            icon: "magnifyingglass.circle",
+            category: catBrowsing,
+            type: "slider",
+            appStorageKey: "defaultPageZoom",
+            sliderMax: 200,
+            sliderMin: 50,
+            defaultValueInt: 100
+        ),
+        Setting(
+            name: "HTTPS Only",
+            icon: "lock",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "httpsOnly",
+            defaultValueBool: false
+        ),
+        Setting(
+            name: "Global Privacy Control",
+            icon: "hand.raised",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "globalPrivacyControl",
+            defaultValueBool: false
+        ),
+        Setting(
+            name: "Open Links in Background",
+            icon: "arrow.up.right.square",
+            category: catBrowsing,
+            type: "toggle",
+            appStorageKey: "openLinksInBackground",
+            defaultValueBool: false
+        ),
+        Setting(
+            name: "Homepage",
+            icon: "house",
+            category: catLearnMore,
+            type: "button",
+            appStorageKey: "",
+            buttonText: "Open",
+            action: {
+                createNewTab(with:URL(string:"https://systemsoftware.github.io/about/balance"))
+            }
+        ),
+        Setting(
+            name: "README",
+            icon: "doc.text",
+            category: catLearnMore,
+            type: "button",
+            appStorageKey: "",
+            buttonText: "Open",
+            action: {
+                createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/README.md"))
+            }
+        ),
+        Setting(
+            name: "FEATURES.md",
+            icon: "doc.text.fill",
+            category: catLearnMore,
+            type: "button",
+            appStorageKey: "",
+            buttonText: "Open",
+            action: {
+                createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/FEATURES.md"))
+            }
+        ),
+        Setting(
+            name: "GitHub Repo",
+            icon: "curlybraces",
+            category: catLearnMore,
+            type: "button",
+            appStorageKey: "",
+            buttonText: "Open",
+            action: {
+                createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
+            }
+        ),
+        Setting(
+            name: "Use Favicons",
+            icon: "network",
+            category: catAdvanced,
+            type: "toggle",
+            appStorageKey: "loadImages",
+            defaultValueBool: true
+        ),
+        Setting(name: "Weather City", icon: "cloud.sun", category: catBrowsing, type: "text", appStorageKey: "homepageWeatherCity")
+    ]
+
+    #if os(macOS)
+    s.append(
+        Setting(
+            name: "Developer Tools",
+            icon: "chevron.left.forwardslash.chevron.right",
+            category: catAdvanced,
+            type: "toggle",
+            appStorageKey: "developerMode",
+            defaultValueBool: false
+        ),
+    )
+    s.append(
+        Setting(
+            name: "Right Sidebar",
+            icon: "sidebar.right",
+            category: catSidebar,
+            type: "toggle",
+            appStorageKey: "showSidebar",
+            defaultValueBool: true
+        ))
+    s.append(
+        Setting(
+            name: "Theme",
+            icon: "paintbrush",
+            category: catAdvanced,
+            type: "dropdownString",
+            appStorageKey: "themePreference",
+            defaultValueString: "system",
+            dropdownOptions: .staticTaggedOptions([
+                "system": "System",
+                "light": "Light",
+                "match": "Match Page",
+                "dark": "Dark"
+            ])
+        ),
+    )
+    s.append(Setting(
+        name: "Open App Data",
+        icon: "folder",
+        category: catAdvanced,
+        type: "button",
+        appStorageKey: "",
+        buttonText: "Open",
+        action: {
+            if let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
+                PlatformApplication.open(url)
+            }
+        }
+    ))
+    #endif
+
+    return s
+}()
+
 struct Setting: Identifiable {
     var id: String { appStorageKey.isEmpty ? "header-\(name)" : appStorageKey }
     var name: String
@@ -136,401 +546,6 @@ enum DropdownOptionsSource {
     case staticTaggedOptions([String: String])
 }
 
-
-// MARK: SETTINGS DATA
-var Settings: [Setting] = [
-    Setting(
-        name: "Browsing History",
-        icon: "clock",
-        category: catPrivacy,
-        type: "toggle",
-        appStorageKey: "recordHistory",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Search Engine",
-        icon: "magnifyingglass",
-        category: catBrowsing,
-        type: "dropdownString",
-        appStorageKey: "searchURL",
-        defaultValueString: "https://google.com/search?q=",
-        dropdownOptions: .staticTaggedOptions([
-            "https://google.com/search?q=": "Google",
-            "https://www.bing.com/search?q=": "Bing",
-            "https://duckduckgo.com/?q=": "DuckDuckGo",
-            "https://www.perplexity.ai/search/new?q=": "Perplexity",
-            "https://en.wikipedia.org/wiki/": "Wikipedia",
-            "https://search.yahoo.com/search?p=": "Yahoo",
-            "https://chatgpt.com/?q=":"ChatGPT"
-        ])
-    ),
-    Setting(
-        name: "Autocomplete Engine",
-        icon: "text.cursor",
-        category: catAdvanced,
-        type: "text",
-        appStorageKey: "autofillEngine",
-        defaultValueString: "",
-    ),
-    Setting(
-        name: "Show Autocomplete When Typing",
-        icon: "text.cursor",
-        category: catBrowsing,
-        type: "toggle",
-        appStorageKey: "showAddressBarAutofill",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Homepage",
-        icon: "house",
-        category: catBrowsing,
-        type: "text",
-        appStorageKey: "homepage",
-        defaultValueString: "default-home"
-    ),
-    Setting(
-        name: "Tabs",
-        icon: "rectangle.on.rectangle",
-        category: catBrowsing,
-        type: "dropdown",
-        appStorageKey: "tabMode",
-        defaultValueInt: 0,
-        dropdownOptions: .staticOptions([0: "Horizontal Top", 1: "Slide Over", 2: "Vertical", 3:"Hidden", 4: "Horizontal Bottom"])
-    ),
-    Setting(
-        name: "Toolbar Position",
-        icon: "rectangle.grid.1x2.fill",
-        category: catBrowsing,
-        type: "dropdown",
-        appStorageKey: "toolbarLocation",
-        defaultValueInt: 0,
-        dropdownOptions: .staticOptions([0: "Top", 1: "Bottom"])
-    ),
-    Setting(
-        name: "Spaces",
-        icon: "rectangle.on.rectangle.angled",
-        category: catBrowsing,
-        type: "toggle",
-        appStorageKey: "showSpaces",
-        defaultValueBool: true,
-    ),
-    Setting(
-        name: "Vertical Tabs Width",
-        icon: "arrow.left.and.right",
-        category: catSidebar,
-        type: "slider",
-        appStorageKey: "leftSidebarWidth",
-        sliderMax: 600,
-        sliderMin: 100,
-        defaultValueInt: 200
-    ),
-    Setting(
-        name: "Right Sidebar",
-        icon: "sidebar.right",
-        category: catSidebar,
-        type: "toggle",
-        appStorageKey: "showSidebar",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Right Sidebar Background",
-        icon: "sidebar.right",
-        category: catSidebar,
-        type: "dropdown",
-        appStorageKey: "sidebarBackgroundType",
-        defaultValueInt: 1,
-        dropdownOptions: .staticOptions([0: "None", 1:"Unified", 2: "Individual"])
-    ),
-    Setting(
-        name: "Right Sidebar Width",
-        icon: "arrow.left.and.right",
-        category: catSidebar,
-        type: "slider",
-        appStorageKey: "sidebarWidth",
-        sliderMax: 600,
-        sliderMin: 100,
-        defaultValueInt: 345
-    ),
-    Setting(
-        name: "Temperature",
-        icon: "thermometer",
-        category: catAI,
-        type: "doubleSlider",
-        appStorageKey: "temp",
-        sliderMax: 1,
-        sliderMin: 0,
-        defaultValueDouble: 0.7
-    ),
-    Setting(
-        name: "Max Tokens",
-        icon: "number",
-        category: catAI,
-        type: "slider",
-        appStorageKey: "maxTokens",
-        sliderMax: 1000,
-        sliderMin: 10,
-        defaultValueInt: 1000
-    ),
-    Setting(
-        name: "Page Character Cutoff",
-        icon: "scissors",
-        category: catAI,
-        type: "slider",
-        appStorageKey: "pageCutoff",
-        sliderMax: 15000,
-        sliderMin: 0,
-        defaultValueInt: 12000
-    ),
-    Setting(
-        name: "Instructions",
-        icon: "text.quote",
-        category: catAI,
-        type: "text",
-        appStorageKey: "instructions"
-    ),
-    Setting(
-        name: "Bookmark Bar",
-        icon: "inset.filled.topthird.rectangle",
-        category: catBookmarks,
-        type: "dropdown",
-        appStorageKey: "bookmarkBar",
-        defaultValueInt: 0,
-        dropdownOptions: .staticOptions(Dictionary(uniqueKeysWithValues: BookmarkBarMode.allCases.map { ($0.rawValue, $0.name) }))
-    ),
-    Setting(
-        name: "Bookmark Bar Location",
-        icon: "inset.filled.tophalf.bottomhalf.rectangle",
-        category: catBookmarks,
-        type: "dropdown",
-        appStorageKey: "bookmarkbarLocation",
-        defaultValueInt: 0,
-        dropdownOptions: .staticOptions([0:"Top", 1:"Bottom"])
-    ),
-    Setting(
-        name: "Clear Browsing History On Close",
-        icon: "clock.badge.xmark",
-        category: catPrivacy,
-        type: "toggle",
-        appStorageKey: "clearHistoryOnClose",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Clear Download History On Close",
-        icon: "arrow.down.circle.badge.xmark",
-        category: catPrivacy,
-        type: "toggle",
-        appStorageKey: "clearDownloadHistoryOnClose",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Clear Cache On Close",
-        icon: "trash.circle",
-        category: catPrivacy,
-        type: "toggle",
-        appStorageKey: "clearCacheOnClose",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Clear Cookies On Close",
-        icon: "xmark.bin",
-        category: catPrivacy,
-        type: "toggle",
-        appStorageKey: "clearCookiesOnClose",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Tabs",
-        icon: "square.on.square",
-        category: catPalette,
-        type: "toggle",
-        appStorageKey: "paletteShowTabs",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Bookmarks",
-        icon: "bookmark",
-        category: catPalette,
-        type: "toggle",
-        appStorageKey: "paletteShowBookmarks",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Search",
-        icon: "magnifyingglass.circle",
-        category: catPalette,
-        type: "toggle",
-        appStorageKey: "paletteShowSearch",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Commands",
-        icon: "terminal",
-        category: catPalette,
-        type: "toggle",
-        appStorageKey: "paletteShowCommands",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "History",
-        icon: "clock.arrow.circlepath",
-        category: catPalette,
-        type: "toggle",
-        appStorageKey: "paletteShowHistory",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Enable Handoff",
-        icon: "hand.point.up.left",
-        category: catPrivacy,
-        type: "toggle",
-        appStorageKey: "enableHandoff",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "User Agent",
-        icon: "person.crop.rectangle",
-        category: catAdvanced,
-        type: "text",
-        appStorageKey: "userAgent"
-    ),
-    Setting(
-        name: "Preserve On Close",
-        icon: "archivebox",
-        category: catAdvanced,
-        type: "toggle",
-        appStorageKey: "preserveOnClose",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Use PDFKit",
-        icon: "doc.richtext",
-        category: catAdvanced,
-        type: "toggle",
-        appStorageKey: "usePDFKit",
-        defaultValueBool: true
-    ),
-    Setting(
-        name: "Open App Data",
-        icon: "folder",
-        category: catAdvanced,
-        type: "button",
-        appStorageKey: "",
-        buttonText: "Open",
-        action: {
-            if let url = FileManager.default.urls(for: .applicationSupportDirectory, in: .userDomainMask).first {
-                NSWorkspace.shared.open(url)
-            }
-        }
-    ),
-    Setting(
-        name: "Theme",
-        icon: "paintbrush",
-        category: catAdvanced,
-        type: "dropdownString",
-        appStorageKey: "themePreference",
-        defaultValueString: "system",
-        dropdownOptions: .staticTaggedOptions([
-            "system": "System",
-            "light": "Light",
-            "match": "Match Page",
-            "dark": "Dark"
-        ])
-    ),
-    Setting(
-        name: "Default Page Zoom (%)",
-        icon: "magnifyingglass.circle",
-        category: catBrowsing,
-        type: "slider",
-        appStorageKey: "defaultPageZoom",
-        sliderMax: 200,
-        sliderMin: 50,
-        defaultValueInt: 100
-    ),
-    Setting(
-        name: "HTTPS Only",
-        icon: "lock",
-        category: catPrivacy,
-        type: "toggle",
-        appStorageKey: "httpsOnly",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Global Privacy Control",
-        icon: "hand.raised",
-        category: catPrivacy,
-        type: "toggle",
-        appStorageKey: "globalPrivacyControl",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Open Links in Background",
-        icon: "arrow.up.right.square",
-        category: catBrowsing,
-        type: "toggle",
-        appStorageKey: "openLinksInBackground",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Homepage",
-        icon: "house",
-        category: catLearnMore,
-        type: "button",
-        appStorageKey: "",
-        buttonText: "Open",
-        action: {
-            createNewTab(with:URL(string:"https://systemsoftware.github.io/about/balance"))
-        }
-    ),
-    Setting(
-        name: "README",
-        icon: "doc.text",
-        category: catLearnMore,
-        type: "button",
-        appStorageKey: "",
-        buttonText: "Open",
-        action: {
-            createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/README.md"))
-        }
-    ),
-    Setting(
-        name: "FEATURES.md",
-        icon: "doc.text.fill",
-        category: catLearnMore,
-        type: "button",
-        appStorageKey: "",
-        buttonText: "Open",
-        action: {
-            createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/FEATURES.md"))
-        }
-    ),
-    Setting(
-        name: "GitHub Repo",
-        icon: "curlybraces",
-        category: catLearnMore,
-        type: "button",
-        appStorageKey: "",
-        buttonText: "Open",
-        action: {
-            createNewTab(with:URL(string:"https://github.com/systemsoftware/balance"))
-        }
-    ),
-    Setting(
-        name: "Developer Tools",
-        icon: "chevron.left.forwardslash.chevron.right",
-        category: catAdvanced,
-        type: "toggle",
-        appStorageKey: "developerMode",
-        defaultValueBool: false
-    ),
-    Setting(
-        name: "Use Favicons",
-        icon: "network",
-        category: catAdvanced,
-        type: "toggle",
-        appStorageKey: "loadImages",
-        defaultValueBool: true
-    )
-]
 
 // MARK: - Header (legacy, kept for any external usage)
 struct Header: View {
@@ -804,8 +819,8 @@ struct SettingsCardRow: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(isHovered
-                      ? Color(NSColor.controlBackgroundColor).opacity(0.8)
-                      : Color(NSColor.controlBackgroundColor).opacity(0))
+                      ? Color.platformControlBackground.opacity(0.8)
+                      : Color.platformControlBackground.opacity(0))
         )
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
@@ -844,8 +859,8 @@ struct SettingsCustomCardRow<TrailingContent: View>: View {
         .background(
             RoundedRectangle(cornerRadius: 10)
                 .fill(isHovered
-                      ? Color(NSColor.controlBackgroundColor).opacity(0.8)
-                      : Color(NSColor.controlBackgroundColor).opacity(0))
+                      ? Color.platformControlBackground.opacity(0.8)
+                      : Color.platformControlBackground.opacity(0))
         )
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
@@ -872,7 +887,7 @@ struct CategoryChip: View {
             .padding(.vertical, 5)
             .background(
                 Capsule()
-                    .fill(isSelected ? def.color.opacity(0.2) : Color(NSColor.controlBackgroundColor).opacity(0.5))
+                    .fill(isSelected ? def.color.opacity(0.2) : Color.platformControlBackground.opacity(0.5))
             )
             .overlay(
                 Capsule()
@@ -995,7 +1010,7 @@ struct SettingsSectionContent: View {
             }
             }
             
-            if def.id == "bookmarks" && isStandalone {
+            if def.id == "bookmarks" {
                 SettingsCardRow(
                     setting: Setting(
                         name:"New Bookmark",
@@ -1168,7 +1183,7 @@ struct SettingsSectionContent: View {
                         .fixedSize()
                     }
                     .padding()
-                    .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+                    .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformControlBackground.opacity(0.5)))
                     .overlay(
                         RoundedRectangle(cornerRadius: 12)
                             .stroke(Color.primary.opacity(0.05), lineWidth: 1)
@@ -1213,7 +1228,7 @@ struct SettingsSectionContent: View {
         .padding(.vertical, 10)
         .background(
             RoundedRectangle(cornerRadius: 10)
-                .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
+                .fill(Color.platformControlBackground.opacity(0.4))
         )
     }
 
@@ -1251,7 +1266,7 @@ struct SettingsSectionContent: View {
             .padding(.vertical, 10)
             .background(
                 RoundedRectangle(cornerRadius: 10)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.4))
+                    .fill(Color.platformControlBackground.opacity(0.4))
             )
         }
         .buttonStyle(.plain)
@@ -1293,7 +1308,11 @@ struct SettingsView: View {
         if isStandalone || isSetup {
             return categoryDefs
         } else {
+            #if os(macOS)
             return categoryDefs.filter { $0.id != "sidebar" }
+            #else
+            return categoryDefs
+            #endif
         }
     }
 
@@ -1339,7 +1358,7 @@ struct SettingsView: View {
                 Spacer()
             }
             .frame(width: 170)
-            .background(Color(NSColor.windowBackgroundColor).opacity(0.6))
+            .background(Color.platformWindowBackground.opacity(0.6))
 
             Divider()
 
@@ -1357,7 +1376,7 @@ struct SettingsView: View {
                 .padding(8)
                 .background(
                     RoundedRectangle(cornerRadius: 8)
-                        .fill(Color(NSColor.controlBackgroundColor).opacity(0.7))
+                        .fill(Color.platformControlBackground.opacity(0.7))
                 )
                 .padding(.horizontal, 8)
                 .padding(.top, 25)
@@ -1415,7 +1434,7 @@ struct SettingsView: View {
             .padding(7)
             .background(
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color(NSColor.controlBackgroundColor).opacity(0.7))
+                    .fill(Color.platformControlBackground.opacity(0.7))
             )
             .padding(.horizontal, 8)
             .padding(.bottom, 8)
@@ -1557,9 +1576,13 @@ struct SettingsView: View {
 
 // MARK: - windowAlert helper
 func windowAlert(message: String) {
+    #if canImport(AppKit)
     let a = NSAlert()
     a.messageText = message
     a.runModal()
+    #else
+    SwiftUIPresentationCenter.shared.message(message)
+    #endif
 }
 
 
@@ -1609,3 +1632,4 @@ struct NewPasswordView: View {
     }
     
 }
+

@@ -33,7 +33,7 @@ public struct CachedAsyncImageCore<Content>: View where Content: View {
     public init(urlRequest: URLRequest?, urlCache: URLCache = .shared,  scale: CGFloat = 1) where Content == Image {
         self.init(urlRequest: urlRequest, urlCache: urlCache, scale: scale) { phase in
 #if os(macOS)
-            phase.image ?? Image(nsImage: .init())
+            phase.image ?? Image(universalImage: .init())
 #else
             phase.image ?? Image(uiImage: .init())
 #endif
@@ -141,8 +141,8 @@ private extension CachedAsyncImageCore {
     
     private func image(from data: Data) throws -> Image {
 #if os(macOS)
-        if let nsImage = NSImage(data: data) {
-            return Image(nsImage: nsImage)
+        if let image = UniversalImage(data: data) {
+            return Image(universalImage: image)
         } else {
             throw AsyncImage<Content>.LoadingError()
         }

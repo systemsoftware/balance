@@ -125,7 +125,9 @@ struct CreateNewTabIntent: AppIntent {
     
     @MainActor
     func perform() async throws -> some IntentResult {
+#if os(macOS)
         NSApp.activate(ignoringOtherApps: true)
+        #endif
         
         if let bookmark {
             var string = bookmark.url
@@ -163,8 +165,10 @@ struct CreateNewWindowIntent: AppIntent {
     
     @MainActor
     func perform() async throws -> some IntentResult {
+#if os(macOS)
+
         NSApp.activate(ignoringOtherApps: true)
-        
+        #endif
         if let bookmark {
             var string = bookmark.url
             
@@ -201,7 +205,10 @@ struct OpenURLIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+#if os(macOS)
+
         NSApp.activate(ignoringOtherApps: true)
+        #endif
         createNewTab(with: url)
         return .result()
     }
@@ -233,7 +240,9 @@ struct OpenPrivateWindowIntent: AppIntent {
 
     @MainActor
     func perform() async throws -> some IntentResult {
+        #if os(macOS)
         NSApp.activate(ignoringOtherApps: true)
+        #endif
         createNewWindow(pvt: true)
         return .result()
     }
@@ -253,7 +262,9 @@ struct SearchIntent: AppIntent {
     
     @MainActor
     func perform() async throws -> some IntentResult {
+#if os(macOS)
         NSApp.activate(ignoringOtherApps: true)
+        #endif
         
         if let url = URL(string:q.url) {
             createNewTab(with: url)

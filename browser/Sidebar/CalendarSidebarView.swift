@@ -205,7 +205,7 @@ struct CalendarRow: View {
             Spacer()
         }
         .padding()
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .background(Color.platformWindowBackground.opacity(0.5))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)

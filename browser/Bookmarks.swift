@@ -49,10 +49,10 @@ struct BookmarkRow: View {
                 Spacer()
             }
             .padding()
-            .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformControlBackground.opacity(0.5)))
         }
         .buttonStyle(.plain)
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
+        .background(Color.platformWindowBackground.opacity(0.5), in: RoundedRectangle(cornerRadius: 12))
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.primary.opacity(0.05), lineWidth: 1)

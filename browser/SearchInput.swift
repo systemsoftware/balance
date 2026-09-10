@@ -5,12 +5,12 @@ struct SearchInputVisualConfig {
     var height: CGFloat = 22
 
     var iconName: String = "magnifyingglass"
-    var iconColor: Color = Color(nsColor: .tertiaryLabelColor)
+    var iconColor: Color = .secondary
     var clearIconName: String = "xmark.circle.fill"
 
     var placeholderText: String = "Search"
-    var placeholderColor: Color = Color(nsColor: .placeholderTextColor)
-    var textColor: Color = Color(nsColor: .labelColor)
+    var placeholderColor: Color = .secondary
+    var textColor: Color = .primary
     var font: Font = .system(size: 13)
 
     var horizontalPadding: CGFloat = 6
@@ -25,6 +25,15 @@ struct SearchInputView: View {
     
     var placeholder: String?
 
+    private var clearButton: some View {
+        Button(action: { withAnimation(config.animation) { text = "" } }) {
+            Image(systemName: config.clearIconName)
+                .foregroundColor(config.iconColor)
+                .font(.system(size: 11))
+        }
+        .buttonStyle(.plain)
+    }
+
     var body: some View {
         HStack(spacing: 4) {
             Image(systemName: config.iconName)
@@ -32,22 +41,13 @@ struct SearchInputView: View {
                 .font(.system(size: 11, weight: .medium))
                 .frame(width: 16)
 
-            TextField(placeholder ?? config.placeholderText,
-                text: $text,
-            )
-            .padding(3)
-            .textFieldStyle(.plain)
+            TextField(placeholder ?? config.placeholderText, text: $text)
+                .padding(3)
+                .textFieldStyle(.plain)
 
             if !text.isEmpty {
-                Button(action: {
-                    withAnimation(config.animation) { text = "" }
-                }) {
-                    Image(systemName: config.clearIconName)
-                        .foregroundColor(config.iconColor)
-                        .font(.system(size: 11))
-                }
-                .buttonStyle(.plain)
-                .transition(.opacity.combined(with: .scale(scale: 0.8)))
+                clearButton
+                    .transition(.opacity.combined(with: .scale(scale: 0.8)))
             }
         }
         .padding(.horizontal, config.horizontalPadding)
@@ -55,18 +55,14 @@ struct SearchInputView: View {
         .frame(height: config.height)
         .background(
             RoundedRectangle(cornerRadius: config.cornerRadius)
-                .fill(Color(nsColor: .controlBackgroundColor))
+                .fill(Color.platformControlBackground.opacity(0.6))
                 .overlay(
                     RoundedRectangle(cornerRadius: config.cornerRadius)
-                        .strokeBorder(
-                            isFocused
-                                ? Color(nsColor: .keyboardFocusIndicatorColor).opacity(0.7)
-                                : Color(nsColor: .separatorColor).opacity(0.6),
-                            lineWidth: isFocused ? 2 : 0.5
-                        )
+                        .strokeBorder(Color.platformSeparator.opacity(isFocused ? 0.8 : 0.4), lineWidth: isFocused ? 1.5 : 0.5)
                 )
         )
+        // Use a single animation modifier to avoid compounding animations
         .animation(config.animation, value: isFocused)
-        .animation(config.animation, value: text.isEmpty)
+        .animation(config.animation, value: text)
     }
 }

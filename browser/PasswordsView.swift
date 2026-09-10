@@ -73,7 +73,7 @@ struct PasswordRow: View {
             // Circular Key Icon
             ZStack {
                 Circle()
-                    .fill(Color(NSColor.controlAccentColor).opacity(0.1))
+                    .fill(Color.platformAccent.opacity(0.1))
                     .frame(width: 36, height: 36)
                 Favicon(cred.domain)
             }
@@ -99,6 +99,7 @@ struct PasswordRow: View {
                 Button(action: {
                     authenticate(reason: "authenticate to copy your password") {
                         if let pass = PasswordManager.shared.fetchPasswordData(for: cred.username, domain: cred.domain) {
+                            #if canImport(AppKit)
                             let pasteboard = NSPasteboard.general
                             pasteboard.clearContents()
                             pasteboard.declareTypes([.string, NSPasteboard.PasteboardType("org.nspasteboard.ConcealedType")], owner: nil)
@@ -110,6 +111,7 @@ struct PasswordRow: View {
                                     pasteboard.clearContents()
                                 }
                             }
+                            #endif
                         }
                     }
                 }) {
@@ -150,7 +152,7 @@ struct PasswordRow: View {
         }
         .padding(.vertical, 8)
         .padding(.horizontal, 12)
-        .background(RoundedRectangle(cornerRadius: 10).fill(Color(NSColor.controlBackgroundColor).opacity(0.5)))
+        .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformControlBackground.opacity(0.5)))
         .contextMenu {
             Button("Edit Username") {
                 editUsernameText = cred.username
@@ -177,7 +179,7 @@ struct PasswordRow: View {
                 PasswordManager.shared.savePassword(username: cred.username, passwordString: editPasswordText, domain: cred.domain)
             }
         }
-        .background(Color(NSColor.windowBackgroundColor).opacity(0.5))
+        .background(Color.platformWindowBackground.opacity(0.5))
         .cornerRadius(12)
         .overlay(
             RoundedRectangle(cornerRadius: 12)

@@ -9,6 +9,15 @@ struct RoundedBorderStyle: ViewModifier {
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
     private var sidebarWidth = 345
 
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
+
+    private var targetWidth: CGFloat? {
+        if horizontalSizeClass == .compact {
+            return nil
+        }
+        return CGFloat(sidebarWidth)
+    }
+
     func body(content: Content) -> some View {
         content
             .overlay(
@@ -16,7 +25,7 @@ struct RoundedBorderStyle: ViewModifier {
                     .stroke(color, lineWidth: lineWidth)
             )
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius))
-            .frame(width: usesSidebarWidth ? CGFloat(sidebarWidth) : nil)
+            .frame(width: usesSidebarWidth ? targetWidth : nil)
     }
 }
 

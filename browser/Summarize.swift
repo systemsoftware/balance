@@ -4,6 +4,7 @@ import FoundationModels
 
 @MainActor
 func createSummaryWindow(state: BrowserState) async {
+    #if canImport(AppKit)
     let text = await withCheckedContinuation { continuation in
         guard let webView = state.webView else {
             continuation.resume(returning: "")
@@ -30,6 +31,7 @@ func createSummaryWindow(state: BrowserState) async {
         let result = try await LanguageModelSession().respond(to: prompt).content
         
         if let url = state.url {
+#if canImport(AppKit)
             let window = NSWindow(
                 contentRect: NSRect(x: 0, y: 0, width: 800, height: 600),
                 styleMask: [.titled, .closable, .miniaturizable, .resizable],
@@ -58,7 +60,10 @@ func createSummaryWindow(state: BrowserState) async {
             window.titleVisibility = .hidden
             
             window.makeKeyAndOrderFront(nil)
-
+#else
+            PlatformApplication.copy(result)
+            windowAlert(message: "Summary copied to the clipboard.")
+#endif
         }
         
     } catch {
@@ -67,16 +72,21 @@ func createSummaryWindow(state: BrowserState) async {
             message: error.localizedDescription
         )
     }
+    #endif
 }
 
 @MainActor
 private func showSummaryError(title: String, message: String) {
+#if canImport(AppKit)
     let alert = NSAlert()
     alert.alertStyle = .informational
     alert.messageText = title
     alert.informativeText = message
     alert.addButton(withTitle: "OK")
     alert.runModal()
+#else
+    windowAlert(message: "\(title): \(message)")
+#endif
 }
 
 struct SummaryWindow: View {
@@ -86,7 +96,7 @@ struct SummaryWindow: View {
 
     var body: some View {
         ZStack {
-            Color(NSColor.windowBackgroundColor)
+            Color.platformWindowBackground
                 .ignoresSafeArea()
 
             ScrollView {
@@ -143,7 +153,7 @@ struct SummaryWindow: View {
         .padding(16)
         .background(
             RoundedRectangle(cornerRadius: 12, style: .continuous)
-                .fill(Color(NSColor.controlBackgroundColor))
+                .fill(Color.platformControlBackground)
         )
     }
 
@@ -151,7 +161,9 @@ struct SummaryWindow: View {
         HStack {
             Spacer()
             Button("") {
+#if canImport(AppKit)
                 NSApp.keyWindow?.close()
+#endif
             }
             .keyboardShortcut(.escape)
             .buttonStyle(.plain)

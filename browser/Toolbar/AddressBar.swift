@@ -16,11 +16,16 @@ struct AddressBar: View {
     let profileName: String?
     let events: [EventExtraction]
     let submitURL: () -> Void
+    @AppStorage("toolbarLocation") private var toolbarLocation = 0
 
     var body: some View {
         HStack {
             TrustIndicator(url: location, isPresented: $showTrustInfo)
-                .popover(isPresented: $showTrustInfo) {
+                .popover(
+                    isPresented: $showTrustInfo,
+                    attachmentAnchor: .rect(.bounds),
+                    arrowEdge: toolbarLocation == 0 ? .top : .bottom
+                ) {
                     ServerTrustView(
                         trust: browserState.serverTrust,
                         url: location,
@@ -28,6 +33,7 @@ struct AddressBar: View {
                         dataStore: browserState.webView?.configuration.websiteDataStore,
                         onAttemptHTTPS: attemptHTTPS
                     )
+                    .roomyToolbarPopover()
                 }
 
             AddressField(text: $urlInput, focusOnAppear: focusOnAppear, onSubmit: submitURL)
@@ -45,6 +51,8 @@ struct AddressBar: View {
                     .padding(.trailing, 10)
             }
         }
+        .frame(minWidth: 0, maxWidth: .infinity)
+        .clipped()
     //    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
         .sheet(isPresented: $showTabSearch) {
             TabSearchView(isPopover: true)
@@ -130,25 +138,41 @@ private struct AddressField: View {
     @State private var isEditing = false
     @State private var showSuggestions = false
     @State private var fieldWidth: CGFloat = 300
+    @AppStorage("toolbarLocation") private var toolbarLocation = 0
+    @FocusState private var isFocused: Bool
 
     var body: some View {
-        NativeAddressTextField(
-            text: $text,
-            focusOnAppear: focusOnAppear,
-            onEditingChange: { editing in
-                isEditing = editing
-                showSuggestions = editing && shouldShowSuggestions(for: text)
-            },
-            onSubmit: {
+        TextField("Search or enter website name", text: $text)
+            .textFieldStyle(.plain)
+            .autocorrectionDisabled(true)
+            .lineLimit(1)
+#if os(iOS)
+            .textInputAutocapitalization(.never)
+            .submitLabel(.go)
+#endif
+            .focused($isFocused)
+            .onSubmit {
                 showSuggestions = false
                 onSubmit()
             }
-        )
+            .onAppear {
+                if focusOnAppear { isFocused = true }
+            }
+            .onChange(of: isFocused) { _, editing in
+                isEditing = editing
+                showSuggestions = editing && shouldShowSuggestions(for: text)
+                if !editing { showSuggestions = false }
+            }
+            .frame(minWidth: 0, maxWidth: .infinity)
             .onChange(of: text) { _, newValue in
                 showSuggestions = shouldShowSuggestions(for: newValue)
             }
             .onGeometryChange(for: CGFloat.self) { $0.size.width } action: { fieldWidth = $0 }
-            .popover(isPresented: $showSuggestions, attachmentAnchor: .rect(.bounds), arrowEdge: .bottom) {
+            .popover(
+                isPresented: $showSuggestions,
+                attachmentAnchor: .rect(.bounds),
+                arrowEdge: toolbarLocation == 0 ? .top : .bottom
+            ) {
                 ScrollView {
                     AutocompleteView(
                         searchTerm: $text,
@@ -161,96 +185,16 @@ private struct AddressField: View {
                 }
                 .padding()
                 .frame(width: max(fieldWidth, 1), height: 300)
+#if os(iOS)
+                .presentationCompactAdaptation(.popover)
+#endif
             }
             .padding(10)
             .frame(height: 40)
     }
 
     private func shouldShowSuggestions(for value: String) -> Bool {
-        showAddressBarAutofill && isEditing && !value.isEmpty && !value.contains("//")
-    }
-}
-
-private final class AddressNSTextField: NSTextField {
-    // macOS 27's password-autofill heuristic asks the focused field for its
-    // neighboring valid key views. Crossing into SwiftUI's responder graph can
-    // loop forever, so the address field explicitly ends both traversals.
-    override var previousValidKeyView: NSView? { nil }
-    override var nextValidKeyView: NSView? { nil }
-}
-
-private struct NativeAddressTextField: NSViewRepresentable {
-    @Binding var text: String
-    let focusOnAppear: Bool
-    let onEditingChange: (Bool) -> Void
-    let onSubmit: () -> Void
-
-    func makeCoordinator() -> Coordinator {
-        Coordinator(parent: self)
-    }
-
-    func makeNSView(context: Context) -> NSTextField {
-        let field = AddressNSTextField()
-        field.delegate = context.coordinator
-        field.placeholderString = "Search or enter website name"
-        field.isBordered = false
-        field.drawsBackground = false
-        field.focusRingType = .none
-        field.usesSingleLineMode = true
-        field.cell?.isScrollable = true
-        field.isAutomaticTextCompletionEnabled = false
-        field.contentType = .URL
-        field.stringValue = text
-        return field
-    }
-
-    func updateNSView(_ field: NSTextField, context: Context) {
-        context.coordinator.parent = self
-        if field.currentEditor() == nil, field.stringValue != text {
-            field.stringValue = text
-        }
-
-        guard focusOnAppear, !context.coordinator.didFocus else { return }
-        context.coordinator.didFocus = true
-        DispatchQueue.main.async { [weak field] in
-            guard let field, field.window?.isKeyWindow == true else { return }
-            field.window?.makeFirstResponder(field)
-        }
-    }
-
-    static func dismantleNSView(_ field: NSTextField, coordinator: Coordinator) {
-        field.delegate = nil
-    }
-
-    final class Coordinator: NSObject, NSTextFieldDelegate {
-        var parent: NativeAddressTextField
-        var didFocus = false
-
-        init(parent: NativeAddressTextField) {
-            self.parent = parent
-        }
-
-        func controlTextDidBeginEditing(_ notification: Notification) {
-            parent.onEditingChange(true)
-        }
-
-        func controlTextDidChange(_ notification: Notification) {
-            guard let field = notification.object as? NSTextField else { return }
-            parent.text = field.stringValue
-        }
-
-        func controlTextDidEndEditing(_ notification: Notification) {
-            parent.onEditingChange(false)
-        }
-
-        func control(
-            _ control: NSControl,
-            textView: NSTextView,
-            doCommandBy commandSelector: Selector
-        ) -> Bool {
-            guard commandSelector == #selector(NSResponder.insertNewline(_:)) else { return false }
-            parent.onSubmit()
-            return true
-        }
+        let query = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return showAddressBarAutofill && isEditing && !query.isEmpty && !query.contains("//")
     }
 }

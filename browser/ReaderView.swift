@@ -125,17 +125,25 @@ struct ReaderView: View {
     }
 }
 
-struct ReaderWebView: NSViewRepresentable {
+struct ReaderWebView: PlatformViewRepresentable {
     let htmlContent: String
     let baseURL: URL?
     
-    func makeNSView(context: Context) -> WKWebView {
+    private func makeWebView() -> WKWebView {
         let config = WKWebViewConfiguration()
         let webView = WKWebView(frame: .zero, configuration: config)
         return webView
     }
     
-    func updateNSView(_ nsView: WKWebView, context: Context) {
-        nsView.loadHTMLString(htmlContent, baseURL: baseURL)
+    #if canImport(AppKit)
+    func makeNSView(context: Context) -> WKWebView { makeWebView() }
+    func updateNSView(_ webView: WKWebView, context: Context) {
+        webView.loadHTMLString(htmlContent, baseURL: baseURL)
     }
+    #else
+    func makeUIView(context: Context) -> WKWebView { makeWebView() }
+    func updateUIView(_ webView: WKWebView, context: Context) {
+        webView.loadHTMLString(htmlContent, baseURL: baseURL)
+    }
+    #endif
 }

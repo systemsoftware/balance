@@ -27,7 +27,7 @@ struct CleanupButtonView: View {
     func clearTmpDirectory() {
             Task {
                 let count = await CleanupButtonView.cleanTmp()
-                updateUI(message: "Successfully cleared \(count) items!", resetting: true)
+                updateUI(message: "Cleaned \(count) items!", resetting: true)
             }
     }
     

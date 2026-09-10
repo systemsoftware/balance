@@ -101,6 +101,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
 }
 
 struct BrowserToolbar: View {
+    @Environment(\.verticalSizeClass) private var verticalSizeClass
     
     @ObservedObject var browserState: BrowserState
     @ObservedObject var sidebarStore: SidebarStore
@@ -132,9 +133,12 @@ struct BrowserToolbar: View {
     @State var editSection = 0
 
     @AppStorage("showToolbarDragHandle") private var showDrag = false
+    @AppStorage("toolbarLocation") private var toolbarLocation = 0
 
     @State var showCommands = false
     @State var commandSearchText = ""
+
+    private var hasCompactHeight: Bool { verticalSizeClass == .compact }
     
     var body: some View {
         
@@ -200,6 +204,7 @@ struct BrowserToolbar: View {
                     .padding(Layout.controlPadding)
             }
         }
+        .padding(.top, 5)
         
    /*     .background {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -221,9 +226,13 @@ struct BrowserToolbar: View {
             }
         }
 
-        .popover(isPresented: $showEdit) {
+        .popover(
+            isPresented: $showEdit,
+            attachmentAnchor: .rect(.bounds),
+            arrowEdge: toolbarLocation == 0 ? .top : .bottom
+        ) {
             ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
+                VStack(alignment: .center, spacing: 16) {
                     Text("Customize Toolbar")
                         .font(.headline)
                     
@@ -305,9 +314,15 @@ struct BrowserToolbar: View {
                         .foregroundStyle(.secondary)
                         .frame(maxWidth: .infinity)
                 }
-                .padding(20)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 20)
             }
-            .frame(height: 500)
+            .scrollIndicators(.visible)
+            .fittedMenuPopover(
+                minHeight: hasCompactHeight ? 240 : 420,
+                idealHeight: hasCompactHeight ? 320 : 520,
+                maxHeight: hasCompactHeight ? 360 : 580
+            )
         }
     }
 
@@ -350,6 +365,7 @@ struct BrowserToolbar: View {
         @State var t = ""
         
         @State var showSuggestions = false
+        @AppStorage("toolbarLocation") private var toolbarLocation = 0
         @AppStorage(AutofillPreferences.enabledKey, store: Config.sharedDefaults)
         private var autofillEnabled = true
         
@@ -393,6 +409,10 @@ struct BrowserToolbar: View {
                     
                 case .autocomplete:
                     Button {
+                        guard !urlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+                            showSuggestions = false
+                            return
+                        }
                         showSuggestions.toggle()
                     } label: {
                         Image(systemName: "character.cursor.ibeam")
@@ -401,8 +421,19 @@ struct BrowserToolbar: View {
                     }
                     .frame(width: 40, height: 40)
                     .buttonStyle(.plain)
-                    .popover(isPresented: $showSuggestions) {
+                    .disabled(urlInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                    .onChange(of: urlInput) { _, newValue in
+                        if newValue.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                            showSuggestions = false
+                        }
+                    }
+                    .popover(
+                        isPresented: $showSuggestions,
+                        attachmentAnchor: .rect(.bounds),
+                        arrowEdge: toolbarLocation == 0 ? .top : .bottom
+                    ) {
                         AutoFillPopover(searchTerm: $urlInput)
+                            .roomyToolbarPopover()
                     }
                     
                 case .autofill:
@@ -518,7 +549,7 @@ private struct ToolbarDragSource: ViewModifier {
     let entry: ToolbarEntry
     @Binding var draggedItemID: UUID?
     
-    @AppStorage("showToolbarDragHandle") private var showDrag = true
+    @AppStorage("showToolbarDragHandle") private var showDrag = false
 
     func body(content: Content) -> some View {
         if entry.item == .addressBar && showDrag {

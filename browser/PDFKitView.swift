@@ -1,10 +1,10 @@
 import SwiftUI
 import PDFKit
 
-struct PDFKitRepresentedView: NSViewRepresentable {
+struct PDFKitRepresentedView: PlatformViewRepresentable {
     let url: URL
     
-    func makeNSView(context: Context) -> PDFView {
+    private func makePDFView() -> PDFView {
         let pdfView = PDFView()
         pdfView.autoScales = true
         pdfView.displaysAsBook = false
@@ -21,7 +21,15 @@ struct PDFKitRepresentedView: NSViewRepresentable {
         return pdfView
     }
     
-    func updateNSView(_ nsView: PDFView, context: Context) {
+    #if canImport(AppKit)
+    func makeNSView(context: Context) -> PDFView { makePDFView() }
+    func updateNSView(_ pdfView: PDFView, context: Context) {
         // Handled via async load in makeNSView
     }
+    #else
+    func makeUIView(context: Context) -> PDFView { makePDFView() }
+    func updateUIView(_ pdfView: PDFView, context: Context) {
+        // Handled via async load in makeUIView
+    }
+    #endif
 }
