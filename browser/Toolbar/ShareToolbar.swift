@@ -4,14 +4,13 @@ import SwiftUI
 struct ShareToolbarButton: View {
     
     @Binding var location: URL?
+    var expandedLabel = false
     
     var body: some View {
             ShareLink(item: location ?? URL(string:"https://systemsoftware.github.io/about/balance/")!) {
-                    Image(systemName: "square.and.arrow.up")
-                        .font(.title2)
-                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                    ToolbarItemLabel(expanded: expandedLabel, title: "Share", systemImage: "square.and.arrow.up")
                 }
-                .frame(width: 40, height: 40)
+                .frame(width: expandedLabel ? nil : 40, height: 40)
                 .buttonStyle(.plain)
                 .keyboardShortcut("s", modifiers: [.command, .shift])
                 .disabled(!(location?.absoluteString.starts(with: "http") ?? false))

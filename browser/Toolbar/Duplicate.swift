@@ -3,6 +3,7 @@ import SwiftUI
 struct DuplicateToolbarButton: View {
     
     @Binding var location: URL?
+    var expandedLabel = false
  
     var body: some View {
         
@@ -25,12 +26,11 @@ struct DuplicateToolbarButton: View {
                     .disabled(true)
             }
         } label: {
-            Image(systemName: "plus.square.on.square")
+            ToolbarItemLabel(expanded: expandedLabel, title: "Duplicate", systemImage: "plus.square.on.square")
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 40, height: 40)
-        .frame(width: 40, height: 40)
+        .frame(width: expandedLabel ? nil : 40, height: 40)
         .disabled(!(location?.absoluteString.starts(with: "http") ?? false))
     }
 }

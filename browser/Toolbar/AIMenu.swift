@@ -7,8 +7,10 @@ struct AIMenuToolbar: View {
     @ObservedObject var passwordManager = PasswordManager.shared
     @ObservedObject var browserState: BrowserState
     @Binding var location: URL?
-    
-    @State var summarizing = false
+    var expandedLabel = false
+    @Binding var summarizing: Bool
+    let presentSummarySheet: () -> Void
+
     @State var scanningForEvents = false
     
     
@@ -30,11 +32,7 @@ struct AIMenuToolbar: View {
             }
             
             Button {
-                Task {
-                    summarizing = true
-                    await createSummaryWindow(state: browserState)
-                    summarizing = false
-                }
+                presentSummarySheet()
             } label: {
                 Label("Summarize", systemImage: "text.line.3.summary")
             }
@@ -44,12 +42,12 @@ struct AIMenuToolbar: View {
                 ProgressView()
                     .scaleEffect(2)
             } else {
-                Image(systemName: "sparkles.2")
+                ToolbarItemLabel(expanded: expandedLabel, title: "AI Tools", systemImage: "sparkles.2")
             }
         }
         .disabled(location == nil)
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 40, height: 40)        
+        .frame(width: expandedLabel ? nil : 40, height: 40)
     }
 }

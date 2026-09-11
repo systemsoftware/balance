@@ -2,9 +2,16 @@ import SwiftUI
 import WebKit
 import FoundationModels
 
+enum SummaryGenerationError: LocalizedError {
+    case noReadableText
+
+    var errorDescription: String? {
+        "This page doesn't contain enough readable text to create a summary."
+    }
+}
+
 @MainActor
-func createSummaryWindow(state: BrowserState) async {
-    #if canImport(AppKit)
+func generatePageSummary(state: BrowserState) async throws -> String {
     let text = await withCheckedContinuation { continuation in
         guard let webView = state.webView else {
             continuation.resume(returning: "")
@@ -17,19 +24,19 @@ func createSummaryWindow(state: BrowserState) async {
 
     let cleanedText = text.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !cleanedText.isEmpty else {
-        showSummaryError(
-            title: "Nothing to summarize",
-            message: "This page doesn't contain enough readable text to create a summary."
-        )
-        return
+        throw SummaryGenerationError.noReadableText
     }
 
-    let prompt = "Summarize this page: \(cleanedText)"
-    
+    return try await LanguageModelSession()
+        .respond(to: "Summarize this page: \(cleanedText)")
+        .content
+}
+
+@MainActor @discardableResult
+func createSummaryWindow(state: BrowserState) async -> String {
     do {
-        
-        let result = try await LanguageModelSession().respond(to: prompt).content
-        
+        let result = try await generatePageSummary(state: state)
+
         if let url = state.url {
 #if canImport(AppKit)
             let window = NSWindow(
@@ -64,6 +71,8 @@ func createSummaryWindow(state: BrowserState) async {
             PlatformApplication.copy(result)
             windowAlert(message: "Summary copied to the clipboard.")
 #endif
+            return result
+
         }
         
     } catch {
@@ -71,8 +80,9 @@ func createSummaryWindow(state: BrowserState) async {
             title: "Couldn't summarize this page",
             message: error.localizedDescription
         )
+        return "Couldn't summarize this page"
     }
-    #endif
+    return "Couldn't summarize this page"
 }
 
 @MainActor
@@ -95,27 +105,27 @@ struct SummaryWindow: View {
     let summary: String
 
     var body: some View {
-        ZStack {
-            Color.platformWindowBackground
-                .ignoresSafeArea()
-
-            ScrollView {
-                VStack(alignment: .leading, spacing: 16) {
-
-                    header
-
-                    Divider()
-
-                    summaryCard
-
-                    footer
-                }
-                .padding(24)
+            ZStack {
+                Color.platformWindowBackground
+                    .ignoresSafeArea()
                 
-                .frame(width: 700)
-                .fixedSize(horizontal: false, vertical: true)
+                ScrollView {
+                    VStack(alignment: .leading, spacing: 16) {
+                        
+                        header
+                        
+                        Divider()
+                        
+                        summaryCard
+                        
+                        footer
+                    }
+                    .padding(24)
+                    
+                    .frame(width: 700)
+                    .fixedSize(horizontal: false, vertical: true)
+                }
             }
-        }
     }
 
     private var header: some View {

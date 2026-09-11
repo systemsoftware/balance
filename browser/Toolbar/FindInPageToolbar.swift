@@ -2,6 +2,7 @@ import SwiftUI
 
 struct FindInPageToolbarButton: View {
     @ObservedObject var browserState: BrowserState
+    var expandedLabel = false
     
     var body: some View {
     
@@ -10,11 +11,9 @@ struct FindInPageToolbarButton: View {
             Button() {
                 presentFindBar()
             } label: {
-                Image(systemName: "doc.text.magnifyingglass")
-                    .font(.title2)
-                    .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                ToolbarItemLabel(expanded: expandedLabel, title: "Find in Page", systemImage: "doc.text.magnifyingglass")
             }
-            .frame(width: 40, height: 40)
+            .frame(width: expandedLabel ? nil : 40, height: 40)
             .buttonStyle(.plain)
             .disabled(browserState.url == nil)
             

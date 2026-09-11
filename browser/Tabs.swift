@@ -176,6 +176,7 @@ struct Tabs: View {
                                     Label("New Tab", systemImage: "plus")
                                 .frame(maxWidth: .infinity)
                                 }
+                                .buttonStyle(.plain)
                                 .padding(.horizontal)
                                 .padding(7)
                                 .glassEffect()

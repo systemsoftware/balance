@@ -6,15 +6,11 @@ struct AddressBar: View {
     @Binding var location: URL?
     @Binding var urlInput: String
     @Binding var showTrustInfo: Bool
-    @Binding var showTabSearch: Bool
-    @Binding var showEventPopup: Bool
-    @Binding var showGoTo: Bool
 
     let focusOnAppear: Bool
     let isPrivate: Bool
     let profileIcon: String?
     let profileName: String?
-    let events: [EventExtraction]
     let submitURL: () -> Void
     @AppStorage("toolbarLocation") private var toolbarLocation = 0
 
@@ -36,7 +32,12 @@ struct AddressBar: View {
                     .roomyToolbarPopover()
                 }
 
-            AddressField(text: $urlInput, focusOnAppear: focusOnAppear, onSubmit: submitURL)
+            AddressField(
+                text: $urlInput,
+                isLoading: browserState.isLoading,
+                focusOnAppear: focusOnAppear,
+                onSubmit: submitURL
+            )
             Spacer()
 
             if isPrivate {
@@ -54,33 +55,6 @@ struct AddressBar: View {
         .frame(minWidth: 0, maxWidth: .infinity)
         .clipped()
     //    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
-        .sheet(isPresented: $showTabSearch) {
-            TabSearchView(isPopover: true)
-            Button("Close") { showTabSearch = false }
-                .padding()
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-        }
-        .sheet(isPresented: $showEventPopup) {
-            EventListSheet(events: events)
-        }
-        .sheet(isPresented: $showGoTo) {
-            VStack {
-                TextField("Enter URL", text: $urlInput)
-                    .textFieldStyle(.roundedBorder)
-                    .padding()
-                HStack {
-                    Button("Cancel") { showGoTo = false }
-                    Button("Go") {
-                        showGoTo = false
-                        submitURL()
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                }
-            }
-            .padding()
-        }
     }
 
     private func attemptHTTPS() {
@@ -131,6 +105,7 @@ private struct TrustIndicator: View {
 
 private struct AddressField: View {
     @Binding var text: String
+    let isLoading: Bool
     var focusOnAppear = false
     let onSubmit: () -> Void
 
@@ -162,6 +137,11 @@ private struct AddressField: View {
                 isEditing = editing
                 showSuggestions = editing && shouldShowSuggestions(for: text)
                 if !editing { showSuggestions = false }
+            }
+            .onChange(of: isLoading) { wasLoading, isLoading in
+                if wasLoading && !isLoading {
+                    isFocused = false
+                }
             }
             .frame(minWidth: 0, maxWidth: .infinity)
             .onChange(of: text) { _, newValue in

@@ -2,18 +2,16 @@ import SwiftUI
 import WebKit
 
 struct RestyleToolbarButton: View {
-    
-    @Binding var showBoost: Bool
+    var expandedLabel = false
+    let presentRestyleSheet: () -> Void
     
     var body: some View {
         Button {
-            showBoost.toggle()
+            presentRestyleSheet()
         } label: {
-            Image(systemName: "paintpalette.fill")
-                .font(.title2)
-                .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+            ToolbarItemLabel(expanded: expandedLabel, title: "Restyle Page", systemImage: "paintpalette.fill")
         }
-        .frame(width: 40, height: 40)
+        .frame(width: expandedLabel ? nil : 40, height: 40)
         .buttonStyle(.plain)
     }
 }

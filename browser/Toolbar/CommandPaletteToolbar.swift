@@ -1,21 +1,18 @@
 import SwiftUI
 
 struct CommandPaletteToolbarButton: View {
-    
-    @Binding var showCommands: Bool
-    @Binding var urlInput: String
+    var expandedLabel = false
+    let presentCommands: () -> Void
     
     var body: some View {
      
         Button() {
-            showCommands = true
+            presentCommands()
         } label: {
-            Image(systemName: "text.and.command.macwindow")
-                .font(.title2)
-                .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+            ToolbarItemLabel(expanded: expandedLabel, title: "Command Palette", systemImage: "text.and.command.macwindow")
         }
         .buttonStyle(.plain)
-        .frame(width: 40, height: 40)
+        .frame(width: expandedLabel ? nil : 40, height: 40)
         .keyboardShortcut("k", modifiers: .command)        
     }
 }

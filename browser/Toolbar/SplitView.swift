@@ -4,15 +4,14 @@ import SwiftUI
 struct SplitViewToolbarButton: View {
     @Binding var splitURL: String
     @ObservedObject var splitState: BrowserState
-    @State private var isEditingURL = false
-    @State private var draftURL = ""
+    var expandedLabel = false
+    let presentURLSheet: () -> Void
     
     var body: some View {
         Menu() {
             if(splitURL.isEmpty) {
                 Button() {
-                    draftURL = ""
-                    isEditingURL = true
+                    presentURLSheet()
                 } label: {
                     Label("Open", systemImage: "plus")
                 }
@@ -27,8 +26,7 @@ struct SplitViewToolbarButton: View {
                 Divider()
                 
                 Button() {
-                    draftURL = splitURL
-                    isEditingURL = true
+                    presentURLSheet()
                 } label: {
                     Label("Change", systemImage: "link.badge.plus")
                 }
@@ -49,21 +47,9 @@ struct SplitViewToolbarButton: View {
                 }
             }
         } label: {
-            Image(systemName: "rectangle.split.2x1")
-                .font(.title2)
-                .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+            ToolbarItemLabel(expanded: expandedLabel, title: "Split View", systemImage: "rectangle.split.2x1")
         }
-        .frame(width: 40, height: 40)
+        .frame(width: expandedLabel ? nil : 40, height: 40)
         .buttonStyle(.plain)
-        .alert("Split View URL", isPresented: $isEditingURL) {
-            TextField("https://example.com", text: $draftURL)
-            Button("Cancel", role: .cancel) {}
-            Button("Go") {
-                splitURL = draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
-            }
-            .disabled(draftURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            Text("Enter the URL to show beside the current page.")
-        }
     }
 }

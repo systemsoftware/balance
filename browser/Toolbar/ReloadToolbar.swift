@@ -3,6 +3,7 @@ import WebKit
 
 struct ReloadToolbarButton: View {
     @ObservedObject var browserState: BrowserState
+    var expandedLabel = false
 
     var body: some View {
         Button {
@@ -18,13 +19,11 @@ struct ReloadToolbarButton: View {
                         .scaleEffect(0.6)
                         .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
                 } else {
-                    Image(systemName: "arrow.clockwise")
-                        .font(.title2)
-                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                    ToolbarItemLabel(expanded: expandedLabel, title: "Reload", systemImage: "arrow.clockwise")
                 }
             }
         }
-        .frame(width: 40, height: 40)
+        .frame(width: expandedLabel ? nil : 40, height: 40)
         .buttonStyle(.plain)
         .disabled(!(browserState.url?.absoluteString.starts(with: "http") ?? false))
     }

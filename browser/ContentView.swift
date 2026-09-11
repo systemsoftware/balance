@@ -104,7 +104,7 @@ struct ContentView: View {
     
     @State var showPageShine = false
     
-    @State var showGoTo = false
+    @State private var activeToolbarSheet: ToolbarSheet?
 
     @StateObject private var sidebarStore: SidebarStore
     
@@ -181,7 +181,6 @@ struct ContentView: View {
     @AppStorage("showSidebar", store:Config.sharedDefaults) var showSidebar = true
     
     @State private var showTrustInfo = false
-    @State private var showBoost = false
     
     @State private var currentUserActivity: NSUserActivity?
     @AppStorage("enableHandoff", store:Config.sharedDefaults) var enableHandoff: Bool = true
@@ -314,7 +313,6 @@ struct ContentView: View {
         self._splitState = StateObject(wrappedValue: initialSplitState)
     }
     
-    @State var showTabSearch = false
     @State var showServerTrust = false
     @State private var showReader = false
     @State private var showExtensionsPopover = false
@@ -329,7 +327,6 @@ struct ContentView: View {
     
     @State private var isSlideOverVisible = false
     
-    @State private var showEventPopup = false
     @State private var events: [EventExtraction] = []
     
     @State private var showAddPopover = false
@@ -362,17 +359,14 @@ struct ContentView: View {
                     location: locationBinding,
                     urlInput: $urlInput,
                     showTrustInfo: $showTrustInfo,
-                    showTabSearch: $showTabSearch,
-                    showEventPopup: $showEventPopup,
-                    showGoTo: $showGoTo,
-                    showBoost: $showBoost,
+                    activeSheet: $activeToolbarSheet,
+                    summarizing: $summarizing,
                     splitURL: $splitURL,
                     splitState: splitState,
                     focusAddressOnAppear: initialURLString == nil && shouldAutoFocusAddress,
                     isPrivate: priv,
                     profileIcon: bProfileIcon,
                     profileName: bProfileName,
-                    events: events,
                     submitURL: submitURL,
                     scanEvents: scanEvents,
                     showReader: $showReader
@@ -439,17 +433,16 @@ struct ContentView: View {
                                     .onChange(of: browserState.title) { _, newTitle in
                                         handleTitleChange(to: newTitle)
                                     }
-                                    .onTapGesture(count: 3) {
-                                        MemoryStorage.shared.focusMode.toggle()
+#if os(iOS)
+                                    .onTapGesture(count: 5) {
+                                        toggleFocusMode()
                                     }
-                                    
-
+#endif
+                                
                                 if let url = browserState.url ?? location, url.pathExtension.lowercased() == "pdf" && usePDFKit {
                                     PDFKitRepresentedView(url: url)
                                       
                                 }
-                            }.sheet(isPresented: $showBoost) {
-                                BoostView(browserState: browserState, profile: bProfile)
                             }
                             
                             if !splitURL.isEmpty {
@@ -622,17 +615,14 @@ struct ContentView: View {
                     location: locationBinding,
                     urlInput: $urlInput,
                     showTrustInfo: $showTrustInfo,
-                    showTabSearch: $showTabSearch,
-                    showEventPopup: $showEventPopup,
-                    showGoTo: $showGoTo,
-                    showBoost: $showBoost,
+                    activeSheet: $activeToolbarSheet,
+                    summarizing: $summarizing,
                     splitURL: $splitURL,
                     splitState: splitState,
                     focusAddressOnAppear: initialURLString == nil && shouldAutoFocusAddress,
                     isPrivate: priv,
                     profileIcon: bProfileIcon,
                     profileName: bProfileName,
-                    events: events,
                     submitURL: submitURL,
                     scanEvents: scanEvents,
                     showReader: $showReader
@@ -649,7 +639,11 @@ struct ContentView: View {
                     .padding(.bottom, 5)
             }
             
-        }.onAppear {
+        }
+        .sheet(item: $activeToolbarSheet) { sheet in
+            toolbarSheet(sheet)
+        }
+        .onAppear {
             // The toolbar is removed in focus mode and inserted again when it
             // ends. Only auto-focus the address field for the initial mount;
             // focusing every reinsert can make AppKit rebuild a transient
@@ -742,10 +736,32 @@ struct ContentView: View {
         return handleBrowserCommand
     }
 
+    @ViewBuilder
+    private func toolbarSheet(_ sheet: ToolbarSheet) -> some View {
+        switch sheet {
+        case .commands:
+            ToolbarCommandsSheet(searchText: $commandSearchText, searchQuery: $urlInput)
+        case .tabSearch:
+            ToolbarTabSearchSheet()
+        case .events:
+            EventListSheet(events: events)
+        case .goTo:
+            ToolbarGoToSheet(urlInput: $urlInput, submitURL: submitURL)
+        case .restyle:
+            BoostView(browserState: browserState, profile: bProfile)
+        case .splitURL:
+            ToolbarSplitURLSheet(splitURL: $splitURL)
+        case .rename:
+            ToolbarRenameSheet(browserState: browserState)
+        case .summary:
+            ToolbarSummarySheet(browserState: browserState, isSummarizing: $summarizing)
+        }
+    }
+
     private func handleBrowserCommand(_ command: BrowserCommand) {
             switch command {
             case .closeTab: WindowManager.shared.closeTab(tabID)
-            case .searchTabs: showTabSearch = true
+            case .searchTabs: activeToolbarSheet = .tabSearch
             case .zoomIn: browserState.zoomIn()
             case .zoomOut: browserState.zoomOut()
             case .resetZoom: browserState.resetZoom()
@@ -929,7 +945,7 @@ struct ContentView: View {
                     }
 #endif
             case .goTo:
-                showGoTo = true
+                activeToolbarSheet = .goTo
             }
     }
     
@@ -1403,7 +1419,7 @@ struct ContentView: View {
                 )
             } else {
                 events = [decoded]
-                showEventPopup = true
+                activeToolbarSheet = .events
             }
             
         } catch {

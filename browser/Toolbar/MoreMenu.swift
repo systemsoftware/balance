@@ -12,7 +12,7 @@ struct MoreMenuToolbar: View {
                     .disabled(true)
             } else {
                 ForEach(items) { item in
-                    if item != .spacer && item != .autocomplete && item != .addressBar && item != .rename && item != .extensions {
+                    if item != .spacer && item != .autocomplete && item != .addressBar && item != .extensions {
                         itemContent(item)
                     }
                 }

@@ -47,7 +47,7 @@ struct ExtensionsPopoverView: View {
                         Text("Extensions")
                             .font(.headline)
                         
-                        Text("Manage extensions in the sidebar")
+                        Text("Manage extensions in the sidebar or settings")
                             .font(.caption)
                             .foregroundStyle(.secondary)
                     }

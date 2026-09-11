@@ -565,7 +565,7 @@ extension BrowserState {
                    !faviconString.isEmpty,
                    let faviconURL = URL(string: faviconString, relativeTo: pageURL)?.absoluteURL {
 
-                    print("Got favicon from site: \(faviconURL)")
+          //          print("Got favicon from site: \(faviconURL)")
                     return faviconURL
                 }
             } catch {
@@ -1729,6 +1729,16 @@ struct BrowserWebView: PlatformViewRepresentable {
                     return
                 }
 
+                #if os(iOS)
+                if  url.scheme == "marketplace-kit" {
+                         UIApplication.shared.open(url, options: [:], completionHandler: nil)
+                         
+                    decisionHandler(.cancel, preferences)
+                         return
+                     }
+                #endif
+
+                
                 if url.scheme?.lowercased() == "extension" {
                     decisionHandler(.cancel, preferences)
                     if let extensionContext = webView.configuration.webExtensionController?.extensionContexts.first,

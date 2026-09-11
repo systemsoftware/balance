@@ -5,18 +5,16 @@ struct NavigationButtons: View {
     
     @Binding var location: URL?
     @ObservedObject var browserState: BrowserState
+    var expandedLabel = false
     
     var body: some View {
                 HStack(spacing: 0) {
                         Button(action: {
                             browserState.webView?.goBack()
                         }) {
-                            Image(systemName: "chevron.backward")
-                                .padding(Layout.controlPadding)
-                                .font(.title2)
+                            navigationLabel("Back", systemImage: "chevron.backward")
                         }
-                        .padding(8)
-                        .frame(height: 40)
+                        .frame(width: expandedLabel ? nil : 40, height: 40)
                         .buttonStyle(.plain)
                         .keyboardShortcut(.leftArrow, modifiers: .command)
                         .disabled(location == nil ||  !browserState.canGoBack)
@@ -36,12 +34,9 @@ struct NavigationButtons: View {
                                 browserState.webView?.goForward()
                             }
                         }) {
-                            Image(systemName: "chevron.forward")
-                                .padding(Layout.controlPadding)
-                                .font(.title2)
+                            navigationLabel("Forward", systemImage: "chevron.forward")
                         }
-                        .padding(8)
-                        .frame(height: 40)
+                        .frame(width: expandedLabel ? nil : 40, height: 40)
                         .buttonStyle(.plain)
                         .keyboardShortcut(.rightArrow, modifiers: .command)
                         .disabled(location == nil || !browserState.canGoForward)
@@ -57,4 +52,15 @@ struct NavigationButtons: View {
                         }
             }
         }
+
+    @ViewBuilder
+    private func navigationLabel(_ title: String, systemImage: String) -> some View {
+        if expandedLabel {
+            Label(title, systemImage: systemImage)
+        } else {
+            Image(systemName: systemImage)
+                .font(.title2)
+                .frame(height: Layout.toolbarButtonSize)
+        }
+    }
 }

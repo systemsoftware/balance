@@ -5,6 +5,7 @@ struct SaveToToolbarButton: View {
     @Binding var location: URL?
     @ObservedObject var sidebarStore: SidebarStore
     @ObservedObject var bookmarkStore: BookmarkStore
+    var expandedLabel = false
     
     var body: some View {
         
@@ -27,11 +28,11 @@ struct SaveToToolbarButton: View {
                     ))
                 }
         } label: {
-            Image(systemName: "star.fill")
+            ToolbarItemLabel(expanded: expandedLabel, title: "Save To", systemImage: "star.fill")
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 40, height: 40)
+        .frame(width: expandedLabel ? nil : 40, height: 40)
         .disabled(!(location?.absoluteString.starts(with: "http") ?? false))
     }
 }

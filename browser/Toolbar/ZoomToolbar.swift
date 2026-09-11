@@ -4,6 +4,7 @@ struct ZoomToolbar: View {
     
     @Binding var location: URL?
     @ObservedObject var browserState: BrowserState
+    var expandedLabel = false
     
     var body: some View {
         
@@ -29,11 +30,11 @@ struct ZoomToolbar: View {
             }
 
         } label: {
-            Image(systemName: "plus.magnifyingglass")
+            ToolbarItemLabel(expanded: expandedLabel, title: "Zoom", systemImage: "plus.magnifyingglass")
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
-        .frame(width: 40, height: 40)
+        .frame(width: expandedLabel ? nil : 40, height: 40)
         .disabled(!(location?.absoluteString.starts(with: "http") ?? false))
     }
 }

@@ -100,6 +100,35 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     }
 }
 
+enum ToolbarSheet: String, Identifiable {
+    case commands
+    case tabSearch
+    case events
+    case goTo
+    case restyle
+    case splitURL
+    case rename
+    case summary
+
+    var id: String { rawValue }
+}
+
+struct ToolbarItemLabel: View {
+    let expanded: Bool
+    let title: String
+    let systemImage: String
+
+    var body: some View {
+        if expanded {
+            Label(title, systemImage: systemImage)
+        } else {
+            Image(systemName: systemImage)
+                .font(.title2)
+                .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+        }
+    }
+}
+
 struct BrowserToolbar: View {
     @Environment(\.verticalSizeClass) private var verticalSizeClass
     
@@ -110,17 +139,14 @@ struct BrowserToolbar: View {
     @Binding var location: URL?
     @Binding var urlInput: String
     @Binding var showTrustInfo: Bool
-    @Binding var showTabSearch: Bool
-    @Binding var showEventPopup: Bool
-    @Binding var showGoTo: Bool
-    @Binding var showBoost: Bool
+    @Binding var activeSheet: ToolbarSheet?
+    @Binding var summarizing: Bool
     @Binding var splitURL: String
     @ObservedObject var splitState: BrowserState
     let focusAddressOnAppear: Bool
     let isPrivate: Bool
     let profileIcon: String?
     let profileName: String?
-    let events: [EventExtraction]
     let submitURL: () -> Void
     let scanEvents: () async -> Void
     @Binding var showReader: Bool
@@ -134,9 +160,6 @@ struct BrowserToolbar: View {
 
     @AppStorage("showToolbarDragHandle") private var showDrag = false
     @AppStorage("toolbarLocation") private var toolbarLocation = 0
-
-    @State var showCommands = false
-    @State var commandSearchText = ""
 
     private var hasCompactHeight: Bool { verticalSizeClass == .compact }
     
@@ -155,18 +178,14 @@ struct BrowserToolbar: View {
                         location: $location,
                         urlInput: $urlInput,
                         showTrustInfo: $showTrustInfo,
-                        showTabSearch: $showTabSearch,
-                        showEventPopup: $showEventPopup,
-                        showGoTo: $showGoTo,
-                        showBoost: $showBoost,
+                        activeSheet: $activeSheet,
+                        summarizing: $summarizing,
                         splitURL: $splitURL,
-                        showCommands: $showCommands,
                         splitState: splitState,
                         focusAddressOnAppear: focusAddressOnAppear,
                         isPrivate: isPrivate,
                         profileIcon: profileIcon,
                         profileName: profileName,
-                        events: events,
                         showReader: $showReader,
                         submitURL: submitURL,
                         scanEvents: scanEvents
@@ -214,18 +233,6 @@ struct BrowserToolbar: View {
                 .padding(.horizontal, 5)
         }
     */
-        .sheet(isPresented: $showCommands) {
-            VStack(spacing: 0) {
-                CommandsView(searchText:$commandSearchText, searchQuery: $urlInput)
-                Button("Close") {
-                    showCommands = false
-                }
-                .padding()
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
-            }
-        }
-
         .popover(
             isPresented: $showEdit,
             attachmentAnchor: .rect(.bounds),
@@ -337,6 +344,7 @@ struct BrowserToolbar: View {
         
         var item: ToolbarItemType
         var inactiveItems: [ToolbarItemType]
+        var expandedLabel = false
         
         @ObservedObject var browserState: BrowserState
         @ObservedObject var sidebarStore: SidebarStore
@@ -345,18 +353,14 @@ struct BrowserToolbar: View {
         @Binding var location: URL?
         @Binding var urlInput: String
         @Binding var showTrustInfo: Bool
-        @Binding var showTabSearch: Bool
-        @Binding var showEventPopup: Bool
-        @Binding var showGoTo: Bool
-        @Binding var showBoost: Bool
+        @Binding var activeSheet: ToolbarSheet?
+        @Binding var summarizing: Bool
         @Binding var splitURL: String
-        @Binding var showCommands: Bool
         @ObservedObject var splitState: BrowserState
         let focusAddressOnAppear: Bool
         let isPrivate: Bool
         let profileIcon: String?
         let profileName: String?
-        let events: [EventExtraction]
         @Binding var showReader: Bool
         
         let submitURL: () -> Void
@@ -369,23 +373,23 @@ struct BrowserToolbar: View {
         @AppStorage(AutofillPreferences.enabledKey, store: Config.sharedDefaults)
         private var autofillEnabled = true
         
-        var body: some View {
+        @ViewBuilder private var toolbarContent: some View {
             HStack {
                 switch item {
                 case .clock:
                     ClockView(timeOnly: true, fontSize: 14)
                     
                 case .navigation:
-                    NavigationButtons(location: $location, browserState: browserState)
+                    NavigationButtons(location: $location, browserState: browserState, expandedLabel: expandedLabel)
                     
                 case .home:
-                    HomeToolbarButton(location: $location, urlInput: $urlInput)
+                    HomeToolbarButton(location: $location, urlInput: $urlInput, expandedLabel: expandedLabel)
                     
                 case .share:
-                    ShareToolbarButton(location: $location)
+                    ShareToolbarButton(location: $location, expandedLabel: expandedLabel)
                     
                 case .reload:
-                    ReloadToolbarButton(browserState: browserState)
+                    ReloadToolbarButton(browserState: browserState, expandedLabel: expandedLabel)
                     
                 case .addressBar:
                     AddressBar(
@@ -393,19 +397,15 @@ struct BrowserToolbar: View {
                         location: $location,
                         urlInput: $urlInput,
                         showTrustInfo: $showTrustInfo,
-                        showTabSearch: $showTabSearch,
-                        showEventPopup: $showEventPopup,
-                        showGoTo: $showGoTo,
                         focusOnAppear: focusAddressOnAppear,
                         isPrivate: isPrivate,
                         profileIcon: profileIcon,
                         profileName: profileName,
-                        events: events,
                         submitURL: submitURL
                     )
                     
                 case .search:
-                    SearchToolbarButton(location: $location, submitURL: submitURL)
+                    SearchToolbarButton(location: $location, expandedLabel: expandedLabel, submitURL: submitURL)
                     
                 case .autocomplete:
                     Button {
@@ -443,10 +443,8 @@ struct BrowserToolbar: View {
                             AutofillPopoverManager.shared.hide()
                         }
                     } label: {
-                        Image(systemName: "rectangle.and.pencil.and.ellipsis")
-                            .font(.title2)
+                            ToolbarItemLabel(expanded: expandedLabel, title: item.name, systemImage: item.systemImage)
                             .foregroundStyle(autofillEnabled ? Color.primary : Color.secondary)
-                            .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
                     }
                     .frame(width: 40, height: 40)
                     .buttonStyle(.plain)
@@ -460,19 +458,22 @@ struct BrowserToolbar: View {
                     ExtensionsToolbarButton(browserState: browserState, location: $location)
                     
                 case .saveTo:
-                    SaveToToolbarButton(location: $location, sidebarStore: sidebarStore, bookmarkStore: bookmarkStore)
+                    SaveToToolbarButton(location: $location, sidebarStore: sidebarStore, bookmarkStore: bookmarkStore, expandedLabel: expandedLabel)
                     
                 case .splitView:
-                    SplitViewToolbarButton(splitURL: $splitURL, splitState: splitState)
+                    SplitViewToolbarButton(
+                        splitURL: $splitURL,
+                        splitState: splitState,
+                        expandedLabel: expandedLabel,
+                        presentURLSheet: { activeSheet = .splitURL }
+                    )
                         .disabled(location == nil)
                     
                 case .reader:
                     Button {
                         showReader.toggle()
                     } label: {
-                        Image(systemName: "eyeglasses")
-                            .font(.title2)
-                            .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                        ToolbarItemLabel(expanded: expandedLabel, title: item.name, systemImage: item.systemImage)
                     }
                     .buttonStyle(.plain)
                     .disabled(location == nil)
@@ -493,24 +494,21 @@ struct BrowserToolbar: View {
                             BrowserToolbarItem(
                                 item: inactiveItem,
                                 inactiveItems: [],
+                                expandedLabel: true,
                                 browserState: browserState,
                                 sidebarStore: sidebarStore,
                                 bookmarkStore: bookmarkStore,
                                 location: $location,
                                 urlInput: $urlInput,
                                 showTrustInfo: $showTrustInfo,
-                                showTabSearch: $showTabSearch,
-                                showEventPopup: $showEventPopup,
-                                showGoTo: $showGoTo,
-                                showBoost: $showBoost,
+                                activeSheet: $activeSheet,
+                                summarizing: $summarizing,
                                 splitURL: $splitURL,
-                                showCommands: $showCommands,
                                 splitState: splitState,
                                 focusAddressOnAppear: focusAddressOnAppear,
                                 isPrivate: isPrivate,
                                 profileIcon: profileIcon,
                                 profileName: profileName,
-                                events: events,
                                 showReader: $showReader,
                                 submitURL: submitURL,
                                 scanEvents: scanEvents
@@ -518,27 +516,35 @@ struct BrowserToolbar: View {
                         )
                     }
                 case .commandPalette:
-                    CommandPaletteToolbarButton(showCommands: $showCommands, urlInput: $urlInput)
+                    CommandPaletteToolbarButton(expandedLabel: expandedLabel) { activeSheet = .commands }
                     
                 case .findInPage:
-                    FindInPageToolbarButton(browserState: browserState)
+                    FindInPageToolbarButton(browserState: browserState, expandedLabel: expandedLabel)
                     
                 case .ai:
-                    AIMenuToolbar(browserState: browserState, location: $location, scanEvents: scanEvents)
+                    AIMenuToolbar(browserState: browserState, location: $location, expandedLabel: expandedLabel, summarizing: $summarizing, presentSummarySheet: { activeSheet = .summary }, scanEvents: scanEvents
+                    )
                 case .restyle:
-                    RestyleToolbarButton(showBoost: $showBoost)
+                    RestyleToolbarButton(expandedLabel: expandedLabel) { activeSheet = .restyle }
                         .disabled(location == nil)
                 case .mute:
-                    MuteToolbar(location: $location, browserState: browserState)
+                    MuteToolbar(location: $location, browserState: browserState, expandedLabel: expandedLabel)
                 case .duplicate:
-                    DuplicateToolbarButton(location: $location)
+                    DuplicateToolbarButton(location: $location, expandedLabel: expandedLabel)
                 case .rename:
-                    RenameToolbar(location: $location, browserState: browserState)
+                    RenameToolbar(location: $location, presentRenameSheet:  { activeSheet = .rename }, expandedLabel:expandedLabel)
                 case .zoom:
-                    ZoomToolbar(location: $location, browserState: browserState)
+                    ZoomToolbar(location: $location, browserState: browserState, expandedLabel: expandedLabel)
                 }
             }
-            .glassEffect(.regular.interactive())
+        }
+
+        var body: some View {
+            if expandedLabel {
+                toolbarContent
+            } else {
+                toolbarContent.glassEffect(.regular.interactive())
+            }
         }
         
         

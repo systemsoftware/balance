@@ -305,6 +305,7 @@ struct BrowserAppShortcuts: AppShortcutsProvider {
             shortTitle: "Open URL",
             systemImageName: "link"
         )
+#if os(macOS)
 
         AppShortcut(
             intent: AddBookmarkIntent(),
@@ -315,6 +316,8 @@ struct BrowserAppShortcuts: AppShortcutsProvider {
             shortTitle: "Add Bookmark",
             systemImageName: "bookmark.badge.plus"
         )
+        #endif
+#if os(macOS)
 
         AppShortcut(
             intent: OpenPrivateWindowIntent(),
@@ -325,7 +328,8 @@ struct BrowserAppShortcuts: AppShortcutsProvider {
             shortTitle: "Private Window",
             systemImageName: "eye.slash"
         )
-        
+#endif
+        #if os(macOS)
         AppShortcut(
             intent: CreateNewWindowIntent(),
             phrases: [
@@ -336,5 +340,6 @@ struct BrowserAppShortcuts: AppShortcutsProvider {
             shortTitle: "New Window",
             systemImageName: "macwindow.badge.plus"
         )
+        #endif
     }
 }

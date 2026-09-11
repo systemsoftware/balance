@@ -5,18 +5,17 @@ struct HomeToolbarButton: View {
     
     @Binding var location: URL?
     @Binding var urlInput: String
+    var expandedLabel = false
     
     var body: some View {
             Button {
                 location = nil
                 urlInput = ""
             } label: {
-                Image(systemName:"house")
-                    .font(.title2)
-                    .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
+                ToolbarItemLabel(expanded: expandedLabel, title: "Home", systemImage: "house")
             }
             .buttonStyle(.plain)
-            .frame(width: 40, height: 40)
+            .frame(width: expandedLabel ? nil : 40, height: 40)
             .keyboardShortcut("h", modifiers: [.command, .shift])
             .disabled(location == nil)
         }
