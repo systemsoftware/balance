@@ -48,6 +48,7 @@ struct SplitViewToolbarButton: View {
             }
         } label: {
             ToolbarItemLabel(expanded: expandedLabel, title: "Split View", systemImage: "rectangle.split.2x1")
+                .foregroundStyle(splitURL.isEmpty ? .primary : Color.accentColor)
         }
         .frame(width: expandedLabel ? nil : 40, height: 40)
         .buttonStyle(.plain)

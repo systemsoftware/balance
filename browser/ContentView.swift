@@ -134,6 +134,7 @@ struct ContentView: View {
     private var backgroundType: Int = 0
 
     @State private var sidebarURL: URL?
+    @State private var sidebarBounceCounts: [UUID: Int] = [:]
     
     @State private var showInspector = false
     
@@ -209,6 +210,7 @@ struct ContentView: View {
     var bProfile: String = ""
     var bProfileIcon: String? = ""
     var bProfileName: String? = ""
+    var isEphemeralProfile: Bool = false
     
     @AppStorage("profiles", store: Config.sharedDefaults)
     private var profilesJSON = "[]"
@@ -272,8 +274,13 @@ struct ContentView: View {
             }
         }
         
+        let selectedProfile = allProfiles.first {
+            $0.id.uuidString == localBProfile
+        }
+        
         self.priv = restoredState?.isPrivate ?? pvt
         self.bProfile = localBProfile
+        self.isEphemeralProfile = selectedProfile?.isEphemeral ?? false
         self.bProfileIcon = localBProfileIcon
         self.bProfileName = localBProfileName
         
@@ -531,6 +538,7 @@ struct ContentView: View {
                             VStack(spacing: isCompact ? 4 : Layout.sidebarItemSpacing) {
                                 ForEach(sidebarStore.items) { item in
                                     Button(action: {
+                                        sidebarBounceCounts[item.id, default: 0] += 1
                                         toggleSidebar(sidebarTargetURL(for: item))
                                     }) {
                                         if item.icon.starts(with: "https") {
@@ -543,6 +551,11 @@ struct ContentView: View {
                                                 .padding(isCompact ? 7 : Layout.sidebarIconPadding)
                                         }
                                     }
+                                    .symbolEffect(
+                                        .bounce.byLayer,
+                                        options: .nonRepeating,
+                                        value: sidebarBounceCounts[item.id, default: 0]
+                                    )
                                     .glassEffect(sidebarBackground == 2 ? .regular : .identity)
                                     .padding(1)
                                     .buttonStyle(.plain)
@@ -1463,7 +1476,7 @@ struct ContentView: View {
         
         if priv == true { return }
         
-        if recordHistory == true && newURL.absoluteString != homepage {
+       /* if recordHistory == true && newURL.absoluteString != homepage {
             let historyTitle = browserState.title.isEmpty ? (newURL.host() ?? "No Title") : browserState.title
             let historyURL = newURL.absoluteString
             
@@ -1472,7 +1485,7 @@ struct ContentView: View {
                 url: historyURL,
                 profile: bProfile
             )
-        }
+        } */
     }
     
     @AppStorage("themePreference", store:Config.sharedDefaults) var themePreference = "system"
@@ -1482,24 +1495,25 @@ struct ContentView: View {
 
         if priv == true { return }
         
-        if recordHistory == true, let newURL = browserState.url, newURL.absoluteString != homepage {
+        if themePreference == "match" {
+            showPageShine = false
+#if canImport(AppKit)
+            Task {
+                let clr = await browserState.getBackground()
+                if let window = NSApplication.shared.keyWindow {
+                    window.backgroundColor = clr
+                    window.appearance = NSAppearance(named: clr.isLight ? .aqua : .darkAqua)
+                }
+            }
+#endif
+        } else {
+            showPageShine = true
+        }
+        
+        if recordHistory == true, let newURL = browserState.url, newURL.absoluteString != homepage, isEphemeralProfile != true {
             let historyTitle = newTitle.isEmpty ? (newURL.host() ?? "No Title") : newTitle
             let historyURL = newURL.absoluteString
             
-            if themePreference == "match" {
-                showPageShine = false
-#if canImport(AppKit)
-                Task {
-                    let clr = await browserState.getBackground()
-                    if let window = NSApplication.shared.keyWindow {
-                        window.backgroundColor = clr
-                        window.appearance = NSAppearance(named: clr.isLight ? .aqua : .darkAqua)
-                    }
-                }
-#endif
-            } else {
-                showPageShine = true
-            }
             
             HistoryManager.addToHistory(
                 title: historyTitle,

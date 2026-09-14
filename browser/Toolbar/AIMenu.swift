@@ -38,14 +38,9 @@ struct AIMenuToolbar: View {
             }
             
         } label: {
-            if summarizing || scanningForEvents {
-                ProgressView()
-                    .scaleEffect(2)
-            } else {
-                ToolbarItemLabel(expanded: expandedLabel, title: "AI Tools", systemImage: "sparkles.2")
-            }
+                ToolbarItemLabel(expanded: expandedLabel, title: "AI Tools", systemImage:"sparkles.2")
         }
-        .disabled(location == nil)
+        .disabled(location == nil && !scanningForEvents && !summarizing)
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: expandedLabel ? nil : 40, height: 40)

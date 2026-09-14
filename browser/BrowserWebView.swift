@@ -6,6 +6,15 @@ import CoreLocation
 import AuthenticationServices
 import UserNotifications
 
+private func storedProfile(withID id: UUID) -> Profile? {
+    guard let profilesJSON = Config.sharedDefaults?.string(forKey: "profiles"),
+          let data = profilesJSON.data(using: .utf8),
+          let profiles = try? JSONDecoder().decode([Profile].self, from: data) else {
+        return nil
+    }
+    return profiles.first { $0.id == id }
+}
+
 private enum DownloadFilenameResolver {
     private static let extensionsByMIMEType: [String: String] = [
         "application/zip": "zip",
@@ -753,7 +762,6 @@ struct BrowserWebView: PlatformViewRepresentable {
     static let internalScriptMessageHandlerNames = [
         "installExtension", "scrollObserver", "autofillRequest"
     ]
-
     static func privacyRequest(_ request: URLRequest) -> URLRequest {
         guard Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") == true else {
             return request
@@ -984,9 +992,10 @@ struct BrowserWebView: PlatformViewRepresentable {
             config.websiteDataStore = .nonPersistent()
 
         case "profile":
-            // Guard against malformed profile UUID strings to avoid a force-unwrap crash.
             if let profileUUID = UUID(uuidString: profile) {
-                config.websiteDataStore = WKWebsiteDataStore(forIdentifier: profileUUID)
+                config.websiteDataStore = storedProfile(withID: profileUUID)?.isEphemeral == true
+                    ? .nonPersistent()
+                    : WKWebsiteDataStore(forIdentifier: profileUUID)
             } else {
                 config.websiteDataStore = .default()
             }
@@ -1215,7 +1224,7 @@ struct BrowserWebView: PlatformViewRepresentable {
             } catch {
                 print("Error reading content blocker directory: \(error.localizedDescription)")
                 if reloadWhenReady {
-                    DispatchQueue.main.async { [weak webView] in webView?.reload() }
+                    DispatchQueue.main.async { [weak webView = webView] in webView?.reload() }
                 }
                 return
             }
@@ -1247,7 +1256,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                 }
             }
 
-            group.notify(queue: .main) { [weak webView, weak coordinator] in
+            group.notify(queue: .main) { [weak webView = webView, weak coordinator = coordinator] in
                 guard let webView, coordinator?.contentBlockersEnabled == enabled else { return }
                 for ruleList in compiledLists {
                     webView.configuration.userContentController.add(ruleList)
@@ -2363,7 +2372,9 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
         if let existing = controllers[key] { return existing }
         let extConfig = WKWebExtensionController.Configuration.default()
         if !profile.isEmpty, let profileUUID = UUID(uuidString: profile) {
-            extConfig.defaultWebsiteDataStore = WKWebsiteDataStore(forIdentifier: profileUUID)
+            extConfig.defaultWebsiteDataStore = storedProfile(withID: profileUUID)?.isEphemeral == true
+                ? .nonPersistent()
+                : WKWebsiteDataStore(forIdentifier: profileUUID)
         } else {
             extConfig.defaultWebsiteDataStore = .default()
         }

@@ -84,6 +84,7 @@ private struct TrustIndicator: View {
     var body: some View {
         Button(action: { isPresented.toggle() }) {
             Image(systemName: isSecure ? "lock.fill" : "exclamationmark.triangle.fill")
+                .symbolEffect(.bounce.byLayer, options: .nonRepeating, value:isPresented)
                 .foregroundStyle(isSecure ? Color.primary : Color.red)
                 .frame(width: 16, height: 16)
         }
@@ -138,9 +139,12 @@ private struct AddressField: View {
                 showSuggestions = editing && shouldShowSuggestions(for: text)
                 if !editing { showSuggestions = false }
             }
-            .onChange(of: isLoading) { wasLoading, isLoading in
-                if wasLoading && !isLoading {
+            .onChange(of: isLoading) { _, isLoading in
+                if isLoading {
                     isFocused = false
+#if os(iOS)
+                    PlatformApplication.dismissKeyboard()
+#endif
                 }
             }
             .frame(minWidth: 0, maxWidth: .infinity)

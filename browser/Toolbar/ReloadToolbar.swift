@@ -14,13 +14,11 @@ struct ReloadToolbarButton: View {
             }
         } label: {
             Group {
-                if browserState.isLoading {
-                    ProgressView()
-                        .scaleEffect(0.6)
-                        .frame(width: Layout.toolbarButtonSize, height: Layout.toolbarButtonSize)
-                } else {
-                    ToolbarItemLabel(expanded: expandedLabel, title: "Reload", systemImage: "arrow.clockwise")
-                }
+                
+                ToolbarItemLabel(expanded: expandedLabel, title: "Reload", systemImage: browserState.isLoading ? "progress.indicator" : "arrow.clockwise")
+                    .symbolEffect(.rotate, isActive: browserState.isLoading)
+                                  .contentTransition(.symbolEffect(.replace.magic(fallback: .downUp.byLayer), options: .nonRepeating))
+        
             }
         }
         .frame(width: expandedLabel ? nil : 40, height: 40)

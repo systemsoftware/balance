@@ -16,6 +16,7 @@ struct MuteToolbar: View {
                 title: browserState.isAudioMuted ? "Unmute" : "Mute",
                 systemImage: browserState.isAudioMuted ? "speaker.slash" : "speaker"
             )
+            .contentTransition(.symbolEffect(.replace))
         }
         .buttonStyle(.plain)
         .frame(width: expandedLabel ? nil : 40, height: 40)

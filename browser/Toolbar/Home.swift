@@ -13,6 +13,7 @@ struct HomeToolbarButton: View {
                 urlInput = ""
             } label: {
                 ToolbarItemLabel(expanded: expandedLabel, title: "Home", systemImage: "house")
+                    .symbolEffect(.bounce, value: location == nil)
             }
             .buttonStyle(.plain)
             .frame(width: expandedLabel ? nil : 40, height: 40)

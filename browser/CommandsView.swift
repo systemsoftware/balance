@@ -58,11 +58,17 @@ struct Profile: Identifiable, Codable, Hashable {
     var icon: String
     var imapHost: String?
     var imapPort: UInt16?
+    var isEphemeral: Bool
+
+    private enum CodingKeys: String, CodingKey {
+        case id, name, icon, imapHost, imapPort, isEphemeral
+    }
 
     init(
         id: UUID = UUID(),
         name: String,
         icon: String = "person.crop.circle",
+        isEphemeral: Bool = false,
         imapHost: String? = nil,
         imapPort: UInt16? = nil
     ) {
@@ -71,6 +77,17 @@ struct Profile: Identifiable, Codable, Hashable {
         self.icon = icon
         self.imapHost = imapHost
         self.imapPort = imapPort
+        self.isEphemeral = isEphemeral
+    }
+
+    init(from decoder: Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        id = try container.decode(UUID.self, forKey: .id)
+        name = try container.decode(String.self, forKey: .name)
+        icon = try container.decode(String.self, forKey: .icon)
+        imapHost = try container.decodeIfPresent(String.self, forKey: .imapHost)
+        imapPort = try container.decodeIfPresent(UInt16.self, forKey: .imapPort)
+        isEphemeral = try container.decodeIfPresent(Bool.self, forKey: .isEphemeral) ?? false
     }
 }
 
@@ -518,6 +535,8 @@ struct ProfileView: View {
     
     @State var showIMAP = false
     
+    @State var isEph = false
+    @State var showEphHelp = false
     
     var showHeader = true
     
@@ -596,6 +615,23 @@ struct ProfileView: View {
                                             }
                                         }
                                         
+                                        HStack {
+                                            Toggle("Ephemeral Profile", isOn: $isEph)
+                                            Button("(?)") {
+                                                showEphHelp.toggle()
+                                            }
+                                            .buttonStyle(.plain)
+                                            .foregroundStyle(.secondary)
+                                            .popover(isPresented: $showEphHelp) {
+                                                VStack {
+                                                    Text("Ephemeral profiles keep your browser settings but don’t save browsing data. Use them for temporary sessions when you don’t want your activity saved.")
+                                                }
+                                                .frame(width: 300)
+                                                .padding()
+                                            }
+                                        }
+                                            
+                                        
                                         Button("Advanced Icon") {
                                             showAdvancedIcon.toggle()
                                         }
@@ -648,7 +684,8 @@ struct ProfileView: View {
                                                 imapHost: imapHostInput.isEmpty ? nil : imapHostInput,
                                                 imapPort: port,
                                                 imapEmail: imapEmailInput.isEmpty ? nil : imapEmailInput,
-                                                imapPassword: imapPasswordInput.isEmpty ? nil : imapPasswordInput
+                                                imapPassword: imapPasswordInput.isEmpty ? nil : imapPasswordInput,
+                                                isEphemeral: isEph
                                             )
                                             
                                             nameInput = ""
@@ -658,6 +695,7 @@ struct ProfileView: View {
                                             imapEmailInput = ""
                                             imapPasswordInput = ""
                                             showNewProfile = false
+                                            isEph = false
                                         } label: {
                                                 Text("Create Profile")
                                         }
@@ -674,13 +712,13 @@ struct ProfileView: View {
         }
     }
     
-    private func addProfile(name: String, icon: String, imapHost: String? = nil, imapPort: UInt16? = nil, imapEmail: String? = nil, imapPassword: String? = nil) {
+    private func addProfile(name: String, icon: String, imapHost: String? = nil, imapPort: UInt16? = nil, imapEmail: String? = nil, imapPassword: String? = nil, isEphemeral: Bool = false) {
         var current = (try? JSONDecoder().decode(
             [Profile].self,
             from: Data(profilesJSON.utf8)
         )) ?? []
         
-        let newProfile = Profile(name: name, icon: icon, imapHost: imapHost, imapPort: imapPort)
+        let newProfile = Profile(name: name, icon: icon, isEphemeral: isEphemeral, imapHost: imapHost, imapPort: imapPort)
         current.append(newProfile)
         
         guard let data = try? JSONEncoder().encode(current),
