@@ -313,6 +313,7 @@ final class WindowManager: ObservableObject {
 
     func closeWindow(_ windowID: String) {
         guard let index = browserWindows.firstIndex(where: { $0.id == windowID }) else { return }
+        let wasActiveWindow = activeWindowID == windowID
         PlatformApplication.dismissKeyboard()
         let window = browserWindows.remove(at: index)
         for tab in window.tabs {
@@ -329,10 +330,27 @@ final class WindowManager: ObservableObject {
             // We do not recreate a window here automatically because this prevents the app
             // from quitting when the last window closes.
             activeWindowID = nil
-        } else if activeWindowID == windowID {
+        } else if wasActiveWindow {
             activeWindowID = browserWindows.first?.id
         }
         syncExtensionActiveTab()
+
+        #if canImport(AppKit)
+        // SwiftUI can leave the closing scene as the focused scene until after
+        // `willClose` returns. Its focused values then disappear, disabling the
+        // menu commands, while new tabs continue targeting that stale scene.
+        // Promote the surviving browser window after AppKit finishes closing.
+        if wasActiveWindow, let survivingWindowID = activeWindowID {
+            DispatchQueue.main.async { [weak self] in
+                guard let self,
+                      self.activeWindowID == survivingWindowID,
+                      let survivingWindow = self.browserWindows.first(where: { $0.id == survivingWindowID })
+                else { return }
+
+                self.tabWindow(for: survivingWindow)?.makeKeyAndOrderFront(nil)
+            }
+        }
+        #endif
     }
 
     func renameSpace(at index: Int, to proposedName: String) {
@@ -427,7 +445,7 @@ final class WindowManager: ObservableObject {
                 return nsWindow
             }
         }
-        return NSApp.keyWindow
+        return nil
     }
     #endif
 
