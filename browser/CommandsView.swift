@@ -506,6 +506,8 @@ struct ProfileView: View {
     private var profilesJSON = "[]"
     
     @Environment(\.dismiss) var dismiss
+    
+    var isSettings = false
         
     private var profiles: [Profile] {
         get {
@@ -519,26 +521,14 @@ struct ProfileView: View {
         }
     }
     
-    @State var nameInput: String = ""
-    @State var iconInput: String = ""
-    @State var imapHostInput: String = ""
-    @State var imapPortInput: String = "993"
-    @State var imapEmailInput: String = ""
-    @State var imapPasswordInput: String = ""
-    
     @Binding var searchText: String
     
     @Binding var hideProfileList: Bool
     @Binding var showNewProfile: Bool
     
-    @State var showAdvancedIcon = false
-    
-    @State var showIMAP = false
-    
-    @State var isEph = false
-    @State var showEphHelp = false
-    
     var showHeader = true
+    
+    @State private var selectedProfile: Profile?
     
     var filteredProfiles: [Profile] {
         if searchText.isEmpty {
@@ -556,8 +546,12 @@ struct ProfileView: View {
                 if !filteredProfiles.isEmpty {
                     ForEach(filteredProfiles) { profile in
                         Button {
-                            createNewWindow(profile: profile.id.uuidString, profileIcon:profile.icon.isEmpty ? "person.fill" : profile.icon)
-                            dismiss()
+                            if isSettings {
+                                selectedProfile = profile
+                            } else {
+                                createNewWindow(profile: profile.id.uuidString, profileIcon:profile.icon.isEmpty ? "person.fill" : profile.icon)
+                                dismiss()
+                            }
                         } label: {
                             row(
                                 title: profile.name,
@@ -586,151 +580,11 @@ struct ProfileView: View {
                 Text("Profile")
             }
         }
-        .sheet(isPresented: $showNewProfile) {
-                            Section {
-                                VStack(alignment: .leading, spacing: 10) {
-                                    
-                                    Text("New Profile")
-                                    
-                                    VStack(alignment: .leading, spacing: 8) {
-                                        TextField("Name", text: $nameInput)
-                                            .textFieldStyle(.roundedBorder)
-                                        
-                                        HStack {
-                                            Text("Icon")
-                                            
-                                            Spacer()
-                                            
-                                            Picker("", selection: $iconInput) {
-                                                Text("Default").tag("")
-                                                Text("Person").tag("person.crop.circle")
-                                                Text("Briefcase").tag("briefcase.fill")
-                                                Text("Graduation Cap").tag("graduationcap.fill")
-                                                Text("Book").tag("book.fill")
-                                                Text("Globe").tag("globe")
-                                                Text("Star").tag("star.fill")
-                                                Text("Heart").tag("heart.fill")
-                                                Text("Gamepad").tag("gamecontroller.fill")
-                                                Text("Terminal").tag("terminal.fill")
-                                            }
-                                        }
-                                        
-                                        HStack {
-                                            Toggle("Ephemeral Profile", isOn: $isEph)
-                                            Button("(?)") {
-                                                showEphHelp.toggle()
-                                            }
-                                            .buttonStyle(.plain)
-                                            .foregroundStyle(.secondary)
-                                            .popover(isPresented: $showEphHelp) {
-                                                VStack {
-                                                    Text("Ephemeral profiles keep your browser settings but don’t save browsing data. Use them for temporary sessions when you don’t want your activity saved.")
-                                                }
-                                                .frame(width: 300)
-                                                .padding()
-                                            }
-                                        }
-                                            
-                                        
-                                        Button("Advanced Icon") {
-                                            showAdvancedIcon.toggle()
-                                        }
-                                        .buttonStyle(.plain)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        
-                                        if showAdvancedIcon {
-                                            TextField("SF Symbol", text: $iconInput)
-                                                .textFieldStyle(.roundedBorder)
-                                        }
-                                        
-                                        if showIMAP { Divider() }
-                                        Button("Email Settings (Optional)"){
-                                            showIMAP.toggle()
-                                        }
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                        .buttonStyle(.plain)
-                                        
-                                        if showIMAP {
-                                            TextField("IMAP Host (e.g. imap.gmail.com)", text: $imapHostInput)
-                                                .textFieldStyle(.roundedBorder)
-                                            TextField("IMAP Port (e.g. 993)", text: $imapPortInput)
-                                                .textFieldStyle(.roundedBorder)
-                                            TextField("Email Address", text: $imapEmailInput)
-                                                .textFieldStyle(.roundedBorder)
-                                            SecureField("Password", text: $imapPasswordInput)
-                                                .textFieldStyle(.roundedBorder)
-                                        }
-                                    }
-                                    
-                                    HStack {
-                                        Spacer()
-                                        
-                                        
-                                        Button() {
-                                            showNewProfile = false
-                                        } label: {
-                                                Text("Cancel")
-                                        }
-                                        .buttonStyle(.bordered)
-                                        
-                                        Button {
-                                            guard !nameInput.isEmpty else { return }
-                                            let port = UInt16(imapPortInput)
-                                            addProfile(
-                                                name: nameInput,
-                                                icon: iconInput.isEmpty ? "person.crop.circle" : iconInput,
-                                                imapHost: imapHostInput.isEmpty ? nil : imapHostInput,
-                                                imapPort: port,
-                                                imapEmail: imapEmailInput.isEmpty ? nil : imapEmailInput,
-                                                imapPassword: imapPasswordInput.isEmpty ? nil : imapPasswordInput,
-                                                isEphemeral: isEph
-                                            )
-                                            
-                                            nameInput = ""
-                                            iconInput = ""
-                                            imapHostInput = ""
-                                            imapPortInput = "993"
-                                            imapEmailInput = ""
-                                            imapPasswordInput = ""
-                                            showNewProfile = false
-                                            isEph = false
-                                        } label: {
-                                                Text("Create Profile")
-                                        }
-                                        .buttonStyle(.borderedProminent)
-                                        .controlSize(.regular)
-                                        .disabled(nameInput.isEmpty)
-                                      
-                                    }
-                                }
-                                .padding()
-
-            }
-
+        .sheet(item: $selectedProfile) { profile in
+            ProfileSettingsView(profile: profile)
         }
-    }
-    
-    private func addProfile(name: String, icon: String, imapHost: String? = nil, imapPort: UInt16? = nil, imapEmail: String? = nil, imapPassword: String? = nil, isEphemeral: Bool = false) {
-        var current = (try? JSONDecoder().decode(
-            [Profile].self,
-            from: Data(profilesJSON.utf8)
-        )) ?? []
-        
-        let newProfile = Profile(name: name, icon: icon, isEphemeral: isEphemeral, imapHost: imapHost, imapPort: imapPort)
-        current.append(newProfile)
-        
-        guard let data = try? JSONEncoder().encode(current),
-              let encoded = String(data: data, encoding: .utf8) else { return }
-        profilesJSON = encoded
-        
-        if let email = imapEmail, let password = imapPassword {
-            PasswordManager.shared.savePassword(
-                username: email,
-                passwordString: password,
-                domain: "balance.profile.imap.\(newProfile.id.uuidString)"
-            )
+        .sheet(isPresented: $showNewProfile) {
+            NewProfileView()
         }
     }
     
@@ -769,6 +623,195 @@ struct ProfileView: View {
     }
 }
 
+struct NewProfileView: View {
+    let profileID: UUID?
+
+    @AppStorage("profiles", store: Config.sharedDefaults)
+    private var profilesJSON = "[]"
+
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var nameInput = ""
+    @State private var iconInput = ""
+    @State private var imapHostInput = ""
+    @State private var imapPortInput = "993"
+    @State private var imapEmailInput = ""
+    @State private var imapPasswordInput = ""
+    @State private var showAdvancedIcon = false
+    @State private var showIMAP = false
+    @State private var isEphemeral = false
+    @State private var showEphemeralHelp = false
+    @State private var didLoadProfile = false
+
+    init(profileID: UUID? = nil) {
+        self.profileID = profileID
+    }
+
+    private var isEditing: Bool { profileID != nil }
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text(isEditing ? "Edit Profile" : "New Profile")
+
+            VStack(alignment: .leading, spacing: 8) {
+                TextField("Name", text: $nameInput)
+                    .textFieldStyle(.roundedBorder)
+
+                HStack {
+                    Text("Icon")
+                    Spacer()
+                    Picker("", selection: $iconInput) {
+                        Text("Default").tag("")
+                        Text("Person").tag("person.crop.circle")
+                        Text("Briefcase").tag("briefcase.fill")
+                        Text("Graduation Cap").tag("graduationcap.fill")
+                        Text("Book").tag("book.fill")
+                        Text("Globe").tag("globe")
+                        Text("Star").tag("star.fill")
+                        Text("Heart").tag("heart.fill")
+                        Text("Gamepad").tag("gamecontroller.fill")
+                        Text("Terminal").tag("terminal.fill")
+                    }
+                }
+
+                HStack {
+                    Toggle("Ephemeral Profile", isOn: $isEphemeral)
+                    Button("(?)") {
+                        showEphemeralHelp.toggle()
+                    }
+                    .buttonStyle(.plain)
+                    .foregroundStyle(.secondary)
+                    .popover(isPresented: $showEphemeralHelp) {
+                        Text("Ephemeral profiles keep your browser settings but don’t save browsing data. Use them for temporary sessions when you don’t want your activity saved.")
+                            .frame(width: 300)
+                            .padding()
+                    }
+                }
+
+                Button("Advanced Icon") {
+                    showAdvancedIcon.toggle()
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+
+                if showAdvancedIcon {
+                    TextField("SF Symbol", text: $iconInput)
+                        .textFieldStyle(.roundedBorder)
+                }
+
+                if showIMAP { Divider() }
+                Button("Email Settings (Optional)") {
+                    showIMAP.toggle()
+                }
+                .font(.caption)
+                .foregroundStyle(.secondary)
+                .buttonStyle(.plain)
+
+                if showIMAP {
+                    TextField("IMAP Host (e.g. imap.gmail.com)", text: $imapHostInput)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("IMAP Port (e.g. 993)", text: $imapPortInput)
+                        .textFieldStyle(.roundedBorder)
+                    TextField("Email Address", text: $imapEmailInput)
+                        .textFieldStyle(.roundedBorder)
+                    SecureField("Password", text: $imapPasswordInput)
+                        .textFieldStyle(.roundedBorder)
+                }
+            }
+
+            HStack {
+                Spacer()
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(.bordered)
+
+                Button(isEditing ? "Save Changes" : "Create Profile") {
+                    saveProfile()
+                }
+                .buttonStyle(.borderedProminent)
+                .controlSize(.regular)
+                .disabled(nameInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding()
+        .onAppear(perform: loadProfile)
+    }
+
+    private func loadProfile() {
+        guard !didLoadProfile else { return }
+        didLoadProfile = true
+        guard let profileID,
+              let profile = decodedProfiles.first(where: { $0.id == profileID }) else { return }
+
+        nameInput = profile.name
+        iconInput = profile.icon
+        imapHostInput = profile.imapHost ?? ""
+        imapPortInput = profile.imapPort.map(String.init) ?? "993"
+        isEphemeral = profile.isEphemeral
+
+        let domain = credentialDomain(for: profile.id)
+        if let credential = PasswordManager.shared.fetchCredentialDirectly(for: domain) {
+            imapEmailInput = credential.username
+            imapPasswordInput = credential.passwordString
+        }
+        showIMAP = profile.imapHost != nil || !imapEmailInput.isEmpty
+    }
+
+    private var decodedProfiles: [Profile] {
+        (try? JSONDecoder().decode([Profile].self, from: Data(profilesJSON.utf8))) ?? []
+    }
+
+    private func saveProfile() {
+        let name = nameInput.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !name.isEmpty else { return }
+
+        var profiles = decodedProfiles
+        let id = profileID ?? UUID()
+        let profile = Profile(
+            id: id,
+            name: name,
+            icon: iconInput.isEmpty ? "person.crop.circle" : iconInput,
+            isEphemeral: isEphemeral,
+            imapHost: imapHostInput.isEmpty ? nil : imapHostInput,
+            imapPort: UInt16(imapPortInput)
+        )
+
+        if let index = profiles.firstIndex(where: { $0.id == id }) {
+            profiles[index] = profile
+        } else {
+            profiles.append(profile)
+        }
+
+        guard let data = try? JSONEncoder().encode(profiles),
+              let encoded = String(data: data, encoding: .utf8) else { return }
+        profilesJSON = encoded
+
+        let domain = credentialDomain(for: id)
+        if let oldCredential = PasswordManager.shared.fetchCredentialDirectly(for: domain),
+           oldCredential.username != imapEmailInput,
+           !imapEmailInput.isEmpty {
+            PasswordManager.shared.updateUsername(
+                oldUsername: oldCredential.username,
+                newUsername: imapEmailInput,
+                domain: domain
+            )
+        }
+        if !imapEmailInput.isEmpty && !imapPasswordInput.isEmpty {
+            PasswordManager.shared.savePassword(
+                username: imapEmailInput,
+                passwordString: imapPasswordInput,
+                domain: domain
+            )
+        }
+
+        dismiss()
+    }
+
+    private func credentialDomain(for id: UUID) -> String {
+        "balance.profile.imap.\(id.uuidString)"
+    }
+}
+
 @ViewBuilder
 func row(
     title: String,
@@ -795,4 +838,41 @@ func row(
         }
     }
     .padding(.vertical, 6)
+}
+
+
+struct ProfileSettingsView: View {
+    
+    var profile: Profile
+    
+    @Environment(\.dismiss) var dismiss
+
+    @State var diplaying: Int = 0
+        
+    var body: some View {
+        VStack {
+            Picker("", selection:$diplaying) {
+                Text("Profile").tag(0)
+                Text("Data").tag(1)
+            }
+            .pickerStyle(.segmented)
+            
+            switch diplaying {
+            case 0:
+                NewProfileView(profileID: profile.id)
+            default:
+                WebDataView(profile: profile.id.uuidString)
+                HStack {
+                    Spacer()
+                    Button("Close") {
+                        dismiss()
+                    }
+                }
+            }
+            
+        }
+        .padding()
+    }
+    
+    
 }

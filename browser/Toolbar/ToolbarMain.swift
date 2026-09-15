@@ -25,6 +25,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     case duplicate
     case zoom
     case rename
+    case trail
     
     var name: String {
         
@@ -96,6 +97,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .duplicate: "plus.square.on.square"
         case .zoom: "plus.magnifyingglass"
         case .rename: "pencil"
+        case .trail: "point.topleft.down.to.point.bottomright.curvepath"
         }
     }
 }
@@ -535,6 +537,8 @@ struct BrowserToolbar: View {
                     RenameToolbar(location: $location, presentRenameSheet:  { activeSheet = .rename }, expandedLabel:expandedLabel)
                 case .zoom:
                     ZoomToolbar(location: $location, browserState: browserState, expandedLabel: expandedLabel)
+                case .trail:
+                    TrailToolbarButton(browserState: browserState, expandedLabel: expandedLabel)
                 }
             }
         }

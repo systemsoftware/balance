@@ -1,5 +1,6 @@
 import Foundation
 import SwiftUI
+import WebKit
 internal import UniformTypeIdentifiers
 
 
@@ -510,6 +511,8 @@ private struct TabRow: View {
 
     var glass = false
     
+    @State var showTrail = false
+    
     @AppStorage("tabMode", store:Config.sharedDefaults) var tabMode = 0
 
     init(
@@ -644,6 +647,10 @@ private struct TabRow: View {
         .onTapGesture {
             switchToTab(tabID: state.tabID)
         }
+        .sheet(isPresented: $showTrail) {
+            TrailView(tabState: state)
+                .frame(minWidth: 500, minHeight: 400)
+        }
         .contextMenu {
             Button("Focus Tab") {
                 switchToTab(tabID: state.tabID)
@@ -693,6 +700,217 @@ private struct TabRow: View {
                     }
                 }
             }
+            
+            Divider()
+            
+            Button("Trail") {
+                showTrail.toggle()
+            }
+        }
+    }
+}
+
+struct TrailView: View {
+    @ObservedObject var tabState: BrowserState
+    @Environment(\.dismiss) private var dismiss
+    @State private var searchText = ""
+
+    var trail: [String] {
+        guard let webView = tabState.webView else { return [] }
+        let backList = webView.backForwardList.backList
+        return backList.map { $0.url.absoluteString }
+    }
+
+    var filteredTrail: [String] {
+        guard !searchText.isEmpty else { return trail }
+        return trail.filter { $0.localizedCaseInsensitiveContains(searchText) }
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+
+            if !trail.isEmpty {
+                searchBar
+                Divider()
+            }
+
+            if trail.isEmpty {
+                emptyState
+            } else if filteredTrail.isEmpty {
+                noResultsState
+            } else {
+                trailList
+            }
+        }
+        .frame(minWidth: 420, minHeight: 360)
+        .background(.background)
+    }
+
+    // MARK: - Header
+
+    private var header: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 2) {
+                Text("Trail")
+                    .font(.headline)
+                Text(tabState.title.isEmpty ? "New Tab" : tabState.title)
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+                    .lineLimit(1)
+            }
+            Spacer()
+            Button {
+                dismiss()
+            } label: {
+                Image(systemName: "xmark.circle.fill")
+                    .font(.system(size: 18))
+                    .foregroundStyle(.secondary)
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(16)
+    }
+
+    // MARK: - Search
+
+    private var searchBar: some View {
+        HStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .foregroundStyle(.secondary)
+                .font(.system(size: 13))
+            TextField("Search trail", text: $searchText)
+                .textFieldStyle(.plain)
+                .font(.system(size: 13))
+            if !searchText.isEmpty {
+                Button {
+                    searchText = ""
+                } label: {
+                    Image(systemName: "xmark.circle.fill")
+                        .foregroundStyle(.secondary)
+                        .font(.system(size: 13))
+                }
+                .buttonStyle(.plain)
+            }
+        }
+        .padding(.horizontal, 10)
+        .padding(.vertical, 7)
+        .background(Color.secondary.opacity(0.08), in: RoundedRectangle(cornerRadius: 8))
+        .padding(.horizontal, 16)
+        .padding(.vertical, 10)
+    }
+
+    // MARK: - List
+
+    private var trailList: some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: 2) {
+                ForEach(Array(filteredTrail.enumerated()), id: \.element) { index, urlString in
+                    TrailRow(index: index + 1, urlString: urlString) {
+                        guard let url = URL(string: urlString) else { return }
+                        createNewTab(with: url)
+                        dismiss()
+                    }
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 6)
+        }
+    }
+
+    // MARK: - Empty states
+
+    private var emptyState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "signpost.right")
+                .font(.system(size: 28))
+                .foregroundStyle(.tertiary)
+            Text("No trail yet")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Text("Pages you've visited on this tab will show up here.")
+                .font(.caption)
+                .foregroundStyle(.tertiary)
+                .multilineTextAlignment(.center)
+                .padding(.horizontal, 40)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+
+    private var noResultsState: some View {
+        VStack(spacing: 8) {
+            Image(systemName: "magnifyingglass")
+                .font(.system(size: 24))
+                .foregroundStyle(.tertiary)
+            Text("No matches for \"\(searchText)\"")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+    }
+}
+
+// MARK: - Row
+
+private struct TrailRow: View {
+    let index: Int
+    let urlString: String
+    let action: () -> Void
+
+    @State private var isHovering = false
+
+    private var host: String {
+        URL(string: urlString)?.host?.replacingOccurrences(of: "www.", with: "") ?? urlString
+    }
+
+    private var path: String {
+        guard let url = URL(string: urlString) else { return "" }
+        let p = url.path
+        return p.isEmpty || p == "/" ? "" : p
+    }
+
+    var body: some View {
+        Button(action: action) {
+            HStack(spacing: 10) {
+                Text("\(index)")
+                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                    .foregroundStyle(.tertiary)
+                    .frame(width: 18, alignment: .trailing)
+
+                Favicon(urlString)
+
+                VStack(alignment: .leading, spacing: 1) {
+                    Text(host)
+                        .font(.system(size: 13, weight: .medium))
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    if !path.isEmpty {
+                        Text(path)
+                            .font(.system(size: 11))
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                    }
+                }
+
+                Spacer(minLength: 8)
+
+                if isHovering {
+                    Image(systemName: "arrow.up.right.square")
+                        .font(.system(size: 12))
+                        .foregroundStyle(.secondary)
+                }
+            }
+            .padding(.horizontal, 8)
+            .padding(.vertical, 7)
+            .background(
+                RoundedRectangle(cornerRadius: 6)
+                    .fill(isHovering ? Color.secondary.opacity(0.1) : .clear)
+            )
+        }
+        .buttonStyle(.plain)
+        .onHover { hovering in
+            isHovering = hovering
         }
     }
 }

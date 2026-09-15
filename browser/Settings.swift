@@ -1072,7 +1072,7 @@ struct SettingsSectionContent: View {
                 )
                 .padding(0)
                 
-                ProfileView(searchText: $emptyStringBinding, hideProfileList: $falseBinding, showNewProfile: $newProfile, showHeader:false)
+                ProfileView(isSettings:true, searchText: $emptyStringBinding, hideProfileList: $falseBinding, showNewProfile: $newProfile, showHeader:false)
                     .padding(.horizontal)
                     .padding(.leading)
 

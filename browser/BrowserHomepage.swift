@@ -829,7 +829,7 @@ struct BrowserHomepage: View {
         ) { result in
             switch result {
             case .success(let url):
-                homeBackground = url.absoluteString
+                saveBackgroundImage(from: url)
 
             case .failure(let error):
                 print(error)
@@ -852,6 +852,50 @@ struct BrowserHomepage: View {
         store.add(Bookmark(title: "Apple",   url: "https://apple.com"))
         store.add(Bookmark(title: "SwiftUI", url: "https://developer.apple.com/xcode/swiftui/"))
         store.add(Bookmark(title: "HN",      url: "https://news.ycombinator.com"))
+    }
+
+    private func saveBackgroundImage(from sourceURL: URL) {
+        let didAccess = sourceURL.startAccessingSecurityScopedResource()
+        defer {
+            if didAccess {
+                sourceURL.stopAccessingSecurityScopedResource()
+            }
+        }
+
+        do {
+            let fileManager = FileManager.default
+            let applicationSupport = try fileManager.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: true
+            )
+            let directory = applicationSupport
+                .appendingPathComponent("Homepage", isDirectory: true)
+            try fileManager.createDirectory(
+                at: directory,
+                withIntermediateDirectories: true
+            )
+
+            var destination = directory
+                .appendingPathComponent(UUID().uuidString)
+            if !sourceURL.pathExtension.isEmpty {
+                destination.appendPathExtension(sourceURL.pathExtension)
+            }
+
+            try fileManager.copyItem(at: sourceURL, to: destination)
+
+            let previousURL = URL(string: homeBackground)
+            homeBackground = destination.absoluteString
+
+            if let previousURL,
+               previousURL.isFileURL,
+               previousURL.deletingLastPathComponent() == directory {
+                try? fileManager.removeItem(at: previousURL)
+            }
+        } catch {
+            print("Unable to save homepage background: \(error)")
+        }
     }
     
     
