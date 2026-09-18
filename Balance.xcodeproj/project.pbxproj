@@ -7,10 +7,14 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+		A517F73E305DD94A00F0A7AD /* CREDITS.md in Resources */ = {isa = PBXBuildFile; fileRef = A517F73D305DD94A00F0A7AD /* CREDITS.md */; };
+		A517F740305DD95600F0A7AD /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = A517F73F305DD95600F0A7AD /* LICENSE */; };
 		A57B78F62F94B57D000398CF /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A57B78F52F94B57D000398CF /* ZIPFoundation */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
+		A517F73D305DD94A00F0A7AD /* CREDITS.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = CREDITS.md; sourceTree = "<group>"; };
+		A517F73F305DD95600F0A7AD /* LICENSE */ = {isa = PBXFileReference; lastKnownFileType = text; path = LICENSE; sourceTree = "<group>"; };
 		A5892D782F8D68CA00512319 /* Balance.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = Balance.app; sourceTree = BUILT_PRODUCTS_DIR; };
 /* End PBXFileReference section */
 
@@ -37,6 +41,8 @@
 		A5892D6F2F8D68CA00512319 = {
 			isa = PBXGroup;
 			children = (
+				A517F73F305DD95600F0A7AD /* LICENSE */,
+				A517F73D305DD94A00F0A7AD /* CREDITS.md */,
 				A5892D7A2F8D68CA00512319 /* browser */,
 				A5892D792F8D68CA00512319 /* Products */,
 			);
@@ -118,6 +124,8 @@
 			isa = PBXResourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A517F740305DD95600F0A7AD /* LICENSE in Resources */,
+				A517F73E305DD94A00F0A7AD /* CREDITS.md in Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -263,7 +271,7 @@
 				CODE_SIGN_ENTITLEMENTS = browser/browser.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 8K8948D7UD;
 				ENABLE_APP_SANDBOX = YES;
@@ -311,7 +319,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.5.5;
+				MARKETING_VERSION = 1.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.systemsoftware.balance;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -345,7 +353,7 @@
 				CODE_SIGN_ENTITLEMENTS = browser/browser.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 8K8948D7UD;
 				ENABLE_APP_SANDBOX = YES;
@@ -393,7 +401,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.5.5;
+				MARKETING_VERSION = 1.5.6;
 				PRODUCT_BUNDLE_IDENTIFIER = com.systemsoftware.balance;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";

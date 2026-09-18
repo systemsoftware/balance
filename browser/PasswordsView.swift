@@ -5,6 +5,8 @@ struct PasswordsView: View {
     @ObservedObject var passwordManager = PasswordManager.shared
     @State private var searchText = ""
     
+    var hideHeader = false
+    
     var filteredCredentials: [SavedCredential] {
         if searchText.isEmpty {
             return passwordManager.savedCredentials
@@ -19,12 +21,14 @@ struct PasswordsView: View {
     var body: some View {
         VStack(spacing: 0) {
             // Header
-            HStack {
-                Text("Passwords")
-                    .font(.system(.headline, design: .rounded))
-                Spacer()
+            if !hideHeader {
+                HStack {
+                    Text("Passwords")
+                        .font(.system(.headline, design: .rounded))
+                    Spacer()
+                }
+                .padding()
             }
-            .padding()
             
             ScrollView {
                 if passwordManager.savedCredentials.isEmpty {

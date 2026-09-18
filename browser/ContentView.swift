@@ -178,6 +178,7 @@ struct ContentView: View {
     @AppStorage("paletteShowTabs", store:Config.sharedDefaults) var paletteShowTabs: Bool = true
     
     @AppStorage("usePDFKit", store:Config.sharedDefaults) var usePDFKit: Bool = true
+    @AppStorage("renderMd", store:Config.sharedDefaults) var renderMd: Bool = true
     
     @AppStorage("showSidebar", store:Config.sharedDefaults) var showSidebar = true
     
@@ -449,6 +450,10 @@ struct ContentView: View {
                                 if let url = browserState.url ?? location, url.pathExtension.lowercased() == "pdf" && usePDFKit {
                                     PDFKitRepresentedView(url: url)
                                       
+                                }
+                                
+                                if let url = browserState.url ?? location, url.pathExtension.lowercased() == "md" && renderMd {
+                                    MarkdownView(url: url)
                                 }
                             }
                             

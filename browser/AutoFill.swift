@@ -197,7 +197,7 @@ enum EntryType: String, CaseIterable, Identifiable {
 
 struct AutoFillSettingsView: View {
     @State private var items: [AutoFillItem] = []
-    @State var showNewEntrySheet = false
+    @Binding var showNewEntrySheet: Bool
     @State var newEntryData: String = ""
     @State var newEntryType: EntryType = .text
     @State var newEntryLabel: String = ""
@@ -208,30 +208,6 @@ struct AutoFillSettingsView: View {
     
     var body: some View {
         VStack {
-            SettingsCardRow(
-                setting: Setting(
-                    name: "Add AutoFill Entry", category: catAutofill, type: "button", appStorageKey: "",
-                    buttonText: "Add",
-                    action: {
-                        showNewEntrySheet = true
-                    }
-                ),
-                icon: "plus",
-                accentColor: catAutofill.color
-            )
-            
-            SettingsCardRow(
-                setting: Setting(
-                    name:"Manage",
-                    category: catBookmarks,
-                    type:"header",
-                    appStorageKey:"",
-                ),
-                icon: "gearshape",
-                accentColor: catAutofill.color
-            )
-            .padding(.bottom, -15)
-            
             List {
                 if items.isEmpty {
                     Text("No saved AutoFill entries")
@@ -281,7 +257,7 @@ struct AutoFillSettingsView: View {
         }
         .sheet(isPresented: $showNewEntrySheet) {
             VStack(alignment: .leading, spacing: 16) {
-                Text("Add New AutoFill Entry")
+                Text("Add New Autofill Entry")
                     .font(.headline)
 
                 VStack(alignment: .leading) {

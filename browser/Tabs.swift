@@ -714,7 +714,7 @@ struct TrailView: View {
     @ObservedObject var tabState: BrowserState
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
-
+    
     var trail: [String] {
         guard let webView = tabState.webView else { return [] }
         let backList = webView.backForwardList.backList

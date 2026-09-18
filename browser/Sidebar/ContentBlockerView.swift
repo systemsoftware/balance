@@ -2,6 +2,65 @@ import SwiftUI
 import WebKit
 internal import UniformTypeIdentifiers
 
+enum ContentBlockerRuleStore {
+    nonisolated static let identifierPrefix = "dynamicRules-"
+
+    nonisolated static func identifier(for fileURL: URL) -> String {
+        identifierPrefix + fileURL.lastPathComponent
+    }
+
+    /// Idempotently removes a compiled rule list. WebKit reports error 8 when
+    /// another cleanup has already removed the same identifier, so verify the
+    /// store after a failure before surfacing it to the user.
+    static func remove(
+        identifier: String,
+        completion: @escaping (Error?) -> Void = { _ in }
+    ) {
+        guard let store = WKContentRuleListStore.default() else {
+            completion(nil)
+            return
+        }
+
+        store.getAvailableContentRuleListIdentifiers { identifiers in
+            guard identifiers?.contains(identifier) == true else {
+                completion(nil)
+                return
+            }
+
+            store.removeContentRuleList(forIdentifier: identifier) { error in
+                guard let error else {
+                    completion(nil)
+                    return
+                }
+
+                store.getAvailableContentRuleListIdentifiers { remainingIdentifiers in
+                    completion(remainingIdentifiers?.contains(identifier) == true ? error : nil)
+                }
+            }
+        }
+    }
+
+    /// Removes compiled lists whose source JSON no longer exists. This also
+    /// cleans up artifacts left behind by versions that only deleted the JSON.
+    static func removeOrphans(for sourceFiles: [URL]) {
+        let expectedIdentifiers = Set(sourceFiles.map(identifier(for:)))
+        guard let store = WKContentRuleListStore.default() else { return }
+
+        store.getAvailableContentRuleListIdentifiers { identifiers in
+            guard let identifiers else { return }
+            for identifier in identifiers where
+                identifier.hasPrefix(identifierPrefix) &&
+                !expectedIdentifiers.contains(identifier) {
+                remove(identifier: identifier) { error in
+                    if let error {
+                        print("Failed to remove orphaned content blocker \(identifier): \(error.localizedDescription)")
+                    }
+                }
+            }
+        }
+    }
+}
+
 struct ContentBlockerView: View {
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
     var sidebarWidth: Int = 345
@@ -163,6 +222,7 @@ struct ContentBlockerView: View {
         do {
             let files = try FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)
             contentBlockers = files.filter { $0.pathExtension == "json" }.sorted { $0.lastPathComponent < $1.lastPathComponent }
+            ContentBlockerRuleStore.removeOrphans(for: contentBlockers)
         } catch {
             print("Failed to load content blockers: \(error)")
         }
@@ -255,9 +315,19 @@ struct ContentBlockerView: View {
     private func deleteContentBlocker(at url: URL) {
         do {
             try FileManager.default.removeItem(at: url)
-            loadContentBlockers()
+            contentBlockers.removeAll { $0 == url }
         } catch {
             errorMessage = error.localizedDescription
+            return
+        }
+
+        ContentBlockerRuleStore.remove(
+            identifier: ContentBlockerRuleStore.identifier(for: url)
+        ) { error in
+            guard let error else { return }
+            DispatchQueue.main.async {
+                errorMessage = "The JSON was deleted, but its compiled content blocker could not be removed: \(error.localizedDescription)"
+            }
         }
     }
     

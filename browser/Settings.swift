@@ -39,8 +39,8 @@ let catAI = CategoryDef(
 
 let catAutofill = CategoryDef(
     id: "autofill",
-    name: "AutoFill",
-    icon: "person.text.rectangle",
+    name: "Autofill",
+    icon: "rectangle.and.pencil.and.ellipsis",
     color: .orange,
     description: "Manage form autofill settings."
 )
@@ -373,10 +373,19 @@ let Settings: [Setting] = {
         ),
         Setting(
             name: "Use PDFKit",
-            icon: "doc.richtext",
+            icon: "doc.text",
             category: catAdvanced,
             type: "toggle",
             appStorageKey: "usePDFKit",
+            defaultValueBool: true
+        ),
+        
+        Setting(
+            name: "Render Markdown",
+            icon: "richtext.page",
+            category: catAdvanced,
+            type: "toggle",
+            appStorageKey: "renderMd",
             defaultValueBool: true
         ),
         Setting(
@@ -414,40 +423,48 @@ let Settings: [Setting] = {
             defaultValueBool: false
         ),
         Setting(
-            name: "Homepage",
-            icon: "house",
+            name: "App Store",
+            icon: "app.badge",
             category: catLearnMore,
             type: "button",
             appStorageKey: "",
             buttonText: "Open",
             action: {
-                createNewTab(with:URL(string:"https://systemsoftware.github.io/about/balance"))
+                createNewTab(with:URL(string:"https://apps.apple.com/us/app/balance-browser/id6789459733"))
             }
         ),
         Setting(
-            name: "README",
-            icon: "doc.text",
+            name: "LICENSE",
+            icon: "lock.document",
             category: catLearnMore,
             type: "button",
             appStorageKey: "",
             buttonText: "Open",
             action: {
-                createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/README.md"))
+                if let fileURL = Bundle.main.url(forResource: "LICENSE", withExtension: "") {
+                        createNewTab(with:fileURL)
+                } else {
+                    print("File not found in bundle.")
+                }
             }
         ),
         Setting(
-            name: "FEATURES.md",
+            name: "Credits",
             icon: "doc.text.fill",
             category: catLearnMore,
             type: "button",
             appStorageKey: "",
             buttonText: "Open",
             action: {
-                createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/FEATURES.md"))
+                if let fileURL = Bundle.main.url(forResource: "CREDITS", withExtension: "md") {
+                        createNewTab(with:fileURL)
+                } else {
+                    print("File not found in bundle.")
+                }
             }
         ),
         Setting(
-            name: "GitHub Repo",
+            name: "GitHub",
             icon: "curlybraces",
             category: catLearnMore,
             type: "button",
@@ -519,6 +536,28 @@ let Settings: [Setting] = {
     ))
     #endif
 
+    
+    s.append(Setting(
+        name:"Manage",
+        category: catBookmarks,
+        type:"header",
+        appStorageKey:"",
+    ))
+    
+    s.append(Setting(
+        name:"Reorder",
+        category: catPalette,
+        type:"header",
+        appStorageKey:"",
+    ))
+    
+    s.append(Setting(
+        name:"Manage",
+        category: catProfiles,
+        type:"header",
+        appStorageKey:"",
+    ))
+    
     return s
 }()
 
@@ -964,6 +1003,8 @@ struct SettingsSectionContent: View {
     
     @State var showNewPassword = false
     
+    @State var showNewEntrySheet = false
+    
     private func loadInitialURL() {
         if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
             lmpage.load(URLRequest(url: url))
@@ -978,7 +1019,39 @@ struct SettingsSectionContent: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
             if def.id == "profiles" && !profiles.isEmpty {
+                
+                SettingsCardRow(
+                    setting: Setting(
+                        name:"New Profile",
+                        category: catProfiles,
+                        type:"button",
+                        appStorageKey:"",
+                        action: {
+                            newProfile.toggle()
+                        }
+                    ),
+                    icon: "plus",
+                    accentColor: def.color
+                )
+                
                     profilePickerRow
+            }
+            
+            if def.id == "bookmarks" {
+                SettingsCardRow(
+                    setting: Setting(
+                        name:"New Bookmark",
+                        category: catBookmarks,
+                        type:"button",
+                        appStorageKey:"",
+                        buttonText:"New",
+                        action: {
+                            showNewBookmark = true
+                        }
+                    ),
+                    icon: "plus",
+                    accentColor: def.color
+                )
             }
             
             if def.id == "advanced" {
@@ -1011,30 +1084,6 @@ struct SettingsSectionContent: View {
             }
             
             if def.id == "bookmarks" {
-                SettingsCardRow(
-                    setting: Setting(
-                        name:"New Bookmark",
-                        category: catBookmarks,
-                        type:"button",
-                        appStorageKey:"",
-                        buttonText:"New",
-                        action: {
-                            showNewBookmark = true
-                        }
-                    ),
-                    icon: "plus",
-                    accentColor: def.color
-                )
-                SettingsCardRow(
-                    setting: Setting(
-                        name:"Manage",
-                        category: catBookmarks,
-                        type:"header",
-                        appStorageKey:"",
-                    ),
-                    icon: "gearshape",
-                    accentColor: def.color
-                )
                 BookmarksView(showAddBookmark:$showNewBookmark,isSettings:true)
                     .padding(.top, -5)
                     .padding(.leading)
@@ -1046,32 +1095,6 @@ struct SettingsSectionContent: View {
             }
             
             if def.id == "profiles" {
-                SettingsCardRow(
-                    setting: Setting(
-                        name:"New Profile",
-                        category: catProfiles,
-                        type:"button",
-                        appStorageKey:"",
-                        action: {
-                            newProfile.toggle()
-                        }
-                    ),
-                    icon: "plus",
-                    accentColor: def.color
-                )
-                
-                SettingsCardRow(
-                    setting: Setting(
-                        name:"Manage",
-                        category: catProfiles,
-                        type:"header",
-                        appStorageKey:"",
-                    ),
-                    icon: "gearshape",
-                    accentColor: def.color
-                )
-                .padding(0)
-                
                 ProfileView(isSettings:true, searchText: $emptyStringBinding, hideProfileList: $falseBinding, showNewProfile: $newProfile, showHeader:false)
                     .padding(.horizontal)
                     .padding(.leading)
@@ -1079,26 +1102,14 @@ struct SettingsSectionContent: View {
             }
             
             if def.id == "palette" && isStandalone {
-                    SettingsCardRow(
-                        setting: Setting(
-                            name:"Reorder",
-                            category: catPalette,
-                            type:"header",
-                            appStorageKey:"",
-                        ),
-                        icon: "gearshape",
-                        accentColor: def.color
-                    )
-                    .padding(0)
-                    .zIndex(5)
                     CommandsView(searchText:$st, showData: false, searchQuery: $st)
-                        .padding(.vertical, -20)
+                        .padding(.vertical, -15)
                         .padding(.leading)
                         .background(Color.clear)
             }
 
             if def.id == "autofill" {
-                SettingsCustomCardRow(title: "AutoFill Type", icon: "rectangle.and.pencil.and.ellipsis", accentColor: def.color) {
+                SettingsCustomCardRow(title: "Show Autofill Type", icon: "rectangle.and.pencil.and.ellipsis", accentColor: def.color) {
                     Picker("",selection:$autofillType.animation()) {
                         Text("Form").tag(0)
                         Text("Passwords").tag(1)
@@ -1124,11 +1135,53 @@ struct SettingsSectionContent: View {
                     }
                     .padding(.top)
                     
-                    PasswordsView()
+                    SettingsCardRow(
+                        setting:Setting(
+                            name:"Manage",
+                            category: catAutofill,
+                            type:"header",
+                            appStorageKey:"",
+                        ),
+                        icon:"gearshape",
+                        accentColor:def.color
+                    )
+                    
+                    PasswordsView(hideHeader:true)
+                        .padding(.top, -5)
                 default:
-                    AutoFillSettingsView()
+                    
+                    
+                    SettingsCardRow(
+                        setting: Setting(
+                            name: "Add Autofill Entry", category: catAutofill, type: "button", appStorageKey: "",
+                            buttonText: "Add",
+                            action: {
+                                showNewEntrySheet = true
+                            }
+                        ),
+                        icon: "plus",
+                        accentColor: catAutofill.color
+                    )
+                    
+                    SettingsCardRow(
+                        setting:Setting(
+                            name:"Manage",
+                            category: catAutofill,
+                            type:"header",
+                            appStorageKey:"",
+                        ),
+                        icon:"gearshape",
+                        accentColor:def.color
+                    )
+                    .padding(.top, -5)
+
+                    
+                    AutoFillSettingsView(showNewEntrySheet: $showNewEntrySheet)
+                        .padding(.top, -13)
+
                     
                 }
+                
             }
             
             if def.id == "privacy" {
@@ -1278,6 +1331,8 @@ struct SettingsSectionContent: View {
 struct SettingsView: View {
     var isStandalone: Bool = false
     var activeProfile: String? = nil
+
+    @Environment(\.horizontalSizeClass) private var horizontalSizeClass
 
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
     var sidebarWidth: Int = 345
@@ -1493,7 +1548,11 @@ struct SettingsView: View {
                 .animation(.spring(response: 0.3, dampingFraction: 0.85), value: selectedCategoryID)
             }
         }
-        .frame(maxWidth: isSetup ? .infinity : CGFloat(sidebarWidth))
+        .frame(
+            maxWidth: isSetup || horizontalSizeClass == .compact
+                ? .infinity
+                : CGFloat(sidebarWidth)
+        )
     }
 
     // MARK: - Search results
@@ -1632,4 +1691,3 @@ struct NewPasswordView: View {
     }
     
 }
-

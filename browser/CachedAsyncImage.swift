@@ -65,18 +65,22 @@ struct CachedAsyncImage: View {
 
     var body: some View {
         Group {
-            if loadImages {
+            if let url = url {
+                if loadImages || url.absoluteString.contains("failed-favicon") {
                     CachedAsyncImageCore(url: url) { phase in
-                    if let image = phase.image {
-                        image
-                            .resizable()
-                            .scaledToFit()
-                    } else if phase.error != nil {
-                        fallbackView
-                    } else {
-                        ProgressView()
-                            .scaleEffect(0.5)
+                        if let image = phase.image {
+                            image
+                                .resizable()
+                                .scaledToFit()
+                        } else if phase.error != nil {
+                            fallbackView
+                        } else {
+                            ProgressView()
+                                .scaleEffect(0.5)
+                        }
                     }
+                } else {
+                    fallbackView
                 }
             } else {
                 fallbackView

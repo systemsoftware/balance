@@ -22,6 +22,7 @@ struct BookmarkRow: View {
     let action: () -> Void
     let onDelete: () -> Void
     let onEdit: () -> Void
+    var isSettings = false
 
     var body: some View {
         Button(action: action) {
@@ -47,6 +48,14 @@ struct BookmarkRow: View {
                 }
                 
                 Spacer()
+                
+                if isSettings {
+                    Button(action: onDelete) {
+                        Image(systemName: "trash")
+                            .foregroundStyle(.red)
+                    }
+                    .buttonStyle(.plain)
+                }
             }
             .padding()
             .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformControlBackground.opacity(0.5)))
@@ -123,13 +132,22 @@ struct BookmarksView: View {
                         ForEach(store.items) { mark in
                             BookmarkRow(
                                 bookmark: mark,
-                                action: { createNewTab(with: URL(string:mark.url)) },
+                                action: {
+                                    if isSettings {
+                                            urlInput = mark.url
+                                            titleInput = mark.title
+                                            editingBookmark = mark
+                                    } else {
+                                        createNewTab(with: URL(string:mark.url))
+                                    }
+                                },
                                 onDelete: { store.remove(id: mark.id) },
                                 onEdit: {
                                     urlInput = mark.url
                                     titleInput = mark.title
                                     editingBookmark = mark
-                                }
+                                },
+                                isSettings: isSettings
                             )
                         }
                     }

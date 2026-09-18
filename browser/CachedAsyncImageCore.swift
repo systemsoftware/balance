@@ -1,5 +1,6 @@
 //
 //  Created by Lorenzo Fiamingo on 04/11/20. Copyright (c) 2021 Lorenzo Fiamingo
+// MODIFIED
 //
 
 import SwiftUI
@@ -119,18 +120,34 @@ private extension AsyncImage {
 
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
 private extension CachedAsyncImageCore {
-    private func remoteImage(from request: URLRequest, session: URLSession) async throws -> (Image, URLSessionTaskMetrics?) {
-        let (data, _, metrics) = try await session.data(for: request)
+    private func remoteImage(
+        from request: URLRequest,
+        session: URLSession
+    ) async throws -> (Image, URLSessionTaskMetrics?) {
+        
+        let (data, response, metrics) = try await session.data(for: request)
+
+        guard let httpResponse = response as? HTTPURLResponse,
+              (200...299).contains(httpResponse.statusCode) else {
+            throw URLError(.badServerResponse)
+        }
+
         if let metrics,
            metrics.redirectCount > 0,
            let lastResponse = metrics.transactionMetrics.last?.response {
+            
             let requests = metrics.transactionMetrics.map { $0.request }
+            
             if let cache = session.configuration.urlCache {
                 requests.forEach(cache.removeCachedResponse)
-                let lastCachedResponse = CachedURLResponse(response: lastResponse, data: data)
+                let lastCachedResponse = CachedURLResponse(
+                    response: lastResponse,
+                    data: data
+                )
                 cache.storeCachedResponse(lastCachedResponse, for: request)
             }
         }
+
         return (try image(from: data), metrics)
     }
     

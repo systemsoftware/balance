@@ -754,6 +754,7 @@ enum BrowserErrorKind {
 
 
 struct BrowserWebView: PlatformViewRepresentable {
+    private static let errorPageRequestHeader = "X-Balance-Error-Page"
     static let internalContentWorld = WKContentWorld.world(name: "BalanceInternal")
     static let pageScriptMessageHandlerNames = [
         "notificationRequestPermission", "notificationShow", "balanceLocation",
@@ -1240,7 +1241,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                 }
 
                 group.enter()
-                let identifier = "dynamicRules-\(item.lastPathComponent)"
+                let identifier = ContentBlockerRuleStore.identifier(for: item)
                 WKContentRuleListStore.default().compileContentRuleList(
                     forIdentifier: identifier,
                     encodedContentRuleList: json
@@ -1647,7 +1648,9 @@ struct BrowserWebView: PlatformViewRepresentable {
 
 
             let responseURL = failedURL ?? URL(string: "about:blank")!
-            webView.loadSimulatedRequest(URLRequest(url: responseURL), responseHTML: html)
+            var request = URLRequest(url: responseURL)
+            request.setValue("1", forHTTPHeaderField: BrowserWebView.errorPageRequestHeader)
+            webView.loadSimulatedRequest(request, responseHTML: html)
             return true
         }
         
@@ -1726,6 +1729,15 @@ struct BrowserWebView: PlatformViewRepresentable {
                      decidePolicyFor navigationAction: WKNavigationAction,
                      preferences: WKWebpagePreferences,
                      decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
+
+            // Error pages use the failed URL so the address bar and retry action retain
+            // the original destination. They are simulated responses, though, and must
+            // bypass request rewrites such as GPC and HTTPS-only; otherwise those rules
+            // replace the error document with another network request and create a loop.
+            if navigationAction.request.value(forHTTPHeaderField: BrowserWebView.errorPageRequestHeader) == "1" {
+                decisionHandler(.allow, preferences)
+                return
+            }
             
             if let url = navigationAction.request.url {
         //        print("decidePolicyFor:", url.absoluteString)

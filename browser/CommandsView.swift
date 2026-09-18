@@ -652,6 +652,8 @@ struct NewProfileView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             Text(isEditing ? "Edit Profile" : "New Profile")
+                .font(.system(.headline, design: .rounded))
+
 
             VStack(alignment: .leading, spacing: 8) {
                 TextField("Name", text: $nameInput)

@@ -53,7 +53,7 @@ struct ExtensionsView: View {
                             createNewTab(with: webstore)
                         }
                     ),
-                    icon: "gearshape",
+                    icon: "storefront",
                     accentColor: catExt.color,
                 )
                 
