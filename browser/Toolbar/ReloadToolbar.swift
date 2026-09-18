@@ -30,7 +30,7 @@ struct ReloadToolbarButton: View {
         }
         .frame(width: expandedLabel ? nil : 40, height: 40)
         .buttonStyle(.plain)
-        .disabled(browserState.url != nil)
+        .disabled(browserState.url == nil)
         .task(id: browserState.isLoading) {
             if browserState.isLoading {
                 displayedIsLoading = true

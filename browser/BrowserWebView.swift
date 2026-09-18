@@ -1125,9 +1125,12 @@ struct BrowserWebView: PlatformViewRepresentable {
         }
         
         let autoplaySetting = SitePermissionStore.shared.setting(for: host, type: "autoplay", defaultState: .allow)
-        nsView.configuration.mediaTypesRequiringUserActionForPlayback = (autoplaySetting == .allow) ? [] : .all
-        if autoplaySetting == .block {
-            nsView.evaluateJavaScript("document.querySelectorAll('video, audio').forEach(function(v) { if (!v.paused) v.pause(); });", completionHandler: nil)
+        let requiredMediaTypes: WKAudiovisualMediaTypes = (autoplaySetting == .allow) ? [] : .all
+        if nsView.configuration.mediaTypesRequiringUserActionForPlayback != requiredMediaTypes {
+            nsView.configuration.mediaTypesRequiringUserActionForPlayback = requiredMediaTypes
+            if autoplaySetting == .block {
+                nsView.evaluateJavaScript("document.querySelectorAll('video, audio').forEach(function(v) { if (!v.paused) v.pause(); });", completionHandler: nil)
+            }
         }
 
         context.coordinator.syncNotificationPermission(in: nsView)
@@ -1806,7 +1809,10 @@ struct BrowserWebView: PlatformViewRepresentable {
             }
             
             if let url = navigationAction.request.url {
-                if navigationAction.targetFrame?.isMainFrame != false,
+                // A nil target frame represents a new browsing context (for example,
+                // target="_blank" or window.open). Rewriting that request by loading it
+                // in `webView` would replace the opener instead of creating a new tab.
+                if navigationAction.targetFrame?.isMainFrame == true,
                    ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
                    Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") == true,
                    navigationAction.request.value(forHTTPHeaderField: "Sec-GPC") != "1" {
@@ -1816,7 +1822,8 @@ struct BrowserWebView: PlatformViewRepresentable {
                 }
 
                 let httpsOnly = Config.sharedDefaults?.bool(forKey: "httpsOnly") ?? false
-                if httpsOnly && url.scheme == "http" {
+                if navigationAction.targetFrame?.isMainFrame == true,
+                   httpsOnly && url.scheme == "http" {
                     let host = url.host ?? ""
                     if host != "localhost" && host != "127.0.0.1" {
                         if let httpsUrl = URL(string: url.absoluteString.replacingOccurrences(of: "http://", with: "https://")) {
