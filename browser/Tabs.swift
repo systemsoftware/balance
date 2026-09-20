@@ -652,6 +652,8 @@ private struct TabRow: View {
                 .frame(minWidth: 500, minHeight: 400)
         }
         .contextMenu {
+
+            
             Button("Focus Tab") {
                 switchToTab(tabID: state.tabID)
             }

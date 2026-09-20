@@ -16,6 +16,8 @@ enum ContentBlockerRuleStore {
         identifier: String,
         completion: @escaping (Error?) -> Void = { _ in }
     ) {
+        removeDiskRuleList(forIdentifier: identifier)
+
         guard let store = WKContentRuleListStore.default() else {
             completion(nil)
             return
@@ -41,21 +43,62 @@ enum ContentBlockerRuleStore {
     }
 
     /// Removes compiled lists whose source JSON no longer exists. This also
-    /// cleans up artifacts left behind by versions that only deleted the JSON.
+    /// cleans up artifacts left behind by versions that only deleted the JSON,
+    /// as well as unreferenced rule lists (e.g. com.apple.WebPrivacy.ResourceMonitorURLsRuleList).
     static func removeOrphans(for sourceFiles: [URL]) {
         let expectedIdentifiers = Set(sourceFiles.map(identifier(for:)))
+        
+        cleanDiskRuleLists(keeping: expectedIdentifiers)
+
         guard let store = WKContentRuleListStore.default() else { return }
 
         store.getAvailableContentRuleListIdentifiers { identifiers in
             guard let identifiers else { return }
-            for identifier in identifiers where
-                identifier.hasPrefix(identifierPrefix) &&
-                !expectedIdentifiers.contains(identifier) {
+            for identifier in identifiers where !expectedIdentifiers.contains(identifier) {
                 remove(identifier: identifier) { error in
                     if let error {
                         print("Failed to remove orphaned content blocker \(identifier): \(error.localizedDescription)")
                     }
                 }
+            }
+        }
+    }
+
+    private static func removeDiskRuleList(forIdentifier identifier: String) {
+        guard let libraryDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        let ruleListsDir = libraryDir.appendingPathComponent("WebKit/ContentRuleLists", isDirectory: true)
+        let candidates = [
+            ruleListsDir.appendingPathComponent("ContentRuleList-\(identifier)"),
+            ruleListsDir.appendingPathComponent(identifier)
+        ]
+        for candidate in candidates {
+            if FileManager.default.fileExists(atPath: candidate.path) {
+                try? FileManager.default.removeItem(at: candidate)
+            }
+        }
+    }
+
+    private static func cleanDiskRuleLists(keeping expectedIdentifiers: Set<String>) {
+        guard let libraryDir = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        let ruleListsDir = libraryDir.appendingPathComponent("WebKit/ContentRuleLists", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: ruleListsDir.path) else { return }
+
+        guard let files = try? FileManager.default.contentsOfDirectory(at: ruleListsDir, includingPropertiesForKeys: nil) else { return }
+        for file in files {
+            let filename = file.lastPathComponent
+            let isExpected = expectedIdentifiers.contains { expectedId in
+                filename == "ContentRuleList-\(expectedId)" ||
+                filename.hasPrefix("ContentRuleList-\(expectedId).") ||
+                filename == expectedId
+            }
+            if !isExpected {
+                try? FileManager.default.removeItem(at: file)
+            }
+        }
+
+        if expectedIdentifiers.isEmpty {
+            if let remaining = try? FileManager.default.contentsOfDirectory(at: ruleListsDir, includingPropertiesForKeys: nil), remaining.isEmpty {
+                try? FileManager.default.removeItem(at: ruleListsDir)
             }
         }
     }
@@ -329,6 +372,8 @@ struct ContentBlockerView: View {
                 errorMessage = "The JSON was deleted, but its compiled content blocker could not be removed: \(error.localizedDescription)"
             }
         }
+
+        ContentBlockerRuleStore.removeOrphans(for: contentBlockers)
     }
     
     @ViewBuilder

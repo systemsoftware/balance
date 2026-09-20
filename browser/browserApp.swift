@@ -343,6 +343,27 @@ class AppDelegate: NSObject, NSApplicationDelegate {
 
         // Re-register App Shortcuts after full launch so Spotlight can index them.
         BrowserAppShortcuts.updateAppShortcutParameters()
+
+        // Clean up any orphaned WebsiteDataStore directories or ContentRuleLists left on disk
+        DispatchQueue.global(qos: .utility).async {
+            let defs = Config.sharedDefaults ?? UserDefaults.standard
+            let profilesJSON = defs.string(forKey: "profiles") ?? "[]"
+            let profiles = (try? JSONDecoder().decode([Profile].self, from: Data(profilesJSON.utf8))) ?? []
+            let validIDs = Set(profiles.map { $0.id })
+            ProfileDataStoreCleanup.removeOrphans(validProfileIDs: validIDs)
+
+            if let base = try? FileManager.default.url(
+                for: .applicationSupportDirectory,
+                in: .userDomainMask,
+                appropriateFor: nil,
+                create: false
+            ) {
+                let dir = base.appendingPathComponent("ContentBlockers", isDirectory: true)
+                let files = (try? FileManager.default.contentsOfDirectory(at: dir, includingPropertiesForKeys: nil)) ?? []
+                let contentBlockers = files.filter { $0.pathExtension == "json" }
+                ContentBlockerRuleStore.removeOrphans(for: contentBlockers)
+            }
+        }
     }
     
     func applicationShouldTerminateAfterLastWindowClosed(_ sender: NSApplication) -> Bool {

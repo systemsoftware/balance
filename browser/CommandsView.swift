@@ -586,12 +586,13 @@ struct ProfileView: View {
         .sheet(isPresented: $showNewProfile) {
             NewProfileView()
         }
+        .onAppear {
+            let validIDs = Set(profiles.map { $0.id })
+            ProfileDataStoreCleanup.removeOrphans(validProfileIDs: validIDs)
+        }
     }
     
-    
-    
     private func deleteProfile(_ profile: Profile) {
-        
         var current = (try? JSONDecoder().decode(
             [Profile].self,
             from: Data(profilesJSON.utf8)
@@ -603,8 +604,45 @@ struct ProfileView: View {
               let encoded = String(data: data, encoding: .utf8) else { return }
         profilesJSON = encoded
         
+        ProfileDataStoreCleanup.remove(profile: profile, remainingProfiles: current)
+    }
+}
+
+enum ProfileDataStoreCleanup {
+    /// Completely removes a profile's WebKit website data store, on-disk directories, and associated defaults.
+    static func remove(profile: Profile, remainingProfiles: [Profile]) {
+        let profileID = profile.id
+        let uuidString = profileID.uuidString
+        
+        // 1. Reset defaultProfile if it matches
+        let defaults = Config.sharedDefaults ?? UserDefaults.standard
+        if defaults.string(forKey: "defaultProfile") == uuidString {
+            defaults.set("", forKey: "defaultProfile")
+        }
+        
+        // 2. Remove profile-scoped UserDefaults keys
+        let keysToRemove = [
+            "bookmarks_\(uuidString)",
+            "sidebar_\(uuidString)",
+            "downloads_\(uuidString)",
+            "pins_\(uuidString)",
+            "toolbar_\(uuidString)",
+            "chat_threads_\(uuidString)",
+            "chat_active_thread_\(uuidString)",
+            "tabs_\(uuidString)",
+            "user_agent_\(uuidString)",
+            "homepage_\(uuidString)",
+            "ad_block_\(uuidString)"
+        ]
+        for key in keysToRemove {
+            defaults.removeObject(forKey: key)
+            Config.defaults.removeObject(forKey: key)
+            UserDefaults.standard.removeObject(forKey: key)
+        }
+        
+        // 3. WebKit Data Store removal API
         if #available(macOS 14.0, *) {
-            WKWebsiteDataStore.remove(forIdentifier: profile.id) { error in
+            WKWebsiteDataStore.remove(forIdentifier: profileID) { error in
                 if let error = error {
                     print("Failed to remove profile data store: \(error)")
                 } else {
@@ -612,11 +650,64 @@ struct ProfileView: View {
                 }
             }
         } else {
-            let store = WKWebsiteDataStore(forIdentifier: profile.id)
+            let store = WKWebsiteDataStore(forIdentifier: profileID)
             let types = WKWebsiteDataStore.allWebsiteDataTypes()
             store.fetchDataRecords(ofTypes: types) { records in
                 store.removeData(ofTypes: types, for: records) {
                     print("Profile data cleared")
+                }
+            }
+        }
+        
+        // 4. Remove disk directory from Library/WebKit/WebsiteDataStore/<uuid>
+        removeDiskDataStore(for: profileID)
+        
+        // 5. Sweep any orphaned WebsiteDataStore directories
+        let validIDs = Set(remainingProfiles.map { $0.id })
+        removeOrphans(validProfileIDs: validIDs)
+    }
+    
+    /// Removes disk directory for a specific profile UUID
+    static func removeDiskDataStore(for profileID: UUID) {
+        guard let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        let baseDir = libraryURL.appendingPathComponent("WebKit/WebsiteDataStore", isDirectory: true)
+        let uuidString = profileID.uuidString
+        
+        let pathsToCheck = [
+            baseDir.appendingPathComponent(uuidString),
+            baseDir.appendingPathComponent(uuidString.lowercased()),
+            baseDir.appendingPathComponent(uuidString.uppercased())
+        ]
+        
+        for path in pathsToCheck {
+            if FileManager.default.fileExists(atPath: path.path) {
+                try? FileManager.default.removeItem(at: path)
+            }
+        }
+        
+        // Also check any directory whose name matches case-insensitively
+        if let subdirs = try? FileManager.default.contentsOfDirectory(at: baseDir, includingPropertiesForKeys: nil) {
+            for subdir in subdirs where subdir.lastPathComponent.caseInsensitiveCompare(uuidString) == .orderedSame {
+                try? FileManager.default.removeItem(at: subdir)
+            }
+        }
+    }
+    
+    /// Removes disk directories and WebKit stores for UUIDs not in validProfileIDs
+    static func removeOrphans(validProfileIDs: Set<UUID>) {
+        guard let libraryURL = FileManager.default.urls(for: .libraryDirectory, in: .userDomainMask).first else { return }
+        let baseDir = libraryURL.appendingPathComponent("WebKit/WebsiteDataStore", isDirectory: true)
+        guard FileManager.default.fileExists(atPath: baseDir.path),
+              let subdirs = try? FileManager.default.contentsOfDirectory(at: baseDir, includingPropertiesForKeys: nil) else { return }
+        
+        for subdir in subdirs {
+            let name = subdir.lastPathComponent
+            if let dirUUID = UUID(uuidString: name) {
+                if !validProfileIDs.contains(dirUUID) {
+                    try? FileManager.default.removeItem(at: subdir)
+                    if #available(macOS 14.0, *) {
+                        WKWebsiteDataStore.remove(forIdentifier: dirUUID) { _ in }
+                    }
                 }
             }
         }
