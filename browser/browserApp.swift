@@ -345,7 +345,7 @@ class AppDelegate: NSObject, NSApplicationDelegate {
         BrowserAppShortcuts.updateAppShortcutParameters()
 
         // Clean up any orphaned WebsiteDataStore directories or ContentRuleLists left on disk
-        DispatchQueue.global(qos: .utility).async {
+        Task { @MainActor in
             let defs = Config.sharedDefaults ?? UserDefaults.standard
             let profilesJSON = defs.string(forKey: "profiles") ?? "[]"
             let profiles = (try? JSONDecoder().decode([Profile].self, from: Data(profilesJSON.utf8))) ?? []
