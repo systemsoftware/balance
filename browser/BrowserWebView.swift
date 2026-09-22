@@ -68,6 +68,8 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var webViewIdentity = UUID()
     weak var underlyingWebView: WKWebView?
 
+    @Published var mimeType: String? = nil
+    
     @Published var url: URL?
     @Published private(set) var navigationRevision: UInt = 0
     @Published var title: String = ""
@@ -1304,6 +1306,7 @@ struct BrowserWebView: PlatformViewRepresentable {
         var observers: [NSKeyValueObservation] = []
         let downloadStore: DownloadStore
         var locationManager: CLLocationManager?
+        
 
         let state: BrowserState
         let isPrivate: Bool
@@ -1891,6 +1894,8 @@ struct BrowserWebView: PlatformViewRepresentable {
                 decisionHandler(.download)
                 return
             }
+            
+            state.mimeType = navigationResponse.response.mimeType
             decisionHandler(.allow)
         }
 

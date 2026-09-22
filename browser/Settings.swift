@@ -430,6 +430,14 @@ let Settings: [Setting] = {
             defaultValueBool: true
         ),
         Setting(
+            name: "Render JSON",
+            icon: "ellipsis.curlybraces",
+            category: catAdvanced,
+            type: "toggle",
+            appStorageKey: "renderJSON",
+            defaultValueBool: true
+        ),
+        Setting(
             name: "Default Page Zoom (%)",
             icon: "magnifyingglass.circle",
             category: catBrowsing,

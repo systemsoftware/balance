@@ -179,6 +179,7 @@ struct ContentView: View {
     
     @AppStorage("usePDFKit", store:Config.sharedDefaults) var usePDFKit: Bool = true
     @AppStorage("renderMd", store:Config.sharedDefaults) var renderMd: Bool = true
+    @AppStorage("renderJSON", store:Config.sharedDefaults) var renderJson: Bool = true
     
     @AppStorage("showSidebar", store:Config.sharedDefaults) var showSidebar = true
     
@@ -443,13 +444,18 @@ struct ContentView: View {
                                     }
 #endif
                                 
-                                if let url = browserState.url ?? location, url.pathExtension.lowercased() == "pdf" && usePDFKit {
-                                    PDFKitRepresentedView(url: url)
-                                      
-                                }
-                                
-                                if let url = browserState.url ?? location, url.pathExtension.lowercased() == "md" && renderMd {
-                                    MarkdownView(url: url)
+                                if let url = browserState.url, let mimeType = browserState.mimeType {
+                                    if mimeType.contains("pdf") && usePDFKit {
+                                        PDFKitRepresentedView(url: url)
+                                    }
+                                    
+                                    if mimeType.contains("markdown") && renderMd {
+                                        MarkdownView(url: url)
+                                    }
+                                    
+                                    if mimeType.contains("json") && renderJson {
+                                        JSONView(url: url)
+                                    }
                                 }
                             }
                             
