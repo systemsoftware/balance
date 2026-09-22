@@ -326,7 +326,6 @@ struct Tabs: View {
                                 .padding(7)
                             }
                         }
-                        .padding(.horizontal, 4)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 0.7)
@@ -339,6 +338,7 @@ struct Tabs: View {
                             )
                             .allowsHitTesting(false)
                     }
+                    .padding(.horizontal, Layout.controlPadding)
                 }
                 .padding(.horizontal, 0)
                 .padding(.top, alignsWithTitlebar ? 0 : 16)
@@ -354,7 +354,6 @@ struct Tabs: View {
                 )
                 .allowsHitTesting(false)
         }
-        .padding(.horizontal, 5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onPreferenceChange(TabFramePreferenceKey.self) { tabFrames = $0 }
             

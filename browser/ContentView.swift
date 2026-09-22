@@ -351,10 +351,7 @@ struct ContentView: View {
                 Tabs(browserState: browserState)
                     .frame(height: isCompact ? 44 : 50)
                     .frame(maxWidth: .infinity)
-                    .padding(
-                        .horizontal,
-                        (isCompact ? 3 : Layout.outerPadding) + Layout.controlPadding + (isCompact ? 2 : 5)
-                    )
+                    .padding(.horizontal, isCompact ? 3 : Layout.outerPadding)
                     .padding(toolbarLocation == 1 ? (isCompact ? 4 : 8) : 0)
             }
             
@@ -617,10 +614,7 @@ struct ContentView: View {
                 Tabs(browserState: browserState)
                     .frame(height: isCompact ? 44 : 50)
                     .frame(maxWidth: .infinity)
-                    .padding(
-                        .horizontal,
-                        (isCompact ? 3 : Layout.outerPadding) + Layout.controlPadding + (isCompact ? 2 : 5)
-                    )
+                    .padding(.horizontal, isCompact ? 3 : Layout.outerPadding)
                     .padding(.bottom, toolbarLocation == 0 ? (isCompact ? 6 : 10) : 0)
             }
             
