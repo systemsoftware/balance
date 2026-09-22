@@ -210,7 +210,27 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @MainActor
     func getBackground() async -> UniversalColor {
         do {
-            let result = try await webView?.evaluateJavaScript("window.getComputedStyle(document.body).backgroundColor")
+            let result = try await webView?.evaluateJavaScript("""
+                (() => {
+                    const parse = element => {
+                        if (!element) return null;
+                        const value = getComputedStyle(element).backgroundColor;
+                        const match = value.match(/^rgba?\\(\\s*(\\d+(?:\\.\\d+)?)[,\\s]+(\\d+(?:\\.\\d+)?)[,\\s]+(\\d+(?:\\.\\d+)?)(?:[,\\s/]+([\\d.]+))?\\s*\\)$/);
+                        return match ? [Number(match[1]), Number(match[2]), Number(match[3]), match[4] === undefined ? 1 : Number(match[4])] : null;
+                    };
+                    const x = window.innerWidth / 2;
+                    const y = window.innerHeight / 2;
+                    const layers = [];
+                    for (let element = document.elementFromPoint(x, y); element; element = element.parentElement) {
+                        layers.push(parse(element));
+                    }
+                    let color = [255, 255, 255];
+                    for (const layer of layers.reverse()) {
+                        if (layer) color = color.map((channel, i) => Math.round(layer[i] * layer[3] + channel * (1 - layer[3])));
+                    }
+                    return `rgb(${color.join(', ')})`;
+                })()
+                """)
             guard let rgbString = result as? String,
                   let nsColor = UniversalColor.from(rgbString: rgbString) else {
                 return .gray

@@ -645,6 +645,7 @@ private struct BrowserWindowTabContainer: View {
                     profile: tab.profile,
                     profileIcon: tab.profileIcon,
                     tabID: tab.id,
+                    isActiveTab: isActive,
                     restoredState: tab.restoredState,
                     providedState: tab.browserState,
                     providedSplitState: tab.splitState

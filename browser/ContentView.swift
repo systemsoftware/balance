@@ -230,10 +230,12 @@ struct ContentView: View {
     }
 
     var tabID: String
+    var isActiveTab: Bool
     var restoredState: TabSessionState?
 
-    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "", tabID: String = UUID().uuidString, restoredState: TabSessionState? = nil, providedState: BrowserState? = nil, providedSplitState: BrowserState? = nil) {
+    init(initialURL: URL? = nil, pvt: Bool = false, profile: String = "", profileIcon: String = "", tabID: String = UUID().uuidString, isActiveTab: Bool = true, restoredState: TabSessionState? = nil, providedState: BrowserState? = nil, providedSplitState: BrowserState? = nil) {
         self.tabID = tabID
+        self.isActiveTab = isActiveTab
         let latestState = TabRegistry.shared.states[tabID] ?? restoredState
         self.restoredState = latestState
         
@@ -438,6 +440,22 @@ struct ContentView: View {
                                     .onChange(of: browserState.title) { _, newTitle in
                                         handleTitleChange(to: newTitle)
                                     }
+                                    .onChange(of: browserState.isLoading) { _, isLoading in
+                                        if !isLoading {
+                                            updatePageTheme()
+                                            Task {
+                                                try? await Task.sleep(for: .milliseconds(500))
+                                                if !browserState.isLoading { updatePageTheme() }
+                                            }
+                                        }
+                                    }
+                                    .onChange(of: themePreference) { _, _ in
+                                        updatePageTheme()
+                                    }
+                                    .onChange(of: isActiveTab) { _, isActive in
+                                        if isActive { updatePageTheme() }
+                                    }
+                                    .ignoresSafeArea(MemoryStorage.shared.focusMode ? .all : [])
 #if os(iOS)
                                     .onTapGesture(count: 5) {
                                         toggleFocusMode()
@@ -1503,20 +1521,7 @@ struct ContentView: View {
 
         if priv == true { return }
         
-        if themePreference == "match" {
-            showPageShine = false
-#if canImport(AppKit)
-            Task {
-                let clr = await browserState.getBackground()
-                if let window = NSApplication.shared.keyWindow {
-                    window.backgroundColor = clr
-                    window.appearance = NSAppearance(named: clr.isLight ? .aqua : .darkAqua)
-                }
-            }
-#endif
-        } else {
-            showPageShine = true
-        }
+        updatePageTheme()
         
         if recordHistory == true, let newURL = browserState.url, newURL.absoluteString != homepage, isEphemeralProfile != true {
             let historyTitle = newTitle.isEmpty ? (newURL.host() ?? "No Title") : newTitle
@@ -1529,6 +1534,21 @@ struct ContentView: View {
                 profile: bProfile
             )
         }
+    }
+
+    private func updatePageTheme() {
+        showPageShine = themePreference != "match"
+#if canImport(AppKit)
+        guard themePreference == "match", isActiveTab, let webView = browserState.webView else { return }
+        Task {
+            let pageURL = webView.url
+            let color = await browserState.getBackground()
+            guard themePreference == "match", isActiveTab, browserState.webView === webView,
+                  webView.url == pageURL, let window = webView.window else { return }
+            window.backgroundColor = color
+            window.appearance = NSAppearance(named: color.isLight ? .aqua : .darkAqua)
+        }
+#endif
     }
 
     
