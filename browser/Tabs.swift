@@ -40,6 +40,9 @@ struct Tabs: View {
         }
     }
     
+    @AppStorage("tabBackground", store:Config.sharedDefaults) var tabBackground = true
+    @AppStorage("showNewTabButton", store:Config.sharedDefaults) var showNewTabButton = true
+    
     var body: some View {
         VStack(spacing: 0) {
             if tabMode != 0 && tabMode != 4 {
@@ -59,7 +62,7 @@ struct Tabs: View {
                                 .foregroundStyle(.secondary)
                                 .padding(.horizontal, 6)
                                 .padding(.vertical, 2)
-                                .background(.secondary.opacity(0.15), in:.capsule)
+                                .background(.secondary.opacity(0.15), in:BackgroundShape())
                         }
                         .padding(.horizontal, 14)
                         .padding(.top, 14)
@@ -94,6 +97,7 @@ struct Tabs: View {
                             .opacity(0.3)
                             .padding(.top, 10)
                     }
+                
                 }
                 
                 
@@ -171,16 +175,20 @@ struct Tabs: View {
                                     .simultaneousGesture(tabReorderGesture(for: tab))
                                 }
                                 Spacer()
-                                Button {
-                                    createNewTab()
-                                } label: {
-                                    Label("New Tab", systemImage: "plus")
-                                .frame(maxWidth: .infinity)
+                                if showNewTabButton {
+                                    HStack {
+                                        Spacer()
+                                        Button {
+                                            createNewTab()
+                                        } label: {
+                                            Image(systemName: "plus")
+                                        }
+                                        .buttonStyle(.plain)
+                                        .padding(7)
+                                        .glassEffect()
+                                        Spacer()
+                                    }
                                 }
-                                .buttonStyle(.plain)
-                                .padding(.horizontal)
-                                .padding(7)
-                                .glassEffect()
                             }
                         }
                         .padding(.bottom, 10)
@@ -307,23 +315,28 @@ struct Tabs: View {
                                 .simultaneousGesture(tabReorderGesture(for: tab))
                             }
                             
-                            Button {
-                                createNewTab()
-                            } label: {
-                                Image(systemName: "plus")
+                            if showNewTabButton {
+                                Button {
+                                    createNewTab()
+                                } label: {
+                                    Image(systemName: "plus")
+                                }
+                                .buttonStyle(.plain)
+                                .foregroundStyle(.primary)
+                                .padding(7)
                             }
-                            .buttonStyle(.plain)
-                            .foregroundStyle(.primary)
-                            .padding(7)
                         }
                         .padding(.horizontal, 4)
                     }
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .padding(.vertical, 0.7)
                     .background {
-                        Capsule()
+                        BackgroundShape()
                             .fill(.clear)
-                            .glassEffect()
+                            .glassEffect(
+                                tabBackground ? .regular : .identity,
+                                in: BackgroundShape()
+                            )
                             .allowsHitTesting(false)
                     }
                 }
@@ -331,6 +344,17 @@ struct Tabs: View {
                 .padding(.top, alignsWithTitlebar ? 0 : 16)
             }
         }
+        
+        .background {
+            RoundedRectangle(cornerRadius: 8)
+                .fill(.clear)
+                .glassEffect(
+                    tabBackground && tabMode == 2 ? .regular : .identity,
+                    in: RoundedRectangle(cornerRadius: 8)
+                )
+                .allowsHitTesting(false)
+        }
+        .padding(.horizontal, 5)
         .frame(maxWidth: .infinity, maxHeight: .infinity)
         .onPreferenceChange(TabFramePreferenceKey.self) { tabFrames = $0 }
             
@@ -605,27 +629,27 @@ private struct TabRow: View {
         .padding(.vertical, 9)
         .background {
             if isActive {
-                Capsule()
+                BackgroundShape()
                     .fill(.tint)
                     .opacity(glass ? 0.0 : 0.18)
                     .glassEffect(
                         glass ? .regular : .identity,
-                        in: .capsule
+                        in: BackgroundShape()
                     )
                     .overlay(
-                       Capsule()
+                        Capsule()
                             .strokeBorder(.tint, lineWidth: 1)
                             .opacity(glass ? 0.0 : 0.35)
                     )
             } else if isHovered {
-                Capsule()
+                BackgroundShape()
                     .fill(.secondary)
                     .opacity(0.1)
             } else {
                 Color.clear
             }
         }
-        .contentShape(Capsule())
+        .contentShape(BackgroundShape())
         .offset(
             x: insertionFinished || tabMode != 0 ? 0 : 80,
             y: insertionFinished || tabMode == 0 ? 0 : 24

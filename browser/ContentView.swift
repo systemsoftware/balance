@@ -186,8 +186,7 @@ struct ContentView: View {
     
     @State private var currentUserActivity: NSUserActivity?
     @AppStorage("enableHandoff", store:Config.sharedDefaults) var enableHandoff: Bool = true
-    
-    
+        
     var shouldShowBookmarks: Bool {
         guard !bookmarkStore.items.isEmpty else { return false }
 
@@ -593,9 +592,9 @@ struct ContentView: View {
                         .scrollBounceBehavior(.basedOnSize)
                         .background {
                             if sidebarBackground == 1 {
-                                Capsule()
+                                BackgroundShape()
                                     .fill(.clear)
-                                    .glassEffect(.regular, in: .capsule)
+                                    .glassEffect(.regular, in: BackgroundShape())
                                     .allowsHitTesting(false)
                                     .padding(.horizontal, isCompact ? 2 : 5)
                             }
@@ -1196,7 +1195,11 @@ struct ContentView: View {
         //   guard !trimmed.isEmpty else { return }
         
         let url: URL?
-        if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("extension://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
+        if let match = trimmed.wholeMatch(of: engineRegex),
+           let engine = EngineManager.searchByName(String(match.output.engine)) {
+            let query = String(match.output.query)
+            url = EngineManager.searchURL(for: engine, query: query)
+        } else if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("extension://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
             url = URL(string: trimmed)
         } else if trimmed.hasPrefix("/") {
             // Bare POSIX path (e.g. /Users/foo/bar/index.html) — load as file://

@@ -375,11 +375,15 @@ struct BrowserToolbar: View {
         @AppStorage(AutofillPreferences.enabledKey, store: Config.sharedDefaults)
         private var autofillEnabled = true
         
+        @AppStorage("toolbarBackgrounds") private var toolbarBackgrounds = true
+        
         @ViewBuilder private var toolbarContent: some View {
             HStack {
                 switch item {
                 case .clock:
                     ClockView(timeOnly: true, fontSize: 14)
+                        .frame(height: 40)
+                        .padding(.horizontal, 7)
                     
                 case .navigation:
                     NavigationButtons(location: $location, browserState: browserState, expandedLabel: expandedLabel)
@@ -547,7 +551,7 @@ struct BrowserToolbar: View {
             if expandedLabel {
                 toolbarContent
             } else {
-                toolbarContent.glassEffect(.regular.interactive())
+                toolbarContent.glassEffect(toolbarBackgrounds ? .regular.interactive() : .identity)
             }
         }
         

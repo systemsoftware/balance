@@ -809,9 +809,19 @@ struct BrowserWebView: PlatformViewRepresentable {
            webView.navigationDelegate === context.coordinator {
             return webView
         }
+        let requestedHost = request.url?.host ?? "default"
+        let requestedAutoplaySetting = SitePermissionStore.shared.setting(
+            for: requestedHost,
+            type: "autoplay",
+            defaultState: .allow
+        )
+        let requestedMediaTypes: WKAudiovisualMediaTypes = requestedAutoplaySetting == .allow ? [] : .all
+
         if let preloaded = (state.webView as? BrowserWKWebView)
-            ?? (state.preloadedWebView as? BrowserWKWebView) {
-            let host = request.url?.host ?? "default"
+            ?? (state.preloadedWebView as? BrowserWKWebView),
+           preloaded.configuration.mediaTypesRequiringUserActionForPlayback == requestedMediaTypes {
+            let host = requestedHost
+            context.coordinator.autoplaySetting = requestedAutoplaySetting
             preloaded.downloadStore = DownloadStore(profile: profile)
             if !userAgent.isEmpty {
                 preloaded.customUserAgent = userAgent
@@ -886,6 +896,17 @@ struct BrowserWebView: PlatformViewRepresentable {
             return preloaded
         }
 
+        // A WKWebView captures its autoplay policy when it is created. A popup's
+        // preloaded view can inherit a different site's policy, so do not reuse it
+        // when that policy disagrees with the destination site's setting.
+        if let stalePreloaded = state.preloadedWebView {
+            stalePreloaded.stopLoading()
+            stalePreloaded.navigationDelegate = nil
+            stalePreloaded.uiDelegate = nil
+            stalePreloaded.removeFromSuperview()
+            state.preloadedWebView = nil
+        }
+
         let manager = WebExtensionManager.shared
         manager.loadAllFromDisk()
         let extensionControllerKey = profile
@@ -903,7 +924,7 @@ struct BrowserWebView: PlatformViewRepresentable {
         config.defaultWebpagePreferences.allowsContentJavaScript = true
         
         // Media configurations useful for DRM / FairPlay streams
-        let host = request.url?.host ?? "default"
+        let host = requestedHost
         
         let autoplaySetting = SitePermissionStore.shared.setting(for: host, type: "autoplay", defaultState: .allow)
         if autoplaySetting == .allow {
@@ -911,6 +932,7 @@ struct BrowserWebView: PlatformViewRepresentable {
         } else {
             config.mediaTypesRequiringUserActionForPlayback = .all
         }
+        context.coordinator.autoplaySetting = autoplaySetting
         
         config.allowsAirPlayForMediaPlayback = true
         
@@ -1125,11 +1147,16 @@ struct BrowserWebView: PlatformViewRepresentable {
         }
         
         let autoplaySetting = SitePermissionStore.shared.setting(for: host, type: "autoplay", defaultState: .allow)
-        let requiredMediaTypes: WKAudiovisualMediaTypes = (autoplaySetting == .allow) ? [] : .all
-        if nsView.configuration.mediaTypesRequiringUserActionForPlayback != requiredMediaTypes {
-            nsView.configuration.mediaTypesRequiringUserActionForPlayback = requiredMediaTypes
+        if context.coordinator.autoplaySetting != autoplaySetting,
+           !context.coordinator.isRebuildingForAutoplay {
+            context.coordinator.isRebuildingForAutoplay = true
             if autoplaySetting == .block {
                 nsView.evaluateJavaScript("document.querySelectorAll('video, audio').forEach(function(v) { if (!v.paused) v.pause(); });", completionHandler: nil)
+            }
+            let targetURL = nsView.url ?? request.url
+            DispatchQueue.main.async { [weak state = context.coordinator.state] in
+                guard let state, let targetURL else { return }
+                state.rebuildWebView(to: targetURL)
             }
         }
 
@@ -1284,6 +1311,8 @@ struct BrowserWebView: PlatformViewRepresentable {
         var handledNavigationRevision: UInt?
         var lastFailedURL: URL?
         var contentBlockersEnabled: Bool?
+        var autoplaySetting: SettingState?
+        var isRebuildingForAutoplay = false
         let profile: String
         #if canImport(AppKit)
         var activeShareDelegates: [NSSharingServicePicker: WebShareDelegate] = [:]
@@ -1382,8 +1411,6 @@ struct BrowserWebView: PlatformViewRepresentable {
                     let credentials = (hasPassword || isPasswordField) ? PasswordManager.shared.credentials(for: host) : []
                     let autofillItems = AutoFillStore.getMatching(type: inputType, label: inputLabel.isEmpty ? nil : inputLabel)
                     
-                    // Password fields must still offer "Save Current Password"
-                    // when this site has no credentials yet.
                     guard hasPassword || isPasswordField || !credentials.isEmpty || !autofillItems.isEmpty else {
                         return
                     }

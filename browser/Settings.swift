@@ -110,9 +110,17 @@ let catExt = CategoryDef(
     description: "Manage extensions."
 )
 
+let catAppearance = CategoryDef(
+    id:"appearance",
+    name:"Appearance",
+    icon:"paintbrush",
+    color: .purple,
+    description: "Customize the browser's appearance, including themes and color schemes."
+    )
+
 
 let categoryDefs: [CategoryDef] = [
-    catBrowsing, catSidebar, catAI, catAutofill, catPalette, catBookmarks, catProfiles, catPrivacy, catContetBlocker, catExt, catAdvanced, catLearnMore
+    catBrowsing, catAppearance, catSidebar, catAI, catAutofill, catPalette, catBookmarks, catProfiles, catPrivacy, catContetBlocker, catExt, catAdvanced, catLearnMore
 ]
 
 let Settings: [Setting] = {
@@ -167,9 +175,9 @@ let Settings: [Setting] = {
             defaultValueString: "default-home"
         ),
         Setting(
-            name: "Tabs",
+            name: "Tab Position",
             icon: "rectangle.on.rectangle",
-            category: catBrowsing,
+            category: catAppearance,
             type: "dropdown",
             appStorageKey: "tabMode",
             defaultValueInt: 0,
@@ -178,7 +186,7 @@ let Settings: [Setting] = {
         Setting(
             name: "Toolbar Position",
             icon: "rectangle.grid.1x2.fill",
-            category: catBrowsing,
+            category: catAppearance,
             type: "dropdown",
             appStorageKey: "toolbarLocation",
             defaultValueInt: 0,
@@ -205,11 +213,44 @@ let Settings: [Setting] = {
         Setting(
             name: "Right Sidebar Background",
             icon: "sidebar.right",
-            category: catSidebar,
+            category: catAppearance,
             type: "dropdown",
             appStorageKey: "sidebarBackgroundType",
             defaultValueInt: 1,
             dropdownOptions: .staticOptions([0: "None", 1:"Unified", 2: "Individual"])
+        ),
+        Setting(
+            name: "Background Shape",
+            icon: "square.on.circle",
+            category: catAppearance,
+            type: "dropdown",
+            appStorageKey: "backgroundShape",
+            defaultValueInt: 0,
+            dropdownOptions: .staticOptions([0: "Capsule", 1:"Rounded Rect"])
+        ),
+        Setting(
+            name: "Tab Bar Background",
+            icon: "rectangle.grid.1x2",
+            category: catAppearance,
+            type: "toggle",
+            appStorageKey: "tabBackground",
+            defaultValueBool: true,
+        ),
+        Setting(
+            name: "Toolbar Background",
+            icon: "hammer.circle",
+            category: catAppearance,
+            type: "toggle",
+            appStorageKey: "toolbarBackgrounds",
+            defaultValueBool: true,
+        ),
+        Setting(
+            name: "Show New Tab Button",
+            icon: "plus.rectangle.on.rectangle",
+            category: catAppearance,
+            type: "toggle",
+            appStorageKey: "showNewTabButton",
+            defaultValueBool: true,
         ),
         Setting(
             name: "Right Sidebar Width",
@@ -366,7 +407,7 @@ let Settings: [Setting] = {
         Setting(
             name: "Preserve On Close",
             icon: "archivebox",
-            category: catAdvanced,
+            category: catBrowsing,
             type: "toggle",
             appStorageKey: "preserveOnClose",
             defaultValueBool: true
@@ -509,14 +550,14 @@ let Settings: [Setting] = {
         Setting(
             name: "Theme",
             icon: "paintbrush",
-            category: catAdvanced,
+            category: catAppearance,
             type: "dropdownString",
             appStorageKey: "themePreference",
             defaultValueString: "system",
             dropdownOptions: .staticTaggedOptions([
                 "system": "System",
                 "light": "Light",
-                "match": "Match Page",
+                "match": "Page",
                 "dark": "Dark"
             ])
         ),
@@ -554,6 +595,13 @@ let Settings: [Setting] = {
     s.append(Setting(
         name:"Manage",
         category: catProfiles,
+        type:"header",
+        appStorageKey:"",
+    ))
+    
+    s.append(Setting(
+        name:"Engine Shortcuts",
+        category: catBrowsing,
         type:"header",
         appStorageKey:"",
     ))
@@ -1005,6 +1053,8 @@ struct SettingsSectionContent: View {
     
     @State var showNewEntrySheet = false
     
+    @State var showingNewEngine = false
+    
     private func loadInitialURL() {
         if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
             lmpage.load(URLRequest(url: url))
@@ -1083,6 +1133,22 @@ struct SettingsSectionContent: View {
             }
             }
             
+            
+            if def.id == "browsing" {
+                EngineManagerView(showingNewEngine: $showingNewEngine)
+                    .frame(maxWidth: .infinity)
+                
+                
+                SettingsCustomCardRow(title: "Add Engine", icon: "plus", accentColor: def.color) {
+                    Button {
+                        showingNewEngine = true
+                    } label: {
+                        Text("Add")
+                    }
+                }
+            }
+            
+            
             if def.id == "bookmarks" {
                 BookmarksView(showAddBookmark:$showNewBookmark,isSettings:true)
                     .padding(.top, -5)
@@ -1109,7 +1175,7 @@ struct SettingsSectionContent: View {
             }
 
             if def.id == "autofill" {
-                SettingsCustomCardRow(title: "Show Autofill Type", icon: "rectangle.and.pencil.and.ellipsis", accentColor: def.color) {
+                SettingsCustomCardRow(title: "Show", icon: "rectangle.and.pencil.and.ellipsis", accentColor: def.color) {
                     Picker("",selection:$autofillType.animation()) {
                         Text("Form").tag(0)
                         Text("Passwords").tag(1)

@@ -18,6 +18,8 @@ struct GoogleSuggestions: Decodable {
     }
 }
 
+let engineRegex = /@(?<engine>\w+)\s+(?<query>.+)/
+
 
 struct AutocompleteView: View {
     @Binding var searchTerm: String
@@ -41,8 +43,18 @@ struct AutocompleteView: View {
     
     var loadQuery: () -> Void
     
+    @State var customEngine: EngineItem? = nil
+    
     private var suggestions: [String] {
         result?.suggestions ?? []
+    }
+    
+    var cleanSearchTerm: String {
+        if let match = searchTerm.wholeMatch(of: engineRegex) {
+            return String(match.output.query)
+        } else {
+            return searchTerm
+        }
     }
     
     var body: some View {
@@ -50,13 +62,13 @@ struct AutocompleteView: View {
             
             if !searchTerm.isEmpty {
                 Button {
-                    click("\(searchEngine)\(searchTerm.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? searchTerm)")
+                    click(searchURL(for: cleanSearchTerm))
                 } label: {
                     HStack(spacing: 12) {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(.secondary)
                         
-                        Text("Search for \(searchTerm)")
+                        Text("Search for \(cleanSearchTerm) \( customEngine != nil ? "on \(URL(string:customEngine!.url)?.host ?? customEngine?.title ?? "")" : "")")
                             .frame(maxWidth: .infinity, alignment: .leading)
                         
                         Spacer()
@@ -90,7 +102,7 @@ struct AutocompleteView: View {
             } else {
                 ForEach(suggestions, id: \.self) { suggestion in
                     Button {
-                     click(suggestion)
+                        click(searchURL(for: suggestion))
                     } label: {
                         HStack(spacing: 12) {
                             Image(systemName: "magnifyingglass")
@@ -136,8 +148,31 @@ struct AutocompleteView: View {
         
         loadQuery()
     }
+
+    private func searchURL(for query: String) -> String {
+        if let customEngine,
+           let url = EngineManager.searchURL(for: customEngine, query: query) {
+            return url.absoluteString
+        }
+
+        let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query
+        return "\(searchEngine)\(encoded)"
+    }
     
-    func loadData(for query: String) async throws -> GoogleSuggestions? {
+    func loadData(for q: String) async throws -> GoogleSuggestions? {
+        
+        var query = q
+        customEngine = nil
+        
+
+        if let match = q.wholeMatch(of: engineRegex) {
+            query = String(match.output.query)
+            
+            if let eng = EngineManager.searchByName(String(match.output.engine)) {
+                customEngine = eng
+            }
+            
+        }
         
         var eng = "https://ac.duckduckgo.com/ac/?type=list&t=balance&q="
         
