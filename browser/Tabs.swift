@@ -566,11 +566,11 @@ private struct TabRow: View {
                         .frame(width: 16, height: 16)
                 } else {
                     if let host = state.url?.host, !host.isEmpty {
-                        Favicon(faviconURL?.absoluteString ?? "?")
+                        CachedAsyncImage(url: faviconURL ?? Favicon.full(host))
                             .frame(width: 16, height: 16)
-                            .task {
-                                       faviconURL = await state.tryGetFavicon()
-                                   }
+                            .task(id: state.url) {
+                                faviconURL = await state.tryGetFavicon()
+                            }
                     } else{
                         Image(systemName: "house")
                             .resizable()

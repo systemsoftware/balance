@@ -79,6 +79,7 @@ struct CachedAsyncImage: View {
                                 .scaleEffect(0.5)
                         }
                     }
+                    .id(url)
                 } else {
                     fallbackView
                 }
