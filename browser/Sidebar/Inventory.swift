@@ -75,7 +75,7 @@ struct InventorySidebar: View {
                 if syncFailed {
                     Image(systemName: "icloud.slash")
                         .foregroundStyle(.secondary)
-                        .help("iCloud sync is pending; local items are available")
+                        .help(InventoryCloudSync.lastError ?? "iCloud sync is pending; local items are available")
                 }
             }
             .padding()
@@ -249,10 +249,9 @@ struct InventorySidebar: View {
             items.removeAll { $0.id == item.id }
             InventoryCloudSync.enqueueDeletion(id: item.id)
             Task { syncFailed = !(await InventoryCloudSync.sync()) }
-            if !item.isRemoteLink {
-                try? FileManager.default.removeItem(at: item.url)
-            }
+            InventoryCloudSync.removeLocalFile(for: item)
         } catch {
+            context.rollback()
             print("Error deleting item: \(error)")
         }
     }

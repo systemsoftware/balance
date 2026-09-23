@@ -150,8 +150,6 @@ struct AutofillPopoverView: View {
                     }
                 }
             }
-        } else {
-            completion()
         }
     }
 }

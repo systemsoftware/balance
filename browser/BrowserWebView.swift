@@ -1427,11 +1427,13 @@ struct BrowserWebView: PlatformViewRepresentable {
                 
                 DispatchQueue.main.async {
                     guard let webView = self.state.webView ?? (message.webView as? BrowserWKWebView) ?? message.webView else { return }
-                    let host = (message.frameInfo.securityOrigin.host.isEmpty ? webView.url?.host : message.frameInfo.securityOrigin.host)?.lowercased() ?? "default"
+                    let frameHost = message.frameInfo.securityOrigin.host.lowercased()
+                    let host = frameHost.isEmpty ? (webView.url?.host?.lowercased() ?? "") : frameHost
                     
                     let zoom = webView.pageZoom
                     let rect = CGRect(x: x * zoom, y: y * zoom, width: width * zoom, height: height * zoom)
-                    let credentials = (hasPassword || isPasswordField) ? PasswordManager.shared.credentials(for: host) : []
+                    let credentials = (!frameHost.isEmpty && (hasPassword || isPasswordField))
+                        ? PasswordManager.shared.credentials(for: frameHost) : []
                     let autofillItems = AutoFillStore.getMatching(type: inputType, label: inputLabel.isEmpty ? nil : inputLabel)
                     
                     guard hasPassword || isPasswordField || !credentials.isEmpty || !autofillItems.isEmpty else {
@@ -1439,6 +1441,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                     }
                     
                     let frameInfo = message.frameInfo
+                    let pageURL = webView.url
                     
                     AutofillPopoverManager.shared.show(
                         relativeTo: rect,
@@ -1450,12 +1453,17 @@ struct BrowserWebView: PlatformViewRepresentable {
                         credentials: credentials,
                         autofillItems: autofillItems,
                         onSelectCredential: { [weak self = self] cred in
+                            guard let currentWebView = self?.state.webView,
+                                  currentWebView === webView,
+                                  currentWebView.url == pageURL,
+                                  !frameHost.isEmpty else { return }
                             let pass = PasswordManager.shared.fetchPasswordData(for: cred.username, domain: host) ?? ""
+                            guard !pass.isEmpty else { return }
                             let credentialsArray = [cred.username, pass]
                             if let data = try? JSONSerialization.data(withJSONObject: credentialsArray),
                                let jsonStr = String(data: data, encoding: .utf8) {
                                 let js = "window.__balanceAutofill(\(jsonStr)[0], \(jsonStr)[1]);"
-                                self?.state.webView?.evaluateJavaScript(js, in: frameInfo, in: BrowserWebView.internalContentWorld, completionHandler: { _ in })
+                                currentWebView.evaluateJavaScript(js, in: frameInfo, in: BrowserWebView.internalContentWorld, completionHandler: { _ in })
                             }
                         },
                         onSelectAutofillData: { [weak self = self] autofillValue in

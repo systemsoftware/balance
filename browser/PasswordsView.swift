@@ -203,9 +203,6 @@ struct PasswordRow: View {
                     }
                 }
             }
-        } else {
-            // Fallback if no auth available (e.g. no passcode set on Mac)
-            completion()
         }
     }
 }

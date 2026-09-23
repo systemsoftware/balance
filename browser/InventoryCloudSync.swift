@@ -15,6 +15,7 @@ enum InventoryCloudSync {
     private static var syncTask: Task<Bool, Never>?
     private static var needsAnotherPass = false
     private static var zoneReady = false
+    private(set) static var lastError: String?
 
     static func enqueueDeletion(id: UUID) {
         var pending = Set(Config.defaults.stringArray(forKey: pendingDeletesKey) ?? [])
@@ -51,8 +52,10 @@ enum InventoryCloudSync {
             try await deletePendingRecords()
             try await receiveChanges(into: context)
             try await uploadLocalItems(from: context)
+            lastError = nil
             return true
         } catch {
+            lastError = error.localizedDescription
             print("❌ Inventory iCloud sync failed; local items are preserved: \(error)")
             return false
         }
@@ -77,6 +80,8 @@ enum InventoryCloudSync {
 
     private static func receiveChanges(into context: ModelContext) async throws {
         var token = savedToken()
+        var isFullFetch = token == nil
+        var seenIDs = Set<String>()
         repeat {
             let page: (modificationResultsByID: [CKRecord.ID: Result<CKDatabase.RecordZoneChange.Modification, Error>], deletions: [CKDatabase.RecordZoneChange.Deletion], changeToken: CKServerChangeToken, moreComing: Bool)
             do {
@@ -86,15 +91,20 @@ enum InventoryCloudSync {
                     desiredKeys: ["id", "name", "mime", "url", "file"],
                     resultsLimit: 100
                 )
-            } catch let error as CKError where error.code == .changeTokenExpired {
-                guard token != nil else { throw error }
+            } catch {
+                guard token != nil, isExpiredChangeToken(error) else { throw error }
+                // CloudKit commonly wraps the zone's token error in a
+                // partialFailure keyed by CKRecordZone.ID.
                 Config.defaults.removeObject(forKey: tokenKey)
                 token = nil
+                isFullFetch = true
+                seenIDs.removeAll()
                 continue
             }
 
             var uploaded = Set(Config.defaults.stringArray(forKey: uploadedKey) ?? [])
             let pending = Set(Config.defaults.stringArray(forKey: pendingDeletesKey) ?? [])
+            var filesToRemove: [InventoryItem] = []
             for result in page.modificationResultsByID.values {
                 let record = try result.get().record
                 guard record.recordType == "Inventory" else { continue }
@@ -102,22 +112,52 @@ enum InventoryCloudSync {
                 guard let id = UUID(uuidString: idString), !pending.contains(id.uuidString) else { continue }
                 try importRecord(record, id: id, into: context)
                 uploaded.insert(id.uuidString)
+                seenIDs.insert(id.uuidString)
             }
             for deletion in page.deletions where deletion.recordType == "Inventory" {
                 guard let id = UUID(uuidString: deletion.recordID.recordName) else { continue }
                 guard uploaded.contains(id.uuidString) else { continue }
                 if let item = try context.fetch(FetchDescriptor<InventoryItem>()).first(where: { $0.id == id }) {
-                    removeLocalFile(for: item)
+                    filesToRemove.append(item)
                     context.delete(item)
                 }
                 uploaded.remove(id.uuidString)
             }
             try context.save()
+            filesToRemove.forEach(removeLocalFile)
             Config.defaults.set(Array(uploaded), forKey: uploadedKey)
-            saveToken(page.changeToken)
             token = page.changeToken
-            if !page.moreComing { break }
+            if !page.moreComing {
+                if isFullFetch {
+                    // A full fetch has no deletion events for records removed before
+                    // the saved token expired. Reconcile only previously uploaded IDs.
+                    filesToRemove.removeAll()
+                    for idString in uploaded.subtracting(seenIDs) {
+                        guard let id = UUID(uuidString: idString) else { continue }
+                        if let item = try context.fetch(FetchDescriptor<InventoryItem>()).first(where: { $0.id == id }) {
+                            filesToRemove.append(item)
+                            context.delete(item)
+                        }
+                        uploaded.remove(idString)
+                    }
+                    try context.save()
+                    filesToRemove.forEach(removeLocalFile)
+                    Config.defaults.set(Array(uploaded), forKey: uploadedKey)
+                }
+                saveToken(page.changeToken)
+                break
+            }
+            if !isFullFetch { saveToken(page.changeToken) }
         } while true
+    }
+
+    private static func isExpiredChangeToken(_ error: Error) -> Bool {
+        guard let cloudError = error as? CKError else { return false }
+        if cloudError.code == .changeTokenExpired { return true }
+        guard cloudError.code == .partialFailure,
+              let nested = cloudError.partialErrorsByItemID,
+              !nested.isEmpty else { return false }
+        return nested.values.allSatisfy { ($0 as? CKError)?.code == .changeTokenExpired }
     }
 
     private static func importRecord(_ record: CKRecord, id: UUID, into context: ModelContext) throws {
@@ -191,7 +231,7 @@ enum InventoryCloudSync {
         return directory
     }
 
-    private static func removeLocalFile(for item: InventoryItem) {
+    static func removeLocalFile(for item: InventoryItem) {
         guard !item.isRemoteLink,
               item.url.standardizedFileURL.path.hasPrefix(inventoryDirectory.standardizedFileURL.path + "/") else { return }
         try? FileManager.default.removeItem(at: item.url)
