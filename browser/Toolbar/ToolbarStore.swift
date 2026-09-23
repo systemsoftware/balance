@@ -27,6 +27,7 @@ final class ToolbarStore: ObservableObject {
     
     @Published private(set) var items: [ToolbarEntry] = []
 
+    private var cloudObserver: NSObjectProtocol?
     private let defaults = Config.defaults
     private let profile: String
     private var storageKey: String {
@@ -36,6 +37,10 @@ final class ToolbarStore: ObservableObject {
     init(profile: String = "") {
         self.profile = profile
         load()
+        cloudObserver = NotificationCenter.default.addObserver(forName: .cloudPreferencesDidApply, object: nil, queue: .main) { [weak self] note in
+            guard let self, let keys = note.userInfo?["keys"] as? [String], keys.contains(self.storageKey) else { return }
+            self.load()
+        }
     }
 
     func load() {

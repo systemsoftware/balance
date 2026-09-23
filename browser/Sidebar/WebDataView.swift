@@ -227,8 +227,8 @@ struct WebDataView: View {
 
 @Model final class ForgetOnClose {
     var id = UUID()
-    var site: String
-    var profile: String
+    var site: String = ""
+    var profile: String = ""
 
     init(_ site: String, profile: String) {
         self.site = site
@@ -268,7 +268,8 @@ final class ForgetManager: ObservableObject {
             let configuration = ModelConfiguration(
                 "ForgetOnClose",
                 schema: schema,
-                url: directory.appendingPathComponent("ForgetOnClose.store")
+                url: directory.appendingPathComponent("ForgetOnClose.store"),
+                cloudKitDatabase: .private("iCloud.com.systemsoftware.balance")
             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {

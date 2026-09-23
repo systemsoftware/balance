@@ -14,10 +14,15 @@ struct PlaceItem: Identifiable, Codable, Hashable {
 final class PlaceStore: ObservableObject {
     @Published var items: [PlaceItem] = []
     
+    private var cloudObserver: NSObjectProtocol?
     private let defaults = Config.defaults
     
     init() {
         load()
+        cloudObserver = NotificationCenter.default.addObserver(forName: .cloudPreferencesDidApply, object: nil, queue: .main) { [weak self] note in
+            guard let keys = note.userInfo?["keys"] as? [String], keys.contains("savedPlaces") else { return }
+            self?.load()
+        }
     }
     
     func load() {

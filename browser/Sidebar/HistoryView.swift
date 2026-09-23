@@ -1,12 +1,13 @@
 import SwiftUI
 import SwiftData
+import CloudKit
 
 // MARK: - 1. Model
 @Model
 final class HistoryItem {
-    var title: String
-    var url: String
-    var timestamp: Date
+    var title: String = ""
+    var url: String = ""
+    var timestamp: Date = Date()
     var profile: String = ""
     
     init(title: String, url: String, profile: String = "", timestamp: Date = Date()) {
@@ -32,6 +33,8 @@ class HistoryManager {
 
     private static var pendingVisits: [String: PendingVisit] = [:]
     private static var saveTask: Task<Void, Never>?
+    private static let syncEnabledAtLaunch = Config.defaults.bool(forKey: "syncHistory")
+        && (Config.defaults.stringArray(forKey: "pendingCloudHistoryClears") ?? []).isEmpty
     
     static let sharedContainer: ModelContainer = {
         let schema = Schema([HistoryItem.self])
@@ -44,7 +47,9 @@ class HistoryManager {
             let configuration = ModelConfiguration(
                 "History",
                 schema: schema,
-                url: directory.appendingPathComponent("History.store")
+                url: directory.appendingPathComponent("History.store"),
+                cloudKitDatabase: syncEnabledAtLaunch
+                    ? .private("iCloud.com.systemsoftware.balance") : .none
             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
@@ -122,26 +127,35 @@ class HistoryManager {
         }
     }
     
+    /// Clear a profile, or all profiles when `profile` is nil. Cloud cleanup is
+    /// explicit so records uploaded by an older release are removed even when
+    /// history sync is currently disabled on this device.
     @discardableResult
-    static func clearAllHistory(profile: String = "") -> Bool {
-        let searchProfile = profile
-        let descriptor = FetchDescriptor<HistoryItem>(
-            predicate: #Predicate { $0.profile == searchProfile }
-        )
+    static func clearAllHistory(profile: String? = nil) async -> Bool {
+        saveTask?.cancel()
+        saveTask = nil
+        if let profile {
+            pendingVisits = pendingVisits.filter { $0.value.profile != profile }
+        } else {
+            pendingVisits.removeAll()
+        }
+
         do {
-            let items = try sharedContainer.mainContext.fetch(descriptor)
-            for item in items {
+            let items = try sharedContainer.mainContext.fetch(FetchDescriptor<HistoryItem>())
+            for item in items where profile == nil || item.profile == profile {
                 sharedContainer.mainContext.delete(item)
             }
             try sharedContainer.mainContext.save()
-            return true
         } catch {
-            print("❌ Failed to clear history: \(error)")
+            print("❌ Failed to clear local history: \(error)")
             sharedContainer.mainContext.rollback()
             return false
         }
+
+        CloudHistoryCleanup.enqueue(profile: profile)
+        return await CloudHistoryCleanup.retryPending()
     }
-    
+
     @discardableResult
     static func deleteHistory(matchingSite site: String) -> Bool {
         let target = site.lowercased()
@@ -175,6 +189,7 @@ struct HistoryView: View {
     @Query private var historyItems: [HistoryItem]
     
     @State private var searchText: String = ""
+    @State private var clearError = false
     let profile: String
     
     init(profile: String = "") {
@@ -254,6 +269,11 @@ struct HistoryView: View {
             }
         }
         .background(Color.black.opacity(0.02))
+        .alert("Cloud history could not be cleared", isPresented: $clearError) {
+            Button("OK", role: .cancel) {}
+        } message: {
+            Text("Some history could not be cleared. If iCloud is unavailable, the app will retry its deletion on the next launch.")
+        }
     }
 
     private func clearHistory() {
@@ -261,7 +281,9 @@ struct HistoryView: View {
         // Deferring by one main-actor turn also lets SwiftUI dismiss a context menu.
         Task { @MainActor in
             await Task.yield()
-            _ = HistoryManager.clearAllHistory(profile: profile)
+            if !(await HistoryManager.clearAllHistory(profile: profile)) {
+                clearError = true
+            }
         }
     }
 }

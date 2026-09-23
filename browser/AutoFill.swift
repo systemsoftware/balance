@@ -6,8 +6,8 @@ import Foundation
 final class AutoFillItem {
     
     var id = UUID()
-    var data: String
-    var type: String // text, email, tel, etc
+    var data: String = ""
+    var type: String = "" // text, email, tel, etc
     var label: String?
     
     init(data: String, type: String = "", label: String? = nil) {
@@ -31,7 +31,8 @@ struct AutoFillStore {
             let configuration = ModelConfiguration(
                 "AutoFill",
                 schema: schema,
-                url: directory.appendingPathComponent("AutoFill.store")
+                url: directory.appendingPathComponent("AutoFill.store"),
+                cloudKitDatabase: .private("iCloud.com.systemsoftware.balance")
             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {

@@ -81,6 +81,13 @@ struct browserApp: App {
     init () {
         #if canImport(AppKit)
         NSWindow.allowsAutomaticWindowTabbing = false
+        CloudPreferences.shared.start()
+        Task { await CloudHistoryCleanup.retryPending() }
+        Task { await InventoryCloudSync.sync() }
+        #else
+        CloudPreferences.shared.start()
+        Task { await CloudHistoryCleanup.retryPending() }
+        Task { await InventoryCloudSync.sync() }
         #endif
     }
     
@@ -220,7 +227,7 @@ private func performCloseCleanup() async {
     let clearDownloadHistory = defaults.bool(forKey: "clearDownloadHistoryOnClose")
 
     if clearHistory {
-        HistoryManager.clearAllHistory()
+        await HistoryManager.clearAllHistory()
     } else {
         HistoryManager.flushPending()
     }

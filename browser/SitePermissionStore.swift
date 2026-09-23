@@ -23,9 +23,14 @@ class SitePermissionStore: ObservableObject {
     @Published var permissions: [String: [String: String]] = [:]
     
     private let key = "site_permissions_v1"
+    private var cloudObserver: NSObjectProtocol?
     
     init() {
         load()
+        cloudObserver = NotificationCenter.default.addObserver(forName: .cloudPreferencesDidApply, object: nil, queue: .main) { [weak self] note in
+            guard let keys = note.userInfo?["keys"] as? [String], keys.contains("site_permissions_v1") else { return }
+            self?.load()
+        }
     }
     
     private func load() {

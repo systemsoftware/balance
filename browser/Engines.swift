@@ -4,8 +4,8 @@ import SwiftData
 
 @Model
 final class EngineItem {
-    var title: String
-    var url: String
+    var title: String = ""
+    var url: String = ""
     
     init(title: String, url: String) {
         self.title = title
@@ -30,7 +30,8 @@ class EngineManager {
             let configuration = ModelConfiguration(
                 "Engines",
                 schema: schema,
-                url: directory.appendingPathComponent("Engines.store")
+                url: directory.appendingPathComponent("Engines.store"),
+                cloudKitDatabase: .private("iCloud.com.systemsoftware.balance")
             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {

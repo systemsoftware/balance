@@ -134,6 +134,14 @@ let Settings: [Setting] = {
             defaultValueBool: true
         ),
         Setting(
+            name: "Sync History with iCloud (Restart Required)",
+            icon: "icloud",
+            category: catPrivacy,
+            type: "toggle",
+            appStorageKey: "syncHistory",
+            defaultValueBool: false
+        ),
+        Setting(
             name: "Search Engine",
             icon: "magnifyingglass",
             category: catBrowsing,
@@ -791,6 +799,9 @@ struct ToggleRow: View {
         Toggle("", isOn: $isEnabled)
             .toggleStyle(.switch)
             .labelsHidden()
+            .help(setting.appStorageKey == "syncHistory"
+                  ? "Takes effect after restarting Balance. To remove previously synced history, use Clear All in History."
+                  : "")
     }
 }
 

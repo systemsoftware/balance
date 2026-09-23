@@ -52,7 +52,7 @@ struct InventorySidebar: View {
             let directory = appSupport.appendingPathComponent("Inventory", isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let storeURL = directory.appendingPathComponent("Inventory.store")
-            let configuration = ModelConfiguration("Inventory", schema: schema, url: storeURL)
+            let configuration = ModelConfiguration("Inventory", schema: schema, url: storeURL, cloudKitDatabase: .none)
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {
             print("Unable to open inventory store; using memory-only storage: \(error)")
@@ -62,6 +62,7 @@ struct InventorySidebar: View {
     }()
 
     @State private var items: [InventoryItem] = []
+    @State private var syncFailed = false
 
     var body: some View {
         VStack(spacing: 0) {
@@ -71,6 +72,11 @@ struct InventorySidebar: View {
                 Text("Inventory")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
+                if syncFailed {
+                    Image(systemName: "icloud.slash")
+                        .foregroundStyle(.secondary)
+                        .help("iCloud sync is pending; local items are available")
+                }
             }
             .padding()
 
@@ -111,12 +117,21 @@ struct InventorySidebar: View {
             return true
         }
         .task {
-            guard let context = InventorySidebar.sharedContainer?.mainContext else { return }
-            do {
-                self.items = try context.fetch(FetchDescriptor<InventoryItem>())
-            } catch {
-                print(error)
+            loadItems()
+            while !Task.isCancelled {
+                syncFailed = !(await InventoryCloudSync.sync())
+                loadItems()
+                try? await Task.sleep(for: .seconds(60))
             }
+        }
+    }
+
+    private func loadItems() {
+        guard let context = InventorySidebar.sharedContainer?.mainContext else { return }
+        do {
+            items = try context.fetch(FetchDescriptor<InventoryItem>())
+        } catch {
+            print("Couldn't load inventory:", error)
         }
     }
 
@@ -232,6 +247,8 @@ struct InventorySidebar: View {
             context.delete(item)
             try context.save()
             items.removeAll { $0.id == item.id }
+            InventoryCloudSync.enqueueDeletion(id: item.id)
+            Task { syncFailed = !(await InventoryCloudSync.sync()) }
             if !item.isRemoteLink {
                 try? FileManager.default.removeItem(at: item.url)
             }
@@ -469,6 +486,7 @@ struct InventorySidebar: View {
             context.insert(item)
             try context.save()
             items.insert(item, at: 0)
+            Task { syncFailed = !(await InventoryCloudSync.sync()) }
         } catch {
             context.rollback()
             try? FileManager.default.removeItem(at: url)
@@ -499,6 +517,7 @@ struct InventorySidebar: View {
             context.insert(item)
             try context.save()
             items.insert(item, at: 0)
+            Task { syncFailed = !(await InventoryCloudSync.sync()) }
 
         } catch {
             context.rollback()
