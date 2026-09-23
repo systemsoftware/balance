@@ -1075,6 +1075,11 @@ struct ContentView: View {
                     showAddPopover = false
                 }
                 Button("Add") {
+                    
+                    if !userInput.hasPrefix("http://") && !userInput.hasPrefix("https://") && !userInput.hasPrefix("file://") {
+                        userInput = "https://" + userInput
+                    }
+                    
                     let sidebarItemURL = URL(string: userInput) ?? URL(fileURLWithPath: userInput)
                     sidebarStore.add(SidebarItem(icon: userInput, url: sidebarItemURL))
                     showAddPopover = false

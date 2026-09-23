@@ -480,9 +480,11 @@ struct BrowserToolbar: View {
                         showReader.toggle()
                     } label: {
                         ToolbarItemLabel(expanded: expandedLabel, title: item.name, systemImage: item.systemImage)
+                            .padding()
                     }
                     .buttonStyle(.plain)
                     .disabled(location == nil)
+                    .frame(width: 40, height: 40)
                     
                 case .spacer:
                     Color.clear
@@ -551,7 +553,7 @@ struct BrowserToolbar: View {
             if expandedLabel {
                 toolbarContent
             } else {
-                toolbarContent.glassEffect(toolbarBackgrounds ? .regular.interactive() : .identity)
+                toolbarContent.glassEffect(toolbarBackgrounds && item != .spacer ? .regular.interactive() : .identity)
             }
         }
         
