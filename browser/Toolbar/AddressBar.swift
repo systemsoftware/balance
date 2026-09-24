@@ -15,7 +15,7 @@ struct AddressBar: View {
     @AppStorage("toolbarLocation") private var toolbarLocation = 0
 
     var body: some View {
-        HStack {
+        HStack(spacing: 0) {
             TrustIndicator(url: location, isPresented: $showTrustInfo)
                 .popover(
                     isPresented: $showTrustInfo,
@@ -53,6 +53,7 @@ struct AddressBar: View {
             }
         }
         .frame(minWidth: 0, maxWidth: .infinity)
+        .frame(height: 40)
         .clipped()
     //    .glassEffect(.regular.interactive(), in: .rect(cornerRadius: 12))
     }

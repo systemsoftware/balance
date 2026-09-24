@@ -183,13 +183,13 @@ let Settings: [Setting] = {
             defaultValueString: "default-home"
         ),
         Setting(
-            name: "Tab Position",
+            name: "Tabs",
             icon: "rectangle.on.rectangle",
             category: catAppearance,
             type: "dropdown",
             appStorageKey: "tabMode",
             defaultValueInt: 0,
-            dropdownOptions: .staticOptions([0: "Top", 1: "Slide Over", 2: "Vertical", 3:"Hidden", 4: "Bottom"])
+            dropdownOptions: .staticOptions([0: "Top", 1: "Slide Over", 2: "Vertical", 3:"Hidden", 4: "Bottom", 5: "Compact"])
         ),
         Setting(
             name: "Toolbar Position",
@@ -234,7 +234,8 @@ let Settings: [Setting] = {
             type: "dropdown",
             appStorageKey: "backgroundShape",
             defaultValueInt: 0,
-            dropdownOptions: .staticOptions([0: "Capsule", 1:"Rounded Rect"])
+            dropdownOptions: .staticOptions([0: "Capsule", 1:"Rounded Rect"]),
+            advanced: true
         ),
         Setting(
             name: "Tab Bar Background",
@@ -641,6 +642,7 @@ struct Setting: Identifiable {
     var dropdownOptions: DropdownOptionsSource?
     var buttonText: String?
     var action: (() -> Void)?
+    var advanced: Bool = false
     var hidden: Bool = false
 }
 

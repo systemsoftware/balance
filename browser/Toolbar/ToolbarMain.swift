@@ -26,6 +26,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     case zoom
     case rename
     case trail
+    case newTab
     
     var name: String {
         
@@ -64,6 +65,8 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
             "AI Tools"
         case .restyle:
             "Restyle Page"
+        case .newTab:
+            "New Tab"
         default:
             self.rawValue.capitalized
         }
@@ -98,6 +101,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .zoom: "plus.magnifyingglass"
         case .rename: "pencil"
         case .trail: "point.topleft.down.to.point.bottomright.curvepath"
+        case .newTab: "plus.square.on.square"
         }
     }
 }
@@ -162,12 +166,20 @@ struct BrowserToolbar: View {
 
     @AppStorage("showToolbarDragHandle") private var showDrag = false
     @AppStorage("toolbarLocation") private var toolbarLocation = 0
+    @AppStorage("tabMode", store: Config.sharedDefaults) private var tabMode = 0
 
     private var hasCompactHeight: Bool { verticalSizeClass == .compact }
     
     var body: some View {
         
         HStack {
+#if os(macOS)
+            if tabMode == 5 && toolbarLocation == 0 {
+                Color.clear
+                    .frame(width: 76, height: 1)
+                    .accessibilityHidden(true)
+            }
+#endif
             if !toolbarStore.items.isEmpty {
                 ForEach(toolbarStore.items) { entry in
                     
@@ -225,7 +237,7 @@ struct BrowserToolbar: View {
                     .padding(Layout.controlPadding)
             }
         }
-        .padding(.top, 5)
+        .padding(.top, tabMode == 5 && toolbarLocation == 0 ? 0 : 5)
         
    /*     .background {
             RoundedRectangle(cornerRadius: 10, style: .continuous)
@@ -372,6 +384,7 @@ struct BrowserToolbar: View {
         
         @State var showSuggestions = false
         @AppStorage("toolbarLocation") private var toolbarLocation = 0
+        @AppStorage("tabMode", store: Config.sharedDefaults) private var tabMode = 0
         @AppStorage(AutofillPreferences.enabledKey, store: Config.sharedDefaults)
         private var autofillEnabled = true
         
@@ -398,7 +411,7 @@ struct BrowserToolbar: View {
                     ReloadToolbarButton(browserState: browserState, expandedLabel: expandedLabel)
                     
                 case .addressBar:
-                    AddressBar(
+                    let addressBar = AddressBar(
                         browserState: browserState,
                         location: $location,
                         urlInput: $urlInput,
@@ -409,6 +422,11 @@ struct BrowserToolbar: View {
                         profileName: profileName,
                         submitURL: submitURL
                     )
+                    if tabMode == 5 {
+                        Tabs(browserState: browserState, compactAddressBar: AnyView(addressBar))
+                    } else {
+                        addressBar
+                    }
                     
                 case .search:
                     SearchToolbarButton(location: $location, expandedLabel: expandedLabel, submitURL: submitURL)
@@ -545,6 +563,8 @@ struct BrowserToolbar: View {
                     ZoomToolbar(location: $location, browserState: browserState, expandedLabel: expandedLabel)
                 case .trail:
                     TrailToolbarButton(browserState: browserState, expandedLabel: expandedLabel)
+                case .newTab:
+                    NewTabToolbarButton(expandedLabel: expandedLabel)
                 }
             }
         }

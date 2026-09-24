@@ -344,6 +344,14 @@ struct ContentView: View {
     @State private var shouldAutoFocusAddress = true
     
     @AppStorage("toolbarLocation") var toolbarLocation = 0
+
+    private var usesCompactTitlebar: Bool {
+#if os(macOS)
+        leftSidebarMode == 5 && toolbarLocation == 0 && !MemoryStorage.shared.focusMode
+#else
+        false
+#endif
+    }
     
     var body: some View {
         VStack(spacing: 0) {
@@ -379,7 +387,7 @@ struct ContentView: View {
                     showReader: $showReader
                 )
                 .padding(.horizontal, isCompact ? 3 : Layout.outerPadding)
-                .padding(.vertical, isCompact ? 4 : 8)
+                .padding(.vertical, usesCompactTitlebar ? 10 : (isCompact ? 4 : 8))
                 .frame(maxWidth: .infinity)
             }
             
@@ -675,6 +683,7 @@ struct ContentView: View {
             }
             
         }
+        .ignoresSafeArea(.container, edges: usesCompactTitlebar ? .top : [])
         .sheet(item: $activeToolbarSheet) { sheet in
             toolbarSheet(sheet)
         }

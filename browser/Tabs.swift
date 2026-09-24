@@ -10,6 +10,7 @@ struct Tabs: View {
 
     var browserState: BrowserState
     var alignsWithTitlebar = false
+    var compactAddressBar: AnyView? = nil
 
     @StateObject private var store = PinStore()
     @EnvironmentObject var windowManager: WindowManager
@@ -45,7 +46,7 @@ struct Tabs: View {
     
     var body: some View {
         VStack(spacing: 0) {
-            if tabMode != 0 && tabMode != 4 {
+            if tabMode != 0 && tabMode != 4 && tabMode != 5 {
                 // MARK: Header
                 VStack(spacing: 12) {
                     if tabMode == 1 {
@@ -292,8 +293,14 @@ struct Tabs: View {
                             }
                             
                         }
-                        Spacer()
+                        if compactAddressBar == nil { Spacer() }
                     }
+                    if compactAddressBar != nil {
+                        GeometryReader { geometry in
+                            compactTabStrip(width: geometry.size.width)
+                        }
+                        .frame(height: 40)
+                    } else {
                     ScrollView(.horizontal, showsIndicators: false) {
                         HStack(spacing: isCompact ? 4 : 6) {
                             ForEach(filteredTabs, id: \.self) { tab in
@@ -339,9 +346,10 @@ struct Tabs: View {
                             .allowsHitTesting(false)
                     }
                     .padding(.horizontal, Layout.controlPadding)
+                    }
                 }
                 .padding(.horizontal, 0)
-                .padding(.top, alignsWithTitlebar ? 0 : 16)
+                .padding(.top, alignsWithTitlebar || compactAddressBar != nil ? 0 : 16)
             }
         }
         
@@ -354,9 +362,88 @@ struct Tabs: View {
                 )
                 .allowsHitTesting(false)
         }
-        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: compactAddressBar == nil ? .infinity : nil)
         .onPreferenceChange(TabFramePreferenceKey.self) { tabFrames = $0 }
             
+    }
+
+    private func compactTabStrip(width: CGFloat) -> some View {
+        let tabs = filteredTabs
+        let reservedWidth: CGFloat = 260 + (showNewTabButton ? 30 : 0) + (tabs.count > 1 ? 32 : 0)
+        let visibleCount = min(tabs.count, max(1, 1 + Int(max(0, width - reservedWidth) / 120)))
+        let activeIndex = tabs.firstIndex { $0 === browserState } ?? 0
+        let start = min(max(0, activeIndex - visibleCount / 2), max(0, tabs.count - visibleCount))
+        let visible = Array(tabs.dropFirst(start).prefix(visibleCount))
+        let hidden = tabs.filter { tab in !visible.contains { $0 === tab } }
+
+        return
+            HStack(spacing: 4) {
+                
+                    ForEach(visible.filter { $0 !== browserState }, id: \.self) { tab in
+                        if (tabs.firstIndex { $0 === tab } ?? 0) < activeIndex {
+                            compactTab(tab)
+                        }
+                    }
+            
+            if let compactAddressBar {
+                compactAddressBar
+                    .frame(minWidth: 220, maxWidth: .infinity)
+                    .background(Color.accentColor.opacity(0.08), in: Capsule())
+            }
+            
+                    ForEach(visible.filter { $0 !== browserState }, id: \.self) { tab in
+                        if (tabs.firstIndex { $0 === tab } ?? 0) > activeIndex {
+                            compactTab(tab)
+                        }
+                    }
+            
+            if !hidden.isEmpty {
+                Menu {
+                    ForEach(hidden, id: \.self) { tab in
+                        Button {
+                            switchToTab(tabID: tab.tabID)
+                        } label: {
+                            Text(tab.title.isEmpty ? "New Tab" : tab.title)
+                        }
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .frame(width: 24, height: 32)
+                }
+                .menuStyle(.borderlessButton)
+                .help("More Tabs")
+                .padding(.trailing, showNewTabButton ? 0 : 4)
+            }
+            
+            if showNewTabButton {
+                Button {
+                    createNewTab()
+                } label: {
+                    Image(systemName: "plus")
+                        .frame(width: 24, height: 32)
+                }
+                .buttonStyle(.plain)
+                .help("New Tab")
+                .padding(.trailing, 4)
+            }
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .animation(.easeInOut(duration: 0.18), value: visible.map(\.tabID))
+    }
+
+    private func compactTab(_ tab: BrowserState) -> some View {
+        TabRow(
+            state: tab,
+            isActive: false,
+            isHovered: hoveredID == ObjectIdentifier(tab),
+            pinStore: store,
+            showURL: false,
+            animateInsertion: tab.shouldAnimateTabInsertion
+        )
+        .frame(width: 112)
+        .onHover { hoveredID = $0 ? ObjectIdentifier(tab) : nil }
+        .background(tabFrameReader(for: tab))
+        .simultaneousGesture(tabReorderGesture(for: tab))
     }
 
     private func tabFrameReader(for tab: BrowserState) -> some View {
@@ -381,13 +468,13 @@ struct Tabs: View {
     }
 
     private func nearestTab(to location: CGPoint) -> BrowserState? {
-        filteredTabs.min { lhs, rhs in
+        filteredTabs.filter { tabFrames[$0.tabID] != nil }.min { lhs, rhs in
             guard let lhsFrame = tabFrames[lhs.tabID],
                   let rhsFrame = tabFrames[rhs.tabID] else { return false }
-            let lhsDistance = tabMode == 0
+            let lhsDistance = tabMode == 0 || tabMode == 5
                 ? abs(lhsFrame.midX - location.x)
                 : abs(lhsFrame.midY - location.y)
-            let rhsDistance = tabMode == 0
+            let rhsDistance = tabMode == 0 || tabMode == 5
                 ? abs(rhsFrame.midX - location.x)
                 : abs(rhsFrame.midY - location.y)
             return lhsDistance < rhsDistance

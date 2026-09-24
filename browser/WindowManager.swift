@@ -591,11 +591,6 @@ private struct BrowserWindowContent: View {
     @ObservedObject var window: BrowserWindowModel
 
     var body: some View {
-        // Keep every tab mounted so its SwiftUI and WKWebView state survives tab
-        // switches, but place the active tab last so its native view is also the
-        // frontmost AppKit drag destination. `allowsHitTesting(false)` only
-        // controls SwiftUI hit testing and does not reliably exclude an embedded
-        // WKWebView from native drag-and-drop targeting.
         let stackedTabs = window.tabs.sorted { lhs, rhs in
             lhs.id != window.activeTabID && rhs.id == window.activeTabID
         }

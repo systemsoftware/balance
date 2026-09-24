@@ -831,7 +831,7 @@ struct BrowserWebView: PlatformViewRepresentable {
            webView.navigationDelegate === context.coordinator {
             return webView
         }
-        let requestedHost = request.url?.host ?? "default"
+        let requestedHost = state.url?.host ?? request.url?.host ?? "default"
         let requestedAutoplaySetting = SitePermissionStore.shared.setting(
             for: requestedHost,
             type: "autoplay",
@@ -944,6 +944,7 @@ struct BrowserWebView: PlatformViewRepresentable {
             config.preferences.isElementFullscreenEnabled = true
         }
         config.defaultWebpagePreferences.allowsContentJavaScript = true
+        config.preferences.javaScriptCanOpenWindowsAutomatically = true
         
         // Media configurations useful for DRM / FairPlay streams
         let host = requestedHost
@@ -1169,13 +1170,14 @@ struct BrowserWebView: PlatformViewRepresentable {
         }
         
         let autoplaySetting = SitePermissionStore.shared.setting(for: host, type: "autoplay", defaultState: .allow)
-        if context.coordinator.autoplaySetting != autoplaySetting,
+        let requestedMediaTypes: WKAudiovisualMediaTypes = autoplaySetting == .allow ? [] : .all
+        if nsView.configuration.mediaTypesRequiringUserActionForPlayback != requestedMediaTypes,
            !context.coordinator.isRebuildingForAutoplay {
             context.coordinator.isRebuildingForAutoplay = true
             if autoplaySetting == .block {
                 nsView.evaluateJavaScript("document.querySelectorAll('video, audio').forEach(function(v) { if (!v.paused) v.pause(); });", completionHandler: nil)
             }
-            let targetURL = nsView.url ?? request.url
+            let targetURL = nsView.url ?? context.coordinator.state.url ?? request.url
             DispatchQueue.main.async { [weak state = context.coordinator.state] in
                 guard let state, let targetURL else { return }
                 state.rebuildWebView(to: targetURL)
@@ -2061,7 +2063,7 @@ struct BrowserWebView: PlatformViewRepresentable {
             
             if !isLinkActivated {
                 if let host = webView.url?.host {
-                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .block)
+                    let popupSetting = SitePermissionStore.shared.setting(for: host, type: "popups", defaultState: .allow)
                     if popupSetting == .block {
                         if let url = navigationAction.request.url {
                             print("Blocked popup to \(url)")
