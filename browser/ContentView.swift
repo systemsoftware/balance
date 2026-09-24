@@ -799,6 +799,8 @@ struct ContentView: View {
             ToolbarRenameSheet(browserState: browserState)
         case .summary:
             ToolbarSummarySheet(browserState: browserState, isSummarizing: $summarizing)
+        case .wordCount:
+            WordCountView(browserState: browserState)
         }
     }
 

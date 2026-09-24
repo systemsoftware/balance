@@ -158,3 +158,156 @@ struct ToolbarSummarySheet: View {
     }
     
 }
+
+struct WordCountView: View {
+    
+    @Environment(\.dismiss) var dismiss
+    
+    @ObservedObject var browserState: BrowserState
+    @State var text = ""
+    @State private var isLoading = true
+
+    var body: some View {
+        let analysis = WordCountAnalysis(text: text)
+
+        return VStack {
+            ScrollView {
+                if !text.isEmpty {
+                    VStack(alignment: .leading, spacing: 20) {
+                        Text("Word Count")
+                            .font(.headline)
+                        Text("\(analysis.wordCount) words")
+                            .font(.title)
+                        HStack(spacing: 24) {
+                            metric("Characters", value: "\(analysis.characterCount)")
+                            metric("Paragraphs", value: "\(analysis.paragraphCount)")
+                            metric("Sentences", value: "\(analysis.sentenceCount)")
+                            metric("Average sentence length", value: String(format: "%.1f words", analysis.averageSentenceLength))
+                        }
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            Text("Top words")
+                                .font(.headline)
+                            if analysis.topWords.isEmpty {
+                                Text("No keywords found")
+                                    .foregroundStyle(.secondary)
+                            } else {
+                                ForEach(analysis.topWords, id: \.word) { item in
+                                    HStack {
+                                        Text(item.word)
+                                        Spacer()
+                                        Text("\(item.count) · \(item.density, specifier: "%.1f")%")
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                Text("Percentage of all words; common words excluded from the list.")
+                                    .font(.caption)
+                                    .foregroundStyle(.secondary)
+                            }
+                        }
+                        
+                        HStack(spacing: 24) {
+                            metric("Reading time", value: analysis.readingTime)
+                            metric("Speaking time", value: analysis.speakingTime)
+                        }
+                        Text("Based on 200 words/min reading and 130 words/min speaking.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                        
+                        metric("Text", value:text)
+                    }
+                    .padding()
+                } else if isLoading {
+                    ProgressView("Analyzing selected text...")
+                        .frame(width: 400, height: 300)
+                } else {
+                    Text("No text selected")
+                        .frame(width: 400, height: 300)
+                }
+            }
+            .onAppear {
+                browserState.getSelectedText { selectedText in
+                    DispatchQueue.main.async {
+                        text = selectedText
+                        isLoading = false
+                    }
+                }
+            }
+            .frame(minWidth: 380, maxWidth: 520, maxHeight: 600)
+              Button("Close") { dismiss() }
+                    .padding()
+                    .buttonStyle(.borderedProminent)
+                    .tint(.red)
+        }
+    }
+
+    private func metric(_ title: String, value: String) -> some View {
+        VStack(alignment: .leading, spacing: 4) {
+            Text(title).font(.caption).foregroundStyle(.secondary)
+            Text(value).font(.title3)
+        }
+    }
+}
+
+private struct WordCountAnalysis {
+    struct Keyword {
+        let word: String
+        let count: Int
+        let density: Double
+    }
+
+    let wordCount: Int
+    let characterCount: Int
+    let paragraphCount: Int
+    let sentenceCount: Int
+    let averageSentenceLength: Double
+    let topWords: [Keyword]
+    let readingTime: String
+    let speakingTime: String
+
+    private static let stopWords: Set<String> = [
+        "a", "an", "and", "are", "as", "at", "be", "been", "but", "by", "for", "from",
+        "had", "has", "have", "he", "her", "his", "i", "in", "is", "it", "its", "me",
+        "my", "not", "of", "on", "or", "our", "she", "so", "that", "the", "their",
+        "them", "there", "these", "they", "this", "to", "us", "was", "we", "were",
+        "what", "when", "which", "who", "will", "with", "you", "your"
+    ]
+
+    init(text: String) {
+        let source = text as NSString
+        var words: [String] = []
+        source.enumerateSubstrings(in: NSRange(location: 0, length: source.length), options: .byWords) { substring, _, _, _ in
+            if let substring { words.append(substring.lowercased()) }
+        }
+        wordCount = words.count
+        characterCount = text.count
+        paragraphCount = text.components(separatedBy: .newlines)
+            .filter { !$0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }.count
+
+        var sentences = 0
+        source.enumerateSubstrings(in: NSRange(location: 0, length: source.length), options: .bySentences) { substring, _, _, _ in
+            if let substring, !substring.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty {
+                sentences += 1
+            }
+        }
+        sentenceCount = sentences
+        averageSentenceLength = sentences == 0 ? 0 : Double(words.count) / Double(sentences)
+
+        let frequencies = Dictionary(words.filter { !Self.stopWords.contains($0) }.map { ($0, 1) }, uniquingKeysWith: +)
+        topWords = frequencies.map { word, count in
+            Keyword(word: word, count: count, density: words.isEmpty ? 0 : Double(count) * 100 / Double(words.count))
+        }
+        .sorted { $0.count == $1.count ? $0.word < $1.word : $0.count > $1.count }
+        .prefix(10)
+        .map { $0 }
+
+        readingTime = Self.timeDescription(wordCount: words.count, wordsPerMinute: 200)
+        speakingTime = Self.timeDescription(wordCount: words.count, wordsPerMinute: 130)
+    }
+
+    private static func timeDescription(wordCount: Int, wordsPerMinute: Int) -> String {
+        guard wordCount > 0 else { return "0 sec" }
+        let seconds = Int(ceil(Double(wordCount) * 60 / Double(wordsPerMinute)))
+        return seconds < 60 ? "\(seconds) sec" : "\(seconds / 60) min \(seconds % 60) sec"
+    }
+}

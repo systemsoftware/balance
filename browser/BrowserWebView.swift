@@ -457,6 +457,21 @@ extension BrowserState {
         isCountingFindMatches = false
         clearHighlights()
     }
+    
+    func getSelectedText(completion: @escaping (String) -> Void) {
+        guard let webView else {
+            completion("")
+            return
+        }
+        webView.evaluateJavaScript("window.getSelection().toString();") { (result, error) in
+            if let error = error {
+                print("Error getting selection: \(error.localizedDescription)")
+                completion("")
+                return
+            }
+            completion(result as? String ?? "")
+        }
+    }
 
     private func highlightAll(_ query: String) {
         guard let webView else { return }

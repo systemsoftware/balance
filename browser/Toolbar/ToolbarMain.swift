@@ -28,6 +28,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     case trail
     case newTab
     case closeTab
+    case wordCount
     
     var name: String {
         
@@ -70,6 +71,8 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
             "New Tab"
         case .closeTab:
             "Close Tab"
+        case .wordCount:
+            "Word Count"
         default:
             self.rawValue.capitalized
         }
@@ -106,6 +109,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .trail: "point.topleft.down.to.point.bottomright.curvepath"
         case .newTab: "plus.square.on.square"
         case .closeTab: "rectangle.badge.xmark"
+        case .wordCount: "text.quote"
         }
     }
 }
@@ -119,6 +123,7 @@ enum ToolbarSheet: String, Identifiable {
     case splitURL
     case rename
     case summary
+    case wordCount
 
     var id: String { rawValue }
 }
@@ -571,6 +576,10 @@ struct BrowserToolbar: View {
                     NewTabToolbarButton(expandedLabel: expandedLabel)
                 case .closeTab:
                     CloseToolbarButton(browserState: browserState, expandedLabel:expandedLabel)
+                case .wordCount:
+                    WordCountToolbarButton(expandedLabel: expandedLabel, present: {
+                        activeSheet = .wordCount
+                    })
                 }
             }
         }
