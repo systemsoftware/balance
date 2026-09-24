@@ -27,6 +27,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     case rename
     case trail
     case newTab
+    case closeTab
     
     var name: String {
         
@@ -67,6 +68,8 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
             "Restyle Page"
         case .newTab:
             "New Tab"
+        case .closeTab:
+            "Close Tab"
         default:
             self.rawValue.capitalized
         }
@@ -102,6 +105,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .rename: "pencil"
         case .trail: "point.topleft.down.to.point.bottomright.curvepath"
         case .newTab: "plus.square.on.square"
+        case .closeTab: "rectangle.badge.xmark"
         }
     }
 }
@@ -565,6 +569,8 @@ struct BrowserToolbar: View {
                     TrailToolbarButton(browserState: browserState, expandedLabel: expandedLabel)
                 case .newTab:
                     NewTabToolbarButton(expandedLabel: expandedLabel)
+                case .closeTab:
+                    CloseToolbarButton(browserState: browserState, expandedLabel:expandedLabel)
                 }
             }
         }

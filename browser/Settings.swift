@@ -1076,6 +1076,8 @@ struct SettingsSectionContent: View {
     
     @State var showingNewEngine = false
     
+    @State private var isAdvancedPressed = false
+    
     private func loadInitialURL() {
         if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
             lmpage.load(URLRequest(url: url))
@@ -1145,7 +1147,7 @@ struct SettingsSectionContent: View {
             
         
             ForEach(settingsForCategory) { setting in
-                if !setting.hidden {
+                if !setting.hidden && !(setting.advanced && !isAdvancedPressed) {
                 SettingsCardRow(
                     setting: setting,
                     icon: setting.icon,
@@ -1291,6 +1293,12 @@ struct SettingsSectionContent: View {
                 clearProfileCacheButton
             }
         }
+#if os(macOS)
+        .onModifierKeysChanged(mask: .control) { _, new in
+              isAdvancedPressed = new.contains(.control)
+          }
+          #endif
+        
     }
 
 

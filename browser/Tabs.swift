@@ -763,6 +763,10 @@ private struct TabRow: View {
         }
         .contextMenu {
 
+            Text(state.title)
+                .disabled(true)
+            
+            Divider()
             
             Button("Focus Tab") {
                 switchToTab(tabID: state.tabID)
@@ -772,7 +776,7 @@ private struct TabRow: View {
                 state.isSleeping.toggle()
             }
 
-            if tabMode != 0 {
+            if tabMode == 1 || tabMode == 2 {
                 if pinStore.items.first(where: { $0.url == state.url?.absoluteString }) == nil {
                     Button("Pin Tab") {
                         pinStore.add(Bookmark(
@@ -786,6 +790,8 @@ private struct TabRow: View {
                     }
                 }
             }
+            
+            Divider()
 
             Button("Copy URL") {
                 if let url = state.url?.absoluteString {
