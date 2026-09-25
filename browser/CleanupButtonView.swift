@@ -21,7 +21,8 @@ struct CleanupButtonView: View {
                 }
             }
             .disabled(isDeleting)
-            .buttonStyle(.borderedProminent)
+            .buttonStyle(.bordered)
+            .tint(.yellow)
         }
     }
     

@@ -206,7 +206,7 @@ struct Tabs: View {
                                     .frame(width: 8, height: 8)
                                     .onTapGesture {
                                         withAnimation {
-                                            windowManager.currentSpaceIndex = index
+                                            selectSpace(at: index)
                                         }
                                     }
                                     .contextMenu {
@@ -228,8 +228,7 @@ struct Tabs: View {
                             
                             Button {
                                 withAnimation {
-                                    windowManager.spaceNames.append("Space \(windowManager.spaceNames.count + 1)")
-                                    windowManager.currentSpaceIndex = windowManager.spaceNames.count - 1
+                                    createSpace()
                                 }
                             } label: {
                                 Image(systemName: "plus")
@@ -250,7 +249,7 @@ struct Tabs: View {
                         Menu {
                             ForEach(Array(windowManager.spaceNames.enumerated()), id: \.offset) { index, spaceName in
                                 Button {
-                                    withAnimation { windowManager.currentSpaceIndex = index }
+                                    withAnimation { selectSpace(at: index) }
                                 } label: {
                                     if windowManager.currentSpaceIndex == index {
                                         Label(spaceName, systemImage: "checkmark")
@@ -262,8 +261,7 @@ struct Tabs: View {
                             Divider()
                             Button("New Space") {
                                 withAnimation {
-                                    windowManager.spaceNames.append("Space \(windowManager.spaceNames.count + 1)")
-                                    windowManager.currentSpaceIndex = windowManager.spaceNames.count - 1
+                                    createSpace()
                                 }
                             }
                             Button("Rename Space") {
@@ -279,6 +277,7 @@ struct Tabs: View {
                         }
                         .menuStyle(.borderlessButton)
                         .padding(.leading, tabMode == 5 ? 10 : 0)
+                        .menuIndicator(.hidden)
                         .contextMenu {
                             Toggle("Show Spaces", isOn: $showSpaces)
                             
@@ -479,6 +478,23 @@ struct Tabs: View {
                 ? abs(rhsFrame.midX - location.x)
                 : abs(rhsFrame.midY - location.y)
             return lhsDistance < rhsDistance
+        }
+    }
+
+    private func createSpace() {
+        windowManager.spaceNames.append("Space \(windowManager.spaceNames.count + 1)")
+        windowManager.currentSpaceIndex = windowManager.spaceNames.count - 1
+        windowManager.createTab()
+    }
+
+    private func selectSpace(at index: Int) {
+        guard windowManager.spaceNames.indices.contains(index) else { return }
+        let tab = currentWindowTabs.first { $0.spaceIndex == index }
+        windowManager.currentSpaceIndex = index
+        if let tab {
+            windowManager.selectTab(tab.tabID)
+        } else {
+            windowManager.createTab()
         }
     }
 

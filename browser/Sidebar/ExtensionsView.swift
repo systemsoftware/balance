@@ -305,6 +305,7 @@ struct ExtensionsView: View {
             }
         }
         .buttonStyle(.borderedProminent)
+        .menuIndicator(.hidden)
         .controlSize(isSettings ? .small : .regular)
         .fixedSize()
     }

@@ -128,6 +128,7 @@ struct ContentBlockerView: View {
                 ) {
                     addContentBlockerMenu()
                         .buttonStyle(.borderedProminent)
+                        .menuIndicator(.hidden)
                 }
                 .padding(.bottom, 8)
                 

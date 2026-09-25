@@ -4,8 +4,6 @@ extension Notification.Name {
     static let cloudPreferencesDidApply = Notification.Name("cloudPreferencesDidApply")
 }
 
-/// Mirrors small, user-created browser data and preferences to the user's iCloud account.
-/// Local defaults remain the immediate, offline source of truth for SwiftUI's AppStorage.
 final class CloudPreferences {
     static let shared = CloudPreferences()
 
@@ -17,28 +15,13 @@ final class CloudPreferences {
     private var applyingRemote = false
     private var enabledGroups: Set<String> = []
 
-    private let exactKeys: Set<String> = [
-        "bookmarks", "pins", "chats", "savedPlaces", "sidebar", "toolbar", "rssFeeds",
-        "profiles", "defaultProfile", "notepad", "instructions", "homepage",
-        "searchURL", "autofillEngine", "userAgent", "themePreference",
-        "backgroundType", "backgroundShape", "homeBackground", "homepageWeatherCity",
-        "homepageShowCock", "homepageShowWeather", "homepageShowBookmarks",
-        "homepageShowEmail", "homepageShowStories", "homepageShowCalendar",
-        "bookmarkBar", "bookmarkbarLocation", "tabMode", "showSpaces",
-        "tabBackground", "showNewTabButton", "showSidebar", "sidebarWidth",
-        "leftSidebarWidth", "leftSidebarMode", "sidebarBackgroundType",
-        "toolbarLocation", "toolbarBackgrounds", "showToolbarDragHandle",
-        "showAddressBarAutofill", "paletteShowTabs", "paletteShowBookmarks",
-        "paletteShowSearch", "paletteShowCommands", "paletteShowHistory",
-        "paletteSectionOrder", "usePDFKit", "renderMd", "renderJSON",
-        "loadImages", "calDays", "recordHistory", "enableHandoff",
-        "formAutofillEnabled", "globalPrivacyControl", "developerMode",
-        "defaultPageZoom", "httpsOnly", "openLinksInBackground",
-        "temp", "maxTokens", "pageCutoff", "site_permissions_v1",
-        "savedSessionState",
-        "preserveOnClose", "clearHistoryOnClose", "clearDownloadHistoryOnClose",
-        "clearCacheOnClose", "clearCookiesOnClose"
-    ]
+    private let localOnlyKeys: Set<String> = ["sawSetup"]
+    private lazy var settingGroups: [String: String] = {
+        Settings.reduce(into: [:]) { groups, setting in
+            guard !setting.appStorageKey.isEmpty, setting.category.id != catSync.id else { return }
+            groups[setting.appStorageKey] = setting.syncGroup
+        }
+    }()
 
     private init() {}
 
@@ -52,7 +35,6 @@ final class CloudPreferences {
             self?.receive(notification)
         }
         cloud.synchronize()
-        // Existing iCloud values take precedence on a newly installed device.
         enabledGroups = Set(SyncOptions.preferenceKeys.filter { key in SyncOptions.isEnabled(key) })
         reconcile(keys: syncKeys().filter(isEnabled))
         snapshot()
@@ -64,27 +46,28 @@ final class CloudPreferences {
     }
 
     private func isSyncable(_ key: String) -> Bool {
-        exactKeys.contains(key) || ["bookmarks_", "pins_", "chats_", "sidebar_", "toolbar_", "boost_"].contains { key.hasPrefix($0) }
+        !SyncOptions.preferenceKeys.contains(key)
+            && !SyncOptions.modelKeys.contains(key)
+            && key != SyncOptions.inventory
+            && key != SyncOptions.pendingDeletionKey
+            && !localOnlyKeys.contains(key)
+            && !["Downloads", "note_", "pendingCloud", "inventoryCloud", "NS", "Apple"].contains { key.hasPrefix($0) }
     }
 
     private func group(for key: String) -> String {
         if key == "bookmarks" || key.hasPrefix("bookmarks_") || key == "savedPlaces" { return SyncOptions.bookmarks }
         if key == "pins" || key.hasPrefix("pins_") { return SyncOptions.pins }
         if key == "chats" || key.hasPrefix("chats_") { return SyncOptions.chats }
-        if key == "sidebar" || key.hasPrefix("sidebar_") ||
-            ["showSidebar", "sidebarWidth", "leftSidebarWidth", "leftSidebarMode", "sidebarBackgroundType"].contains(key) {
+        if key == "sidebar" || key.hasPrefix("sidebar_") || key == "leftSidebarMode" {
             return SyncOptions.sidebar
         }
-        if key == "toolbar" || key.hasPrefix("toolbar_") ||
-            ["toolbarLocation", "toolbarBackgrounds", "showToolbarDragHandle"].contains(key) {
+        if key == "toolbar" || key.hasPrefix("toolbar_") || key == "showToolbarDragHandle" {
             return SyncOptions.toolbar
         }
         if key == "profiles" || key == "defaultProfile" { return SyncOptions.profiles }
-        return SyncOptions.settings
+        return settingGroups[key] ?? SyncOptions.settings
     }
 
-    /// Removes only this group's iCloud values. The caller turns sync off first;
-    /// local defaults are deliberately left intact.
     func deleteCloudData(group: String) {
         guard SyncOptions.preferenceKeys.contains(group), !SyncOptions.isEnabled(group) else { return }
         for key in cloud.dictionaryRepresentation.keys where isSyncable(key) && self.group(for: key) == group {
@@ -94,8 +77,6 @@ final class CloudPreferences {
         snapshot()
     }
 
-    /// Removes data uploaded by older Balance versions. Downloads metadata is
-    /// no longer part of the sync key set, regardless of the old toggle value.
     func deleteLegacyDownloadsCloudData() {
         for key in cloud.dictionaryRepresentation.keys where key == "Downloads" || key.hasPrefix("Downloads_") {
             cloud.removeObject(forKey: key)
@@ -118,7 +99,8 @@ final class CloudPreferences {
     }
 
     private func syncKeys() -> Set<String> {
-        Set(local.dictionaryRepresentation().keys.filter(isSyncable))
+        let localKeys = Set((local.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "") ?? [:]).keys)
+        return Set(localKeys.filter(isSyncable))
             .union(cloud.dictionaryRepresentation.keys.filter(isSyncable))
     }
 
@@ -148,8 +130,6 @@ final class CloudPreferences {
             let value = local.object(forKey: key)
             let data = encoded(value)
             guard data != lastValues[key] else { continue }
-            // The ubiquitous key-value store has a 1 MB account quota. Large
-            // collections remain local instead of silently exhausting it.
             guard data == nil || data!.count < 64_000 else {
                 print("iCloud preference value exceeds the sync limit: \(key)")
                 continue

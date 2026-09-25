@@ -217,6 +217,7 @@ let Settings: [Setting] = {
             category: catAppearance,
             type: "dropdown",
             appStorageKey: "toolbarLocation",
+            syncGroup: SyncOptions.toolbar,
             defaultValueInt: 0,
             dropdownOptions: .staticOptions([0: "Top", 1: "Bottom"])
         ),
@@ -234,6 +235,7 @@ let Settings: [Setting] = {
             category: catSidebar,
             type: "slider",
             appStorageKey: "leftSidebarWidth",
+            syncGroup: SyncOptions.sidebar,
             sliderMax: 600,
             sliderMin: 100,
             defaultValueInt: 200
@@ -244,6 +246,7 @@ let Settings: [Setting] = {
             category: catAppearance,
             type: "dropdown",
             appStorageKey: "sidebarBackgroundType",
+            syncGroup: SyncOptions.sidebar,
             defaultValueInt: 1,
             dropdownOptions: .staticOptions([0: "None", 1:"Unified", 2: "Individual"])
         ),
@@ -271,6 +274,7 @@ let Settings: [Setting] = {
             category: catAppearance,
             type: "toggle",
             appStorageKey: "toolbarBackgrounds",
+            syncGroup: SyncOptions.toolbar,
             defaultValueBool: true,
         ),
         Setting(
@@ -287,6 +291,7 @@ let Settings: [Setting] = {
             category: catSidebar,
             type: "slider",
             appStorageKey: "sidebarWidth",
+            syncGroup: SyncOptions.sidebar,
             sliderMax: 600,
             sliderMin: 100,
             defaultValueInt: 345
@@ -581,6 +586,7 @@ let Settings: [Setting] = {
             category: catSidebar,
             type: "toggle",
             appStorageKey: "showSidebar",
+            syncGroup: SyncOptions.sidebar,
             defaultValueBool: true
         ))
     s.append(
@@ -653,6 +659,7 @@ struct Setting: Identifiable {
     var category: CategoryDef
     var type: String // "slider", "toggle", "text"
     var appStorageKey: String
+    var syncGroup: String = SyncOptions.settings
     var sliderMax: Int?
     var sliderMin: Int?
     var defaultValueInt: Int?
@@ -861,7 +868,7 @@ struct ButtonRow: View {
         } label: {
             Text(setting.buttonText ?? setting.name)
         }
-        .buttonStyle(.borderedProminent)
+        .buttonStyle(.bordered)
     }
 }
 
@@ -1280,14 +1287,10 @@ struct SettingsSectionContent: View {
                     .frame(maxWidth: .infinity)
                 
                 
-                SettingsCustomCardRow(title: "Add Engine", icon: "plus", accentColor: def.color) {
-                    Button {
-                        showingNewEngine = true
-                    } label: {
-                        Text("Add")
-                    }
-                    .buttonStyle(.borderedProminent)
-                }
+                SettingsCardRow(setting: Setting(name: "Add Engine", category: catBrowsing, type: "button", appStorageKey: "", buttonText: "Add", action: {
+                    showingNewEngine = true
+                }), icon: "plus", accentColor: def.color)
+                .padding(.top, -5)
             }
             
             
@@ -1322,32 +1325,27 @@ struct SettingsSectionContent: View {
             }
 
             if def.id == "autofill" {
-                SettingsCustomCardRow(title: "Show", icon: "rectangle.and.pencil.and.ellipsis", accentColor: def.color) {
-                    Picker("",selection:$autofillType.animation()) {
-                        Text("Form").tag(0)
-                        Text("Passwords").tag(1)
-                    }
-                    .pickerStyle(.segmented)
-                    .controlSize(.small)
-                    .fixedSize()
+                Picker("", selection: $autofillType.animation()) {
+                    Text("Form").tag(0)
+                    Text("Passwords").tag(1)
                 }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+                
                 
                 switch autofillType {
                     
                 case 1:
                     
-                    SettingsCustomCardRow(title: "New Password", icon: "plus", accentColor: def.color) {
-                        Button {
-                            showNewPassword = true
-                        } label: {
-                            Text("New")
-                        }
-                        .buttonStyle(.borderedProminent)
-                    }
+                    SettingsCardRow(setting: Setting(
+name: "New Password", category: catAutofill, type: "button", appStorageKey: "", buttonText: "Add", action: {
+                        showNewPassword = true
+                    }), icon: "plus", accentColor: def.color
+                    )
                     .sheet(isPresented: $showNewPassword) {
                         NewPasswordView(showNewPassword: $showNewPassword)
                     }
-                    .padding(.top)
                     
                     SettingsCardRow(
                         setting:Setting(
@@ -1452,7 +1450,8 @@ struct SettingsSectionContent: View {
                         } label: {
                             Text("Stop Forgetting")
                         }
-                        .buttonStyle(.borderedProminent)
+                        .buttonStyle(.bordered)
+                        .tint(.red)
                         .controlSize(.small)
                         .fixedSize()
                     }
