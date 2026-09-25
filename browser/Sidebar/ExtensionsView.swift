@@ -80,7 +80,7 @@ struct ExtensionsView: View {
                         Text("No Extensions Installed")
                             .font(.headline)
                             .foregroundStyle(.secondary)
-                        Text("If you have not loaded a website, this list may be empty. Extensions are only loaded when a webpage is active.")
+                        Text("Install an extension from a file or URL to get started.")
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                             .multilineTextAlignment(.center)
@@ -125,6 +125,9 @@ struct ExtensionsView: View {
         }
         .padding(.vertical)
         .frame(maxWidth: isSettings ? .infinity : CGFloat(sidebarWidth))
+        .task {
+            manager.loadAllFromDisk()
+        }
         .fileImporter(isPresented: $isChoosingFile, allowedContentTypes: [.data]) { result in
             if case .success(let url) = result { installFile(at: url) }
             if case .failure(let error) = result { errorMessage = error.localizedDescription }
@@ -196,8 +199,7 @@ struct ExtensionsView: View {
     
     private func openOptionsPage(for context: WKWebExtensionContext) {
         if let optionsURL = context.optionsPageURL {
-            let extensionURL = URL(string: "extension://\(context.baseURL.lastPathComponent)/\(optionsURL)")!
-            createNewTab(with: extensionURL)
+            createNewTab(with: optionsURL)
         }
     }
     
@@ -302,6 +304,7 @@ struct ExtensionsView: View {
                     .font(.system(size: 12, weight: .semibold))
             }
         }
+        .buttonStyle(.borderedProminent)
         .controlSize(isSettings ? .small : .regular)
         .fixedSize()
     }

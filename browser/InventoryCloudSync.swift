@@ -23,7 +23,23 @@ enum InventoryCloudSync {
         Config.defaults.set(Array(pending), forKey: pendingDeletesKey)
     }
 
+    static func waitForCurrentSync() async {
+        _ = await syncTask?.value
+    }
+
+    static func didDeleteCloudData() {
+        zoneReady = false
+        Config.defaults.removeObject(forKey: tokenKey)
+        Config.defaults.removeObject(forKey: uploadedKey)
+        Config.defaults.removeObject(forKey: pendingDeletesKey)
+        lastError = nil
+    }
+
     static func sync() async -> Bool {
+        guard SyncOptions.isEnabled(SyncOptions.inventory) else {
+            lastError = nil
+            return true
+        }
         if let syncTask {
             needsAnotherPass = true
             return await syncTask.value

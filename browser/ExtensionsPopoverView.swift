@@ -87,6 +87,9 @@ struct ExtensionsPopoverView: View {
                 }
             }
         }
+        .task {
+            manager.loadAllFromDisk()
+        }
     }
 }
 

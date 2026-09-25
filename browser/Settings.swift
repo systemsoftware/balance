@@ -86,6 +86,14 @@ let catProfiles = CategoryDef(
     description: "Manage and switch between different browsing profiles."
 )
 
+let catSync = CategoryDef(
+    id:"sync",
+    name:"iCloud Sync",
+    icon:"icloud",
+    color: .blue,
+    description: "Manage what syncs with iCloud, including history, bookmarks, and settings."
+)
+
 let catLearnMore = CategoryDef(
     id:"learnmore",
     name:"Learn More",
@@ -120,7 +128,7 @@ let catAppearance = CategoryDef(
 
 
 let categoryDefs: [CategoryDef] = [
-    catBrowsing, catAppearance, catSidebar, catAI, catAutofill, catPalette, catBookmarks, catProfiles, catPrivacy, catContetBlocker, catExt, catAdvanced, catLearnMore
+    catBrowsing, catAppearance, catSidebar, catAI, catAutofill, catSync, catPalette, catBookmarks, catProfiles, catPrivacy, catContetBlocker, catExt, catAdvanced, catLearnMore
 ]
 
 let Settings: [Setting] = {
@@ -134,13 +142,24 @@ let Settings: [Setting] = {
             defaultValueBool: true
         ),
         Setting(
-            name: "Sync History with iCloud (Restart Required)",
+            name: "History (Restart Required)",
             icon: "icloud",
-            category: catPrivacy,
+            category: catSync,
             type: "toggle",
             appStorageKey: "syncHistory",
             defaultValueBool: false
         ),
+        Setting(name: "Bookmarks", icon: "bookmark", category: catSync, type: "toggle", appStorageKey: SyncOptions.bookmarks, defaultValueBool: true),
+        Setting(name: "Pins", icon: "pin", category: catSync, type: "toggle", appStorageKey: SyncOptions.pins, defaultValueBool: true),
+        Setting(name: "Chats", icon: "bubble.left.and.bubble.right", category: catSync, type: "toggle", appStorageKey: SyncOptions.chats, defaultValueBool: true),
+        Setting(name: "Sidebar", icon: "sidebar.left", category: catSync, type: "toggle", appStorageKey: SyncOptions.sidebar, defaultValueBool: true),
+        Setting(name: "Profiles", icon: "person.crop.circle", category: catSync, type: "toggle", appStorageKey: SyncOptions.profiles, defaultValueBool: true),
+        Setting(name: "Settings and Preferences", icon: "gearshape", category: catSync, type: "toggle", appStorageKey: SyncOptions.settings, defaultValueBool: true),
+        Setting(name: "Inventory", icon: "shippingbox", category: catSync, type: "toggle", appStorageKey: SyncOptions.inventory, defaultValueBool: true),
+        Setting(name: "Autofill (Restart Required)", icon: "rectangle.and.pencil.and.ellipsis", category: catSync, type: "toggle", appStorageKey: SyncOptions.autofill, defaultValueBool: true),
+        Setting(name: "Search Engines (Restart Required)", icon: "magnifyingglass", category: catSync, type: "toggle", appStorageKey: SyncOptions.engines, defaultValueBool: true),
+        Setting(name: "Forget-on-Close Rules (Restart Required)", icon: "hand.raised", category: catSync, type: "toggle", appStorageKey: SyncOptions.forgetOnClose, defaultValueBool: true),
+        Setting(name: "Previously Synced Downloads Metadata", icon: "arrow.down.circle", category: catSync, type: "legacyDownloadDelete", appStorageKey: "deleteLegacyDownloads"),
         Setting(
             name: "Search Engine",
             icon: "magnifyingglass",
@@ -721,6 +740,7 @@ struct DropdownRow: View {
         }
         .pickerStyle(.menu)
         .labelsHidden()
+        .buttonStyle(.bordered)
     }
 }
 
@@ -756,6 +776,7 @@ struct DropdownStringRow: View {
         }
         .pickerStyle(.menu)
         .labelsHidden()
+        .buttonStyle(.bordered)
     }
 }
 
@@ -803,7 +824,9 @@ struct ToggleRow: View {
             .labelsHidden()
             .help(setting.appStorageKey == "syncHistory"
                   ? "Takes effect after restarting Balance. To remove previously synced history, use Clear All in History."
-                  : "")
+                  : setting.name.contains("Restart Required")
+                    ? "Takes effect after restarting Balance. Existing iCloud data is kept when sync is turned off."
+                    : "Existing iCloud data is kept when sync is turned off.")
     }
 }
 
@@ -837,6 +860,7 @@ struct ButtonRow: View {
         } label: {
             Text(setting.buttonText ?? setting.name)
         }
+        .buttonStyle(.borderedProminent)
     }
 }
 
@@ -855,6 +879,8 @@ struct InlineSettingControl: View {
             DropdownStringRow(setting: setting)
         case "button":
             ButtonRow(setting: setting)
+        case "legacyDownloadDelete":
+            LegacyDownloadsDeleteButton()
         default:
             EmptyView()
         }
@@ -880,7 +906,7 @@ struct BlockSettingControl: View {
 }
 
 private func isInlineSetting(_ type: String) -> Bool {
-    ["toggle", "dropdown", "dropdownString", "button"].contains(type)
+    ["toggle", "dropdown", "dropdownString", "button", "legacyDownloadDelete"].contains(type)
 }
 
 // MARK: - Settings Card Row
@@ -914,6 +940,9 @@ struct SettingsCardRow: View {
                 if isInlineSetting(setting.type) {
                     InlineSettingControl(setting: setting)
                         .controlSize(.small)
+                    if setting.category.id == catSync.id && setting.type == "toggle" {
+                        SyncDeleteButton(setting: setting)
+                    }
                 }
             }
 
@@ -932,6 +961,89 @@ struct SettingsCardRow: View {
         )
         .onHover { isHovered = $0 }
         .animation(.easeInOut(duration: 0.15), value: isHovered)
+    }
+}
+
+private struct LegacyDownloadsDeleteButton: View {
+    @State private var showingConfirmation = false
+    @State private var deletionRequested = false
+
+    var body: some View {
+        Button("Delete from iCloud") { showingConfirmation = true }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.red)
+            .confirmationDialog("Delete old downloads metadata from iCloud?", isPresented: $showingConfirmation) {
+                Button("Delete from iCloud", role: .destructive) {
+                    CloudPreferences.shared.deleteLegacyDownloadsCloudData()
+                    deletionRequested = true
+                }
+            } message: {
+                Text("The local downloads list stays on this device. Downloads metadata will no longer sync.")
+            }
+            .help(deletionRequested ? "Deletion requested" : "Remove downloads metadata uploaded by older versions")
+    }
+}
+
+private struct SyncDeleteButton: View {
+    let setting: Setting
+    @State private var showingConfirmation = false
+    @State private var status: String?
+    @State private var deleting = false
+
+    var body: some View {
+        Button("Delete") { showingConfirmation = true }
+            .buttonStyle(.borderless)
+            .foregroundStyle(.red)
+            .disabled(deleting)
+            .help("Delete this type's iCloud data; keep local data")
+            .confirmationDialog(
+                "Delete \(setting.name.replacingOccurrences(of: " (Restart Required)", with: "")) from iCloud?",
+                isPresented: $showingConfirmation
+            ) {
+                Button("Delete from iCloud", role: .destructive) { deleteCloudData() }
+            } message: {
+                Text("Local data will stay on this device. Sync for this type will turn off. Other devices still syncing it may upload their copies again.")
+            }
+            .overlay(alignment: .bottomTrailing) {
+                if let status {
+                    Text(status)
+                        .font(.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                        .offset(y: 18)
+                }
+            }
+    }
+
+    private func deleteCloudData() {
+        let key = setting.appStorageKey
+        Config.defaults.set(false, forKey: key)
+        if SyncOptions.preferenceKeys.contains(key) {
+            CloudPreferences.shared.deleteCloudData(group: key)
+            status = "Deletion requested"
+        } else if key == SyncOptions.inventory {
+            CloudSyncDeletion.enqueue(key)
+            deleting = true
+            Task {
+                let succeeded = await CloudSyncDeletion.retryPending(only: key)
+                let pending = (Config.defaults.stringArray(forKey: SyncOptions.pendingDeletionKey) ?? []).contains(key)
+                status = succeeded && !pending ? "Deleted from iCloud" : "Pending; will retry"
+                deleting = false
+            }
+        } else {
+            CloudSyncDeletion.enqueue(key)
+            if SyncOptions.attachedAtLaunch.contains(key) {
+                status = "Restart to delete"
+            } else {
+                deleting = true
+                Task {
+                    let succeeded = await CloudSyncDeletion.retryPending(only: key)
+                    let pending = (Config.defaults.stringArray(forKey: SyncOptions.pendingDeletionKey) ?? []).contains(key)
+                    status = succeeded && !pending ? "Deleted from iCloud" : "Pending; will retry"
+                    deleting = false
+                }
+            }
+        }
     }
 }
 
@@ -1168,6 +1280,7 @@ struct SettingsSectionContent: View {
                     } label: {
                         Text("Add")
                     }
+                    .buttonStyle(.borderedProminent)
                 }
             }
             
@@ -1195,6 +1308,11 @@ struct SettingsSectionContent: View {
                         .padding(.vertical, -15)
                         .padding(.leading)
                         .background(Color.clear)
+            } else if def.id == "palette" {
+                Text("Drag the section titles in the palette to reorder them.")
+                    .foregroundStyle(.secondary)
+                    .font(.caption)
+                    .padding(.horizontal)
             }
 
             if def.id == "autofill" {
@@ -1218,6 +1336,7 @@ struct SettingsSectionContent: View {
                         } label: {
                             Text("New")
                         }
+                        .buttonStyle(.borderedProminent)
                     }
                     .sheet(isPresented: $showNewPassword) {
                         NewPasswordView(showNewPassword: $showNewPassword)
@@ -1237,6 +1356,7 @@ struct SettingsSectionContent: View {
                     
                     PasswordsView(hideHeader:true)
                         .padding(.top, -5)
+                        .frame(maxWidth: .infinity)
                 default:
                     
                     
@@ -1368,6 +1488,7 @@ struct SettingsSectionContent: View {
                     Text(profile.name).tag(profile.id.uuidString)
                 }
             }
+            .buttonStyle(.bordered)
             .pickerStyle(.menu)
             .labelsHidden()
             .controlSize(.small)

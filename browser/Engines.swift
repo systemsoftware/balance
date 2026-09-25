@@ -31,7 +31,8 @@ class EngineManager {
                 "Engines",
                 schema: schema,
                 url: directory.appendingPathComponent("Engines.store"),
-                cloudKitDatabase: .private("iCloud.com.systemsoftware.balance")
+                cloudKitDatabase: SyncOptions.shouldAttachCloudStore(SyncOptions.engines)
+                    ? .private("iCloud.com.systemsoftware.balance") : .none
             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {

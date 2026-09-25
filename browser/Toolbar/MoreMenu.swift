@@ -20,8 +20,9 @@ struct MoreMenuToolbar: View {
         } label: {
             Image(systemName: "ellipsis")
                 .font(.title2)
+                .foregroundStyle(Color.primary)
         }
-        .menuStyle(.borderlessButton)
+        .tint(Color.primary)
         .menuIndicator(.hidden)
         .frame(width: 40, height: 40)
         .accessibilityLabel("More")

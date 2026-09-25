@@ -20,7 +20,8 @@ struct CleanupButtonView: View {
                     Text(statusMessage.isEmpty ? "Clear Temporary Files" : statusMessage)
                 }
             }
-            .disabled(isDeleting) // Prevent double-tapping
+            .disabled(isDeleting)
+            .buttonStyle(.borderedProminent)
         }
     }
     

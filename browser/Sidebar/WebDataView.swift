@@ -269,7 +269,8 @@ final class ForgetManager: ObservableObject {
                 "ForgetOnClose",
                 schema: schema,
                 url: directory.appendingPathComponent("ForgetOnClose.store"),
-                cloudKitDatabase: .private("iCloud.com.systemsoftware.balance")
+                cloudKitDatabase: SyncOptions.shouldAttachCloudStore(SyncOptions.forgetOnClose)
+                    ? .private("iCloud.com.systemsoftware.balance") : .none
             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {

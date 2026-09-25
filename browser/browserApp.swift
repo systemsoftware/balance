@@ -79,15 +79,22 @@ struct browserApp: App {
     var downloadStore = DownloadStore()
     
     init () {
+        SyncOptions.captureLaunchState()
         #if canImport(AppKit)
         NSWindow.allowsAutomaticWindowTabbing = false
         CloudPreferences.shared.start()
-        Task { await CloudHistoryCleanup.retryPending() }
-        Task { await InventoryCloudSync.sync() }
+        Task {
+            _ = await CloudHistoryCleanup.retryPending()
+            _ = await CloudSyncDeletion.retryPending()
+            _ = await InventoryCloudSync.sync()
+        }
         #else
         CloudPreferences.shared.start()
-        Task { await CloudHistoryCleanup.retryPending() }
-        Task { await InventoryCloudSync.sync() }
+        Task {
+            _ = await CloudHistoryCleanup.retryPending()
+            _ = await CloudSyncDeletion.retryPending()
+            _ = await InventoryCloudSync.sync()
+        }
         #endif
     }
     
@@ -175,7 +182,7 @@ struct browserApp: App {
         
         SwiftUI.Settings {
             SettingsView(isStandalone: true)
-                .frame(minWidth: 450, minHeight: 570)
+                .frame(minWidth: 450, minHeight: 600)
         }
     }
     #else

@@ -32,7 +32,8 @@ struct AutoFillStore {
                 "AutoFill",
                 schema: schema,
                 url: directory.appendingPathComponent("AutoFill.store"),
-                cloudKitDatabase: .private("iCloud.com.systemsoftware.balance")
+                cloudKitDatabase: SyncOptions.shouldAttachCloudStore(SyncOptions.autofill)
+                    ? .private("iCloud.com.systemsoftware.balance") : .none
             )
             return try ModelContainer(for: schema, configurations: [configuration])
         } catch {

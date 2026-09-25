@@ -13,6 +13,10 @@ struct ExtensionPopupWebView: PlatformViewRepresentable {
             scrollView.hasVerticalScroller = false
             scrollView.hasHorizontalScroller = false
         }
+        #else
+        webView.isOpaque = false
+        webView.backgroundColor = .clear
+        webView.scrollView.backgroundColor = .clear
         #endif
         return webView
     }

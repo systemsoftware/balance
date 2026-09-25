@@ -15,9 +15,10 @@ final class CloudPreferences {
     private var cloudObserver: NSObjectProtocol?
     private var lastValues: [String: Data] = [:]
     private var applyingRemote = false
+    private var enabledGroups: Set<String> = []
 
     private let exactKeys: Set<String> = [
-        "bookmarks", "pins", "chats", "Downloads", "savedPlaces", "sidebar", "toolbar", "rssFeeds",
+        "bookmarks", "pins", "chats", "savedPlaces", "sidebar", "toolbar", "rssFeeds",
         "profiles", "defaultProfile", "notepad", "instructions", "homepage",
         "searchURL", "autofillEngine", "userAgent", "themePreference",
         "backgroundType", "backgroundShape", "homeBackground", "homepageWeatherCity",
@@ -52,13 +53,8 @@ final class CloudPreferences {
         }
         cloud.synchronize()
         // Existing iCloud values take precedence on a newly installed device.
-        for key in syncKeys() {
-            if let value = cloud.object(forKey: key) {
-                local.set(value, forKey: key)
-            } else if let value = local.object(forKey: key) {
-                cloud.set(value, forKey: key)
-            }
-        }
+        enabledGroups = Set(SyncOptions.preferenceKeys.filter { key in SyncOptions.isEnabled(key) })
+        reconcile(keys: syncKeys().filter(isEnabled))
         snapshot()
         localObserver = NotificationCenter.default.addObserver(
             forName: UserDefaults.didChangeNotification,
@@ -68,7 +64,53 @@ final class CloudPreferences {
     }
 
     private func isSyncable(_ key: String) -> Bool {
-        exactKeys.contains(key) || ["bookmarks_", "pins_", "chats_", "Downloads_", "sidebar_", "toolbar_", "boost_"].contains { key.hasPrefix($0) }
+        exactKeys.contains(key) || ["bookmarks_", "pins_", "chats_", "sidebar_", "toolbar_", "boost_"].contains { key.hasPrefix($0) }
+    }
+
+    private func group(for key: String) -> String {
+        if key == "bookmarks" || key.hasPrefix("bookmarks_") || key == "savedPlaces" { return SyncOptions.bookmarks }
+        if key == "pins" || key.hasPrefix("pins_") { return SyncOptions.pins }
+        if key == "chats" || key.hasPrefix("chats_") { return SyncOptions.chats }
+        if key == "sidebar" || key.hasPrefix("sidebar_") ||
+            ["showSidebar", "sidebarWidth", "leftSidebarWidth", "leftSidebarMode", "sidebarBackgroundType"].contains(key) {
+            return SyncOptions.sidebar
+        }
+        if key == "profiles" || key == "defaultProfile" { return SyncOptions.profiles }
+        return SyncOptions.settings
+    }
+
+    /// Removes only this group's iCloud values. The caller turns sync off first;
+    /// local defaults are deliberately left intact.
+    func deleteCloudData(group: String) {
+        guard SyncOptions.preferenceKeys.contains(group), !SyncOptions.isEnabled(group) else { return }
+        for key in cloud.dictionaryRepresentation.keys where isSyncable(key) && self.group(for: key) == group {
+            cloud.removeObject(forKey: key)
+        }
+        cloud.synchronize()
+        snapshot()
+    }
+
+    /// Removes data uploaded by older Balance versions. Downloads metadata is
+    /// no longer part of the sync key set, regardless of the old toggle value.
+    func deleteLegacyDownloadsCloudData() {
+        for key in cloud.dictionaryRepresentation.keys where key == "Downloads" || key.hasPrefix("Downloads_") {
+            cloud.removeObject(forKey: key)
+        }
+        cloud.synchronize()
+    }
+
+    private func isEnabled(_ key: String) -> Bool {
+        SyncOptions.isEnabled(group(for: key))
+    }
+
+    private func reconcile(keys: Set<String>) {
+        applyingRemote = true
+        for key in keys {
+            if let value = cloud.object(forKey: key) { local.set(value, forKey: key) }
+            else if let value = local.object(forKey: key) { cloud.set(value, forKey: key) }
+        }
+        applyingRemote = false
+        NotificationCenter.default.post(name: .cloudPreferencesDidApply, object: nil, userInfo: ["keys": Array(keys)])
     }
 
     private func syncKeys() -> Set<String> {
@@ -89,8 +131,16 @@ final class CloudPreferences {
 
     private func publishChanges() {
         guard !applyingRemote else { return }
+        let nowEnabled = Set(SyncOptions.preferenceKeys.filter { key in SyncOptions.isEnabled(key) })
+        let newlyEnabled = nowEnabled.subtracting(enabledGroups)
+        enabledGroups = nowEnabled
+        if !newlyEnabled.isEmpty {
+            reconcile(keys: syncKeys().filter { newlyEnabled.contains(group(for: $0)) })
+            snapshot()
+        }
         let keys = syncKeys().union(lastValues.keys)
         for key in keys {
+            guard isEnabled(key) else { continue }
             let value = local.object(forKey: key)
             let data = encoded(value)
             guard data != lastValues[key] else { continue }
@@ -109,7 +159,7 @@ final class CloudPreferences {
     private func receive(_ notification: Notification) {
         guard let keys = notification.userInfo?[NSUbiquitousKeyValueStoreChangedKeysKey] as? [String] else { return }
         applyingRemote = true
-        for key in keys where isSyncable(key) {
+        for key in keys where isSyncable(key) && isEnabled(key) {
             if let value = cloud.object(forKey: key) { local.set(value, forKey: key) }
             else { local.removeObject(forKey: key) }
         }

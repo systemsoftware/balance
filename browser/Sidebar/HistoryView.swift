@@ -33,7 +33,7 @@ class HistoryManager {
 
     private static var pendingVisits: [String: PendingVisit] = [:]
     private static var saveTask: Task<Void, Never>?
-    private static let syncEnabledAtLaunch = Config.defaults.bool(forKey: "syncHistory")
+    private static let syncEnabledAtLaunch = SyncOptions.shouldAttachCloudStore("syncHistory")
         && (Config.defaults.stringArray(forKey: "pendingCloudHistoryClears") ?? []).isEmpty
     
     static let sharedContainer: ModelContainer = {

@@ -27,6 +27,9 @@ struct ExtensionsToolbarButton: View {
             ) {
                 ExtensionsPopoverView()
                     .roomyToolbarPopover(minHeight: 420)
+#if os(iOS)
+                    .presentationCompactAdaptation(.popover)
+#endif
             }
 
     }

@@ -127,6 +127,7 @@ struct ContentBlockerView: View {
                     accentColor: catContetBlocker.color
                 ) {
                     addContentBlockerMenu()
+                        .buttonStyle(.borderedProminent)
                 }
                 .padding(.bottom, 8)
                 
@@ -404,6 +405,7 @@ struct ContentBlockerView: View {
     //    .menuStyle(isSettings ? .borderedButton : .borderlessButton)
         .controlSize(isSettings ? .small : .regular)
         .fixedSize()
+        .menuStyle(.button)
         .help("Add Content Blocker")
     }
 }

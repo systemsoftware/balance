@@ -955,7 +955,7 @@ struct BrowserWebView: PlatformViewRepresentable {
             config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         }
         config.preferences.setValue(true, forKey: "fullScreenEnabled")
-        if #available(macOS 12.3, *) {
+        if #available(macOS 12.3, iOS 15.0, *) {
             config.preferences.isElementFullscreenEnabled = true
         }
         config.defaultWebpagePreferences.allowsContentJavaScript = true
@@ -2395,34 +2395,38 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissions permissions: Set<WKWebExtension.Permission>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.Permission>, Date?) -> Void) {
-        let granted = confirmPermissionRequest(
+        confirmPermissionRequest(
             permissions.map { String(describing: $0) },
             for: extensionContext
-        ) ? permissions : []
-        completionHandler(granted, nil)
+        ) { granted in
+            completionHandler(granted ? permissions : [], nil)
+        }
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionMatchPatterns matchPatterns: Set<WKWebExtension.MatchPattern>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<WKWebExtension.MatchPattern>, Date?) -> Void) {
-        let granted = confirmPermissionRequest(
+        confirmPermissionRequest(
             matchPatterns.map { String(describing: $0) },
             for: extensionContext
-        ) ? matchPatterns : []
-        completionHandler(granted, nil)
+        ) { granted in
+            completionHandler(granted ? matchPatterns : [], nil)
+        }
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, promptForPermissionToAccess urls: Set<URL>, in tab: (any WKWebExtensionTab)?, for extensionContext: WKWebExtensionContext, completionHandler: @escaping (Set<URL>, Date?) -> Void) {
-        let granted = confirmPermissionRequest(
+        confirmPermissionRequest(
             urls.map(\.absoluteString),
             for: extensionContext
-        ) ? urls : []
-        completionHandler(granted, nil)
+        ) { granted in
+            completionHandler(granted ? urls : [], nil)
+        }
     }
 
     private func confirmPermissionRequest(
         _ requestedItems: [String],
-        for extensionContext: WKWebExtensionContext
-    ) -> Bool {
-        guard !requestedItems.isEmpty else { return true }
+        for extensionContext: WKWebExtensionContext,
+        completion: @escaping (Bool) -> Void
+    ) {
+        guard !requestedItems.isEmpty else { completion(true); return }
 
         let extensionName = extensionContext.webExtension.manifest["name"] as? String
             ?? "This extension"
@@ -2438,9 +2442,14 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
         alert.informativeText = details
         alert.addButton(withTitle: "Allow")
         alert.addButton(withTitle: "Deny")
-        return alert.runModal() == .alertFirstButtonReturn
+        completion(alert.runModal() == .alertFirstButtonReturn)
 #else
-        return false
+        SwiftUIPresentationCenter.shared.confirm(
+            "Allow \"\(extensionName)\" additional access?",
+            message: details
+        ) { allowed in
+            completion(allowed)
+        }
 #endif
     }
     
@@ -2475,6 +2484,7 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
             extConfig.defaultWebsiteDataStore = .default()
         }
         let newController = WKWebExtensionController(configuration: extConfig)
+        newController.delegate = self
         controllers[key] = newController
         
         // Load existing contexts into the new controller
@@ -2523,14 +2533,31 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
                     context.setPermissionStatus(.grantedExplicitly, for: pattern, expirationDate: nil)
                 }
                 
+                var loadedControllers: [WKWebExtensionController] = []
                 for (key, controller) in controllers {
                     do {
                         try controller.load(context)
+                        loadedControllers.append(controller)
                     } catch {
                         print("Failed to load extension into controller '\(key)': \(error)")
                     }
                 }
+                guard !loadedControllers.isEmpty else {
+                    contextURLs.removeValue(forKey: context)
+                    print("Extension was parsed but could not be activated: \(url)")
+                    return
+                }
                 contexts.append(context)
+
+                // WebKit only injects manifest content scripts when a navigation starts.
+                // Disk loading is asynchronous, so the first page may already be open.
+                for tab in allTabs {
+                    guard let webView = tab.webView ?? tab.underlyingWebView,
+                          let controller = webView.configuration.webExtensionController,
+                          loadedControllers.contains(where: { $0 === controller }),
+                          webView.url != nil else { continue }
+                    webView.reload()
+                }
             } catch {
                 print("Failed to load extension from \(url):", error)
             }
