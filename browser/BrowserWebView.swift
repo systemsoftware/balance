@@ -167,44 +167,60 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
         }
     }
 
-    func applyTranslations(_ translations: [String]) async {
-        guard let data = try? JSONSerialization.data(
-            withJSONObject: translations
-        ),
-        let json = String(data: data, encoding: .utf8) else {
-            return
-        }
+    struct TranslationTextSnapshot {
+        let webView: WKWebView
+        let id: String
+        let texts: [String]
+        let languageCode: String?
+    }
 
-        let javascript = """
-        const translations = \(json);
-
-        const walker = document.createTreeWalker(
-            document.body,
-            NodeFilter.SHOW_TEXT
-        );
-
-        let nodes = [];
-
-        while (walker.nextNode()) {
-            const node = walker.currentNode;
-
-            if (node.textContent.trim().length > 0) {
-                nodes.push(node);
-            }
-        }
-
-        nodes.forEach((node, index) => {
-            if (translations[index] !== undefined) {
-                node.textContent = translations[index];
-            }
-        });
+    @MainActor
+    func extractTextForTranslation() async throws -> TranslationTextSnapshot? {
+        guard let webView = webView ?? underlyingWebView else { return nil }
+        let id = UUID().uuidString
+        let script = """
+        (() => {
+            const id = "\(id)";
+            const walker = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+                acceptNode(node) {
+                    const parent = node.parentElement;
+                    if (!parent || !node.textContent.trim() ||
+                        parent.closest('script, style, noscript, textarea, [contenteditable], [translate="no"]')) {
+                        return NodeFilter.FILTER_REJECT;
+                    }
+                    return NodeFilter.FILTER_ACCEPT;
+                }
+            });
+            const nodes = [];
+            while (walker.nextNode()) nodes.push(walker.currentNode);
+            window.__balanceTranslationSnapshots = { [id]: nodes };
+            return { texts: nodes.map(node => node.textContent), languageCode: document.documentElement.lang || null };
+        })()
         """
+        guard let result = try await webView.evaluateJavaScript(script) as? [String: Any],
+              let texts = result["texts"] as? [String] else { return nil }
+        return TranslationTextSnapshot(
+            webView: webView, id: id, texts: texts, languageCode: result["languageCode"] as? String
+        )
+    }
 
-        do {
-            try await webView?.evaluateJavaScript(javascript)
-        } catch {
-            print("Failed to apply translations:", error)
-        }
+    @MainActor
+    func applyTranslation(_ translation: String, at index: Int, to snapshot: TranslationTextSnapshot) async throws -> Bool {
+        guard (webView ?? underlyingWebView) === snapshot.webView,
+              snapshot.texts.indices.contains(index) else { return false }
+        let values = [snapshot.texts[index], translation]
+        let data = try JSONSerialization.data(withJSONObject: values)
+        guard let json = String(data: data, encoding: .utf8) else { return false }
+        let script = """
+        (() => {
+            const node = window.__balanceTranslationSnapshots?.["\(snapshot.id)"]?.[\(index)];
+            const [original, translated] = \(json);
+            if (!node || !node.isConnected || node.textContent !== original) return false;
+            node.textContent = translated;
+            return true;
+        })()
+        """
+        return (try await snapshot.webView.evaluateJavaScript(script) as? Bool) == true
     }
 
     @MainActor

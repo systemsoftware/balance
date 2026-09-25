@@ -29,6 +29,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     case newTab
     case closeTab
     case wordCount
+    case translate
     
     var name: String {
         
@@ -110,6 +111,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .newTab: "plus.square.on.square"
         case .closeTab: "rectangle.badge.xmark"
         case .wordCount: "text.quote"
+        case .translate: "translate"
         }
     }
 }
@@ -580,6 +582,10 @@ struct BrowserToolbar: View {
                     WordCountToolbarButton(expandedLabel: expandedLabel, present: {
                         activeSheet = .wordCount
                     })
+                    .disabled(location == nil)
+                case .translate:
+                    TranslateToolbar(browserState: browserState)
+                        .disabled(location == nil)
                 }
             }
         }

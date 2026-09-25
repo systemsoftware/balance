@@ -4,6 +4,7 @@ import Foundation
 import SwiftData
 import FoundationModels
 internal import UniformTypeIdentifiers
+import Translation
 
 // MARK: - Layout Constants
 enum Layout {
@@ -40,7 +41,8 @@ let builtInSidebar = [
     SidebarItem(icon:"calendar", view:"CalendarView"),
     SidebarItem(icon:"cloud.sun", view: "WeatherView"),
     SidebarItem(icon: "bag", view: "InventoryView"),
-    SidebarItem(icon: "internaldrive", view: "WebDataView")
+    SidebarItem(icon: "internaldrive", view: "WebDataView"),
+    SidebarItem(icon: "translate", view:"TranslateView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -343,6 +345,11 @@ struct ContentView: View {
     @State private var addIndex = 0
     @State private var shouldAutoFocusAddress = true
     
+    
+    @State var showTranslateSheet = false
+    @State var showTranslation = false
+    @State var translateText = ""
+    
     @AppStorage("toolbarLocation") var toolbarLocation = 0
 
     private var usesCompactTitlebar: Bool {
@@ -570,54 +577,89 @@ struct ContentView: View {
                         ScrollView(.vertical, showsIndicators: true) {
                             VStack(spacing: isCompact ? 4 : Layout.sidebarItemSpacing) {
                                 ForEach(sidebarStore.items) { item in
-                                    Button(action: {
-                                        sidebarBounceCounts[item.id, default: 0] += 1
-                                        toggleSidebar(sidebarTargetURL(for: item))
-                                    }) {
-                                        if item.icon.starts(with: "https") {
-                                            Favicon(item.icon, width: isCompact ? 17 : Layout.sidebarIconSize, height: isCompact ? 17 : Layout.sidebarIconSize)
-                                                .padding(isCompact ? 7 : Layout.sidebarIconPadding)
-                                        } else {
-                                            Image(systemName: item.icon)
-                                                .font(.system(size: isCompact ? 17 : Layout.sidebarIconSize, weight: .regular))
-                                                .frame(width: isCompact ? 17 : Layout.sidebarIconSize, height: isCompact ? 17 : Layout.sidebarIconSize)
-                                                .padding(isCompact ? 7 : Layout.sidebarIconPadding)
+                                      Button(action: {
+                                          if item.view == "TranslateView" {
+                                              withAnimation {
+                                                  showTranslateSheet.toggle()
+                                              }
+                                          } else {
+                                              sidebarBounceCounts[item.id, default: 0] += 1
+                                              toggleSidebar(sidebarTargetURL(for: item))
+                                          }
+                                        }) {
+                                            if item.icon.starts(with: "https") {
+                                                Favicon(item.icon, width: isCompact ? 17 : Layout.sidebarIconSize, height: isCompact ? 17 : Layout.sidebarIconSize)
+                                                    .padding(isCompact ? 7 : Layout.sidebarIconPadding)
+                                            } else {
+                                                Image(systemName: item.icon)
+                                                    .font(.system(size: isCompact ? 17 : Layout.sidebarIconSize, weight: .regular))
+                                                    .frame(width: isCompact ? 17 : Layout.sidebarIconSize, height: isCompact ? 17 : Layout.sidebarIconSize)
+                                                    .padding(isCompact ? 7 : Layout.sidebarIconPadding)
+                                            }
                                         }
-                                    }
-                                    .symbolEffect(
-                                        .bounce.byLayer,
-                                        options: .nonRepeating,
-                                        value: sidebarBounceCounts[item.id, default: 0]
-                                    )
-                                    .glassEffect(sidebarBackground == 2 ? .regular : .identity)
-                                    .padding(1)
-                                    .buttonStyle(.plain)
-                                    .padding(.horizontal, isCompact ? 2 : 5)
-                                    .onDrag {
-                                        draggedSidebarItem = item
-                                        return NSItemProvider(object: item.id.uuidString as NSString)
-                                    }
-                                    .onDrop(of: [.plainText], delegate: SidebarDropDelegate(item: item, store: sidebarStore, draggedItem: $draggedSidebarItem))
-                                    .contextMenu {
-                                        if sidebarStore.count() > 1 {
-                                            Button("Remove", role: .destructive) {
-                                                Task { @MainActor in
-                                                    try? await Task.sleep(for: .milliseconds(200))
-                                                    withAnimation(.bouncy) {
-                                                        sidebarStore.remove(id: item.id)
+                                        .symbolEffect(
+                                            .bounce.byLayer,
+                                            options: .nonRepeating,
+                                            value: sidebarBounceCounts[item.id, default: 0]
+                                        )
+                                        .glassEffect(sidebarBackground == 2 ? .regular : .identity)
+                                        .padding(1)
+                                        .buttonStyle(.plain)
+                                        .padding(.horizontal, isCompact ? 2 : 5)
+                                        .onDrag {
+                                            draggedSidebarItem = item
+                                            return NSItemProvider(object: item.id.uuidString as NSString)
+                                        }
+                                        .onDrop(of: [.plainText], delegate: SidebarDropDelegate(item: item, store: sidebarStore, draggedItem: $draggedSidebarItem))
+                                        .contextMenu {
+                                            if sidebarStore.count() > 1 {
+                                                Button("Remove", role: .destructive) {
+                                                    Task { @MainActor in
+                                                        try? await Task.sleep(for: .milliseconds(200))
+                                                        withAnimation(.bouncy) {
+                                                            sidebarStore.remove(id: item.id)
+                                                        }
                                                     }
                                                 }
+                                                Divider()
                                             }
-                                            Divider()
+                                            Button("Add") {
+                                                showAddPopover = true
+                                            }
                                         }
-                                        Button("Add") {
-                                            showAddPopover = true
-                                        }
+                                        .id(item.id)
                                     }
-                                    .id(item.id)
-                                }
                             }
                         }
+                        .popover(isPresented: $showTranslateSheet) {
+                            VStack(alignment: .leading) {
+                                Text("Translate Text")
+                                    .font(.headline)
+                                    .padding(.bottom, 5)
+                                Text("Enter the text you want to translate.")
+                                    .font(.subheadline)
+                                    .padding(.bottom, 10)
+                                    .foregroundStyle(.secondary)
+                                TextField("", text: $translateText)
+                                HStack {
+                                    Spacer()
+                                    Button("Close") {
+                                        showTranslateSheet = false
+                                    }
+                                    .buttonStyle(.bordered)
+                                    Button("Translate") {
+                                        showTranslateSheet = false
+                                        showTranslation = true
+                                    }
+                                    .buttonStyle(.borderedProminent)
+                                }
+                                .padding(.top, 10)
+                            }
+                            .frame(width: 300)
+                            .padding()
+                        }
+                        .translationPresentation(isPresented: $showTranslation, text: translateText)
+                     
                         .scrollBounceBehavior(.basedOnSize)
                         .background {
                             if sidebarBackground == 1 {
