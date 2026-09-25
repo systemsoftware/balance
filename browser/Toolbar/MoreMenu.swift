@@ -24,6 +24,7 @@ struct MoreMenuToolbar: View {
         }
         .tint(Color.primary)
         .menuIndicator(.hidden)
+        .buttonStyle(.borderless)
         .frame(width: 40, height: 40)
         .accessibilityLabel("More")
     }

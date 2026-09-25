@@ -153,6 +153,7 @@ let Settings: [Setting] = {
         Setting(name: "Pins", icon: "pin", category: catSync, type: "toggle", appStorageKey: SyncOptions.pins, defaultValueBool: true),
         Setting(name: "Chats", icon: "bubble.left.and.bubble.right", category: catSync, type: "toggle", appStorageKey: SyncOptions.chats, defaultValueBool: true),
         Setting(name: "Sidebar", icon: "sidebar.left", category: catSync, type: "toggle", appStorageKey: SyncOptions.sidebar, defaultValueBool: true),
+        Setting(name: "Toolbar", icon: "square.topthird.inset.filled", category: catSync, type: "toggle", appStorageKey: SyncOptions.toolbar, defaultValueBool: true),
         Setting(name: "Profiles", icon: "person.crop.circle", category: catSync, type: "toggle", appStorageKey: SyncOptions.profiles, defaultValueBool: true),
         Setting(name: "Settings and Preferences", icon: "gearshape", category: catSync, type: "toggle", appStorageKey: SyncOptions.settings, defaultValueBool: true),
         Setting(name: "Inventory", icon: "shippingbox", category: catSync, type: "toggle", appStorageKey: SyncOptions.inventory, defaultValueBool: true),
@@ -991,7 +992,12 @@ private struct SyncDeleteButton: View {
     @State private var deleting = false
 
     var body: some View {
-        Button("Delete") { showingConfirmation = true }
+        Button { showingConfirmation = true }
+        label: {
+            Image(systemName: "trash")
+                .font(.system(size: 12, weight: .semibold))
+                .foregroundStyle(.red)
+        }
             .buttonStyle(.borderless)
             .foregroundStyle(.red)
             .disabled(deleting)

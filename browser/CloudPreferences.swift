@@ -75,6 +75,10 @@ final class CloudPreferences {
             ["showSidebar", "sidebarWidth", "leftSidebarWidth", "leftSidebarMode", "sidebarBackgroundType"].contains(key) {
             return SyncOptions.sidebar
         }
+        if key == "toolbar" || key.hasPrefix("toolbar_") ||
+            ["toolbarLocation", "toolbarBackgrounds", "showToolbarDragHandle"].contains(key) {
+            return SyncOptions.toolbar
+        }
         if key == "profiles" || key == "defaultProfile" { return SyncOptions.profiles }
         return SyncOptions.settings
     }

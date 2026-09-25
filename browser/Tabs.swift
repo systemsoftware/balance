@@ -278,6 +278,7 @@ struct Tabs: View {
                             Image(systemName: "rectangle.on.rectangle.angled")
                         }
                         .menuStyle(.borderlessButton)
+                        .padding(.leading, tabMode == 5 ? 10 : 0)
                         .contextMenu {
                             Toggle("Show Spaces", isOn: $showSpaces)
                             
