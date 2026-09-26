@@ -499,6 +499,7 @@ struct BrowserToolbar: View {
                     SplitViewToolbarButton(
                         splitURL: $splitURL,
                         splitState: splitState,
+                        browserState: browserState,
                         expandedLabel: expandedLabel,
                         presentURLSheet: { activeSheet = .splitURL }
                     )

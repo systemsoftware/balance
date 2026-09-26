@@ -4,8 +4,14 @@ import SwiftUI
 struct SplitViewToolbarButton: View {
     @Binding var splitURL: String
     @ObservedObject var splitState: BrowserState
+    @ObservedObject var browserState: BrowserState
     var expandedLabel = false
     let presentURLSheet: () -> Void
+    @EnvironmentObject var windowManager: WindowManager
+
+    private var availableTabs: [BrowserState] {
+        windowManager.windows.filter { $0 !== browserState && $0.url != nil }
+    }
     
     var body: some View {
         Menu() {
@@ -15,6 +21,20 @@ struct SplitViewToolbarButton: View {
                 } label: {
                     Label("Open", systemImage: "plus")
                 }
+                
+                Menu {
+                    ForEach(availableTabs, id: \.tabID) { state in
+                        Button(state.title) {
+                            if let url = state.url {
+                                splitURL = url.absoluteString
+                            }
+                        }
+                    }
+                } label: {
+                    Text("Split with Other Tab")
+                }
+                .disabled(availableTabs.isEmpty)
+                
             } else {
                 
                 Button() {

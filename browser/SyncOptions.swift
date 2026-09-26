@@ -6,6 +6,8 @@ enum SyncOptions {
     static let bookmarks = "syncBookmarks"
     static let pins = "syncPins"
     static let chats = "syncChats"
+    static let notes = "syncNotes"
+    static let rssFeeds = "syncRSSFeeds"
     static let sidebar = "syncSidebar"
     static let toolbar = "syncToolbar"
     static let profiles = "syncProfiles"
@@ -15,7 +17,7 @@ enum SyncOptions {
     static let engines = "syncEngines"
     static let forgetOnClose = "syncForgetOnClose"
 
-    static let preferenceKeys = [bookmarks, pins, chats, sidebar, toolbar, profiles, settings]
+    static let preferenceKeys = [bookmarks, pins, chats, notes, rssFeeds, sidebar, toolbar, profiles, settings]
     static let modelKeys = ["syncHistory", autofill, engines, forgetOnClose]
     static let pendingDeletionKey = "pendingCloudSyncDeletions"
     private(set) static var attachedAtLaunch: Set<String> = []

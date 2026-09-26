@@ -27,6 +27,7 @@ final class CloudPreferences {
 
     func start() {
         guard localObserver == nil else { return }
+        migrateSiteNotes()
         cloudObserver = NotificationCenter.default.addObserver(
             forName: NSUbiquitousKeyValueStore.didChangeExternallyNotification,
             object: cloud,
@@ -54,10 +55,26 @@ final class CloudPreferences {
             && !["Downloads", "note_", "pendingCloud", "inventoryCloud", "NS", "Apple"].contains { key.hasPrefix($0) }
     }
 
+    private func migrateSiteNotes() {
+        let keys = (local.persistentDomain(forName: Bundle.main.bundleIdentifier ?? "") ?? [:]).keys
+        for key in keys where key.hasPrefix("note_") {
+            let identifier = String(key.dropFirst("note_".count))
+            guard UUID(uuidString: identifier) == nil,
+                  let value = local.string(forKey: key) else { continue }
+            let siteKey = "siteNote_\(identifier)"
+            if local.object(forKey: siteKey) == nil {
+                local.set(value, forKey: siteKey)
+            }
+            local.removeObject(forKey: key)
+        }
+    }
+
     private func group(for key: String) -> String {
         if key == "bookmarks" || key.hasPrefix("bookmarks_") || key == "savedPlaces" { return SyncOptions.bookmarks }
         if key == "pins" || key.hasPrefix("pins_") { return SyncOptions.pins }
         if key == "chats" || key.hasPrefix("chats_") { return SyncOptions.chats }
+        if key == "notepad" || key.hasPrefix("siteNote_") { return SyncOptions.notes }
+        if key == "rssFeeds" { return SyncOptions.rssFeeds }
         if key == "sidebar" || key.hasPrefix("sidebar_") || key == "leftSidebarMode" {
             return SyncOptions.sidebar
         }

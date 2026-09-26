@@ -45,7 +45,7 @@ struct NoteView: View {
                         tabNote = ""
                     case .domain:
                         if let domain = browserState.webView?.url?.domainID {
-                            Config.sharedDefaults?.set("", forKey: "note_\(domain)")
+                            Config.sharedDefaults?.set("", forKey: "siteNote_\(domain)")
                         }
                     }
                 }
@@ -130,7 +130,7 @@ struct NoteView: View {
             TextEditor(text: $tabNote)
         case .domain:
             if let domain = browserState.webView?.url?.domainID {
-                TabNoteEditor(tabID: domain)
+                SiteNoteEditor(domain: domain)
             }
         }
     }
@@ -145,6 +145,18 @@ struct TabNoteEditor: View {
         self._text = AppStorage(wrappedValue: "", "note_\(tabID)", store: Config.sharedDefaults)
     }
     
+    var body: some View {
+        TextEditor(text: $text)
+    }
+}
+
+struct SiteNoteEditor: View {
+    @AppStorage var text: String
+
+    init(domain: String) {
+        self._text = AppStorage(wrappedValue: "", "siteNote_\(domain)", store: Config.sharedDefaults)
+    }
+
     var body: some View {
         TextEditor(text: $text)
     }

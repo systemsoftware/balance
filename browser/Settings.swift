@@ -152,6 +152,8 @@ let Settings: [Setting] = {
         Setting(name: "Bookmarks", icon: "bookmark", category: catSync, type: "toggle", appStorageKey: SyncOptions.bookmarks, defaultValueBool: true),
         Setting(name: "Pins", icon: "pin", category: catSync, type: "toggle", appStorageKey: SyncOptions.pins, defaultValueBool: true),
         Setting(name: "Chats", icon: "bubble.left.and.bubble.right", category: catSync, type: "toggle", appStorageKey: SyncOptions.chats, defaultValueBool: true),
+        Setting(name: "Notes", icon: "note.text", category: catSync, type: "toggle", appStorageKey: SyncOptions.notes, defaultValueBool: true),
+        Setting(name: "RSS Feeds", icon: "antenna.radiowaves.left.and.right", category: catSync, type: "toggle", appStorageKey: SyncOptions.rssFeeds, defaultValueBool: true),
         Setting(name: "Sidebar", icon: "sidebar.left", category: catSync, type: "toggle", appStorageKey: SyncOptions.sidebar, defaultValueBool: true),
         Setting(name: "Toolbar", icon: "square.topthird.inset.filled", category: catSync, type: "toggle", appStorageKey: SyncOptions.toolbar, defaultValueBool: true),
         Setting(name: "Profiles", icon: "person.crop.circle", category: catSync, type: "toggle", appStorageKey: SyncOptions.profiles, defaultValueBool: true),
@@ -261,7 +263,7 @@ let Settings: [Setting] = {
             advanced: true
         ),
         Setting(
-            name: "Tab Bar Background",
+            name: "Tabs Background",
             icon: "rectangle.grid.1x2",
             category: catAppearance,
             type: "toggle",
