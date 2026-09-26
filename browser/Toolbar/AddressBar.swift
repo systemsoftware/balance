@@ -31,6 +31,7 @@ struct AddressBar: View {
                     )
                     .roomyToolbarPopover()
                 }
+                .padding(.leading, location?.scheme == "http" || location?.scheme == "https" ? 16 : 0)
 
             AddressField(
                 text: $urlInput,
@@ -92,7 +93,6 @@ private struct TrustIndicator: View {
         .buttonStyle(.plain)
         .help(isSecure ? "Connection is secure" : "Connection is not secure")
         .frame(width: isWebURL ? 16 : 0)
-        .padding(.leading, isWebURL ? 16 : 0)
         .clipped()
         .opacity(isWebURL ? 1 : 0)
         .allowsHitTesting(isWebURL)

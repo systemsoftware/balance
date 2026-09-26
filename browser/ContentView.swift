@@ -730,14 +730,13 @@ struct ContentView: View {
             toolbarSheet(sheet)
         }
         .onAppear {
-            // The toolbar is removed in focus mode and inserted again when it
-            // ends. Only auto-focus the address field for the initial mount;
-            // focusing every reinsert can make AppKit rebuild a transient
-            // SwiftUI key-view loop indefinitely.
-            shouldAutoFocusAddress = false
+              shouldAutoFocusAddress = false
             if let initialURLString {
                 print("has initialURLString: \(initialURLString)")
                 urlInput = initialURLString
+                if browserState.webView?.url == nil && !browserState.isLoading {
+                    browserState.navigate(to: browserState.url ?? URL(string: initialURLString))
+                }
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
@@ -848,6 +847,7 @@ struct ContentView: View {
 
     private func handleBrowserCommand(_ command: BrowserCommand) {
             switch command {
+            case .commandPalette: activeToolbarSheet = .commands
             case .closeTab: WindowManager.shared.closeTab(tabID)
             case .searchTabs: activeToolbarSheet = .tabSearch
             case .zoomIn: browserState.zoomIn()

@@ -517,6 +517,17 @@ let Settings: [Setting] = {
             }
         ),
         Setting(
+            name: "Feature Guide",
+            icon: "text.page",
+            category: catLearnMore,
+            type: "button",
+            appStorageKey: "",
+            buttonText: "Open",
+            action: {
+                createNewTab(with:URL(string:"https://github.com/systemsoftware/balance/blob/main/FEATURES.md"))
+            }
+        ),
+        Setting(
             name: "LICENSE",
             icon: "lock.document",
             category: catLearnMore,
@@ -1216,7 +1227,8 @@ struct SettingsSectionContent: View {
     
     var body: some View {
         VStack(alignment: .leading, spacing: 6) {
-            if def.id == "profiles" && !profiles.isEmpty {
+            if def.id == "profiles" {
+                
                 
                 SettingsCardRow(
                     setting: Setting(
@@ -1232,7 +1244,9 @@ struct SettingsSectionContent: View {
                     accentColor: def.color
                 )
                 
+                if  !profiles.isEmpty {
                     profilePickerRow
+                }
             }
             
             if def.id == "bookmarks" {

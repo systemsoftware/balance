@@ -13,6 +13,5 @@ struct CommandPaletteToolbarButton: View {
         }
         .buttonStyle(.plain)
         .frame(width: expandedLabel ? nil : 40, height: 40)
-        .keyboardShortcut("k", modifiers: .command)        
     }
 }

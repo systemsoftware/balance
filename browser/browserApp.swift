@@ -493,7 +493,7 @@ enum MenuBarSection: String, CaseIterable {
 
 enum BrowserCommand: String, CaseIterable {
     // Browser
-    case searchTabs, reopenLastTab, downloads, history, openInFocus, showSetup
+    case commandPalette, searchTabs, reopenLastTab, downloads, history, openInFocus, showSetup
     // Page
     case reload, zoomIn, zoomOut, resetZoom, toggleMute
     case duplicateTab, duplicateWindow
@@ -506,6 +506,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var title: String {
         switch self {
+        case .commandPalette: return "Command Palette"
         case .showSetup: return "Setup & Import"
         case .searchTabs: return "Search All Tabs"
         case .reopenLastTab: return "Reopen Closed Tab"
@@ -539,7 +540,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var section: MenuBarSection {
         switch self {
-        case .searchTabs, .reopenLastTab, .downloads, .history, .openInFocus, .showSetup:
+        case .commandPalette, .searchTabs, .reopenLastTab, .downloads, .history, .openInFocus, .showSetup:
             return .browser
         default:
             return .page
@@ -563,6 +564,7 @@ enum BrowserCommand: String, CaseIterable {
     
     var shortcut: KeyboardShortcut? {
         switch self {
+        case .commandPalette: return KeyboardShortcut("k", modifiers: [.command])
         case .reload: return KeyboardShortcut("r", modifiers: [.command])
         case .searchTabs: return KeyboardShortcut("s", modifiers: [.command, .control])
         case .reopenLastTab: return KeyboardShortcut("t", modifiers: [.command, .shift])
@@ -589,8 +591,8 @@ enum BrowserCommand: String, CaseIterable {
     
     var requiresDividerAfter: Bool {
         switch self {
-        case .reload, .searchTabs, .reopenLastTab, .downloads, .history: return true
-        case .resetZoom, .toggleMute, .openInFocus, .copyURL, .addToSidebar, .printPage, .toggleReader, .renameTab, .closeTab, .savePage: return true
+        case .commandPalette, .reload, .searchTabs, .reopenLastTab, .downloads, .history: return true
+        case .resetZoom, .toggleMute, .openInFocus, .copyURL, .addToSidebar, .printPage, .toggleReader, .renameTab, .closeTab, .savePage, .findInPage: return true
         case .zoomOut, .duplicateWindow: return true
         case .summarize, .addEvents, .forceReload, .cite, .shortcut: return true
         default: return false
