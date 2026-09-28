@@ -71,11 +71,7 @@ struct ExtensionsPopoverView: View {
                                         if action.presentsPopup {
                                             selectedAction = action
                                         } else {
-                                            if let tab = manager.activeTab {
-                                                context.performAction(for: tab)
-                                            } else {
-                                                context.performAction(for: nil)
-                                            }
+                                            manager.contextForActiveTab(context)?.performAction(for: manager.activeTab)
                                         }
                                     }
                                 }
@@ -144,7 +140,7 @@ struct ExtensionActionRow: View {
     }
     
     private func getAction() -> WKWebExtension.Action? {
-        return context.action(for: manager.activeTab)
+        return manager.contextForActiveTab(context)?.action(for: manager.activeTab)
     }
     
     private func updateInfo() {

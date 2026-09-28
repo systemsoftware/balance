@@ -14,6 +14,8 @@ struct ExtensionsView: View {
     @State private var isChoosingFile = false
     @State private var isEnteringURL = false
     @State private var draftURL = ""
+    @State private var selectedAction: WKWebExtension.Action?
+    @State private var showActionPopup = false
     
     var isSettings = false
     
@@ -92,8 +94,8 @@ struct ExtensionsView: View {
                         ForEach(manager.contexts, id: \.baseURL) { context in
                             ExtensionRow(context: context, onUninstall: {
                                 manager.removeExtensionFromDisk(context)
-                            }, onOpenOptions: {
-                                openOptionsPage(for: context)
+                            }, onOpenExtension: {
+                                openExtension(for: context)
                             }, onUpdate: {
                                 updateExtension(context)
                             })
@@ -138,6 +140,22 @@ struct ExtensionsView: View {
             Button("Install") { installFromURL(draftURL) }
         } message: {
             Text("Enter the URL of a .crx extension file.")
+        }
+        .sheet(isPresented: $showActionPopup, onDismiss: { selectedAction = nil }) {
+            if let action = selectedAction {
+                VStack(spacing: 0) {
+                    HStack {
+                        Text(action.webExtensionContext?.webExtension.displayName ?? "Extension")
+                            .font(.headline)
+                        Spacer()
+                        Button("Done") { showActionPopup = false }
+                    }
+                    .padding()
+                    Divider()
+                    ExtensionActionPopupView(action: action)
+                }
+                .frame(minWidth: 350, minHeight: 420)
+            }
         }
     }
     
@@ -197,10 +215,37 @@ struct ExtensionsView: View {
         }
     }
     
-    private func openOptionsPage(for context: WKWebExtensionContext) {
-        if let optionsURL = context.optionsPageURL {
-            createNewTab(with: optionsURL)
+    private func openExtension(for context: WKWebExtensionContext) {
+        errorMessage = nil
+        guard let activeContext = manager.contextForActiveTab(context) else {
+            errorMessage = "This extension is not active in the current tab. Open a regular webpage and try again."
+            return
         }
+        if let optionsURL = activeContext.optionsPageURL {
+            createNewTab(with: optionsURL)
+            showBrowserWindow()
+        } else if let action = activeContext.action(for: manager.activeTab) {
+            // Extensions such as Better Campus open their settings through the
+            // toolbar action instead of declaring an options page in the manifest.
+            if action.presentsPopup {
+                if let tab = manager.activeTab {
+                    activeContext.userGesturePerformed(in: tab)
+                }
+                selectedAction = action
+                showActionPopup = true
+            } else {
+                showBrowserWindow()
+                activeContext.performAction(for: manager.activeTab)
+            }
+        } else {
+            errorMessage = "This extension does not provide a settings page or toolbar action."
+        }
+    }
+
+    private func showBrowserWindow() {
+        guard isSettings,
+              let windowID = WindowManager.shared.activeWindowID else { return }
+        WindowManager.shared.openWindow?(windowID)
     }
     
     private func updateExtension(_ context: WKWebExtensionContext) {
@@ -316,7 +361,7 @@ struct ExtensionsView: View {
 struct ExtensionRow: View {
     let context: WKWebExtensionContext
     let onUninstall: () -> Void
-    let onOpenOptions: () -> Void
+    let onOpenExtension: () -> Void
     let onUpdate: () -> Void
     
     private var displayName: String {
@@ -378,13 +423,20 @@ struct ExtensionRow: View {
             }
             .contentShape(Rectangle())
             .onTapGesture {
-                if hasOptionsPage {
-                    onOpenOptions()
-                }
+                onOpenExtension()
             }
             
             // Actions
             HStack(spacing: 4) {
+                Button(action: onOpenExtension) {
+                    Image(systemName: hasOptionsPage ? "gearshape" : "arrow.up.forward.square")
+                        .font(.system(size: 11))
+                        .foregroundStyle(.secondary)
+                }
+                .buttonStyle(.plain)
+                .help(hasOptionsPage ? "Open extension settings" : "Open extension")
+                .accessibilityLabel(hasOptionsPage ? "Open extension settings" : "Open extension")
+
                 Button(action: onUpdate) {
                     Image(systemName: "arrow.clockwise")
                         .font(.system(size: 11))

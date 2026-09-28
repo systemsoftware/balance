@@ -348,11 +348,18 @@ final class BrowserWindow: NSObject, WKWebExtensionWindow {
 #endif
 
     func tabs(for context: WKWebExtensionContext) -> [any WKWebExtensionTab] {
-        WebExtensionManager.shared.allTabs.filter { !$0.isPrivateBrowsing }
+        WebExtensionManager.shared.allTabs.filter {
+            !$0.isPrivateBrowsing && ($0.webView ?? $0.underlyingWebView)?
+                .configuration.webExtensionController === context.webExtensionController
+        }
     }
     
     func activeTab(for context: WKWebExtensionContext) -> (any WKWebExtensionTab)? {
-        WebExtensionManager.shared.activeTab
+        guard let tab = WebExtensionManager.shared.activeTab,
+              !tab.isPrivateBrowsing,
+              (tab.webView ?? tab.underlyingWebView)?.configuration.webExtensionController
+                === context.webExtensionController else { return nil }
+        return tab
     }
     
     func windowType(for context: WKWebExtensionContext) -> WKWebExtension.WindowType { .normal }
@@ -2491,28 +2498,74 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
     func controller(for profile: String) -> WKWebExtensionController {
         let key = profile.isEmpty ? "default" : profile
         if let existing = controllers[key] { return existing }
-        let extConfig = WKWebExtensionController.Configuration.default()
+        let extConfig: WKWebExtensionController.Configuration
         if !profile.isEmpty, let profileUUID = UUID(uuidString: profile) {
-            extConfig.defaultWebsiteDataStore = storedProfile(withID: profileUUID)?.isEphemeral == true
+            let isEphemeral = storedProfile(withID: profileUUID)?.isEphemeral == true
+            extConfig = isEphemeral ? .nonPersistent() : .init(identifier: profileUUID)
+            extConfig.defaultWebsiteDataStore = isEphemeral
                 ? .nonPersistent()
                 : WKWebsiteDataStore(forIdentifier: profileUUID)
         } else {
+            extConfig = .default()
             extConfig.defaultWebsiteDataStore = .default()
         }
         let newController = WKWebExtensionController(configuration: extConfig)
         newController.delegate = self
         controllers[key] = newController
         
-        // Load existing contexts into the new controller
+        // A context can belong to only one controller. Each profile needs its
+        // own runtime, even though all profiles use the same installed files.
         for context in contexts {
+            guard let url = contextURLs[context] else { continue }
             do {
-                try newController.load(context)
+                let profileContext = makeContext(for: context.webExtension, at: url)
+                try newController.load(profileContext)
+                grantManifestPermissions(to: profileContext)
+                contextURLs[profileContext] = url
             } catch {
                 print("Failed to load context into new controller '\(key)': \(error)")
             }
         }
         
         return newController
+    }
+
+    private func makeContext(for ext: WKWebExtension, at url: URL) -> WKWebExtensionContext {
+        let context = WKWebExtensionContext(for: ext)
+        let uuidKey = "ext_uuid_\(url.lastPathComponent)"
+        let identifier = Config.defaults.string(forKey: uuidKey) ?? context.uniqueIdentifier
+        // WebKit only persists extension storage when the identifier is explicitly
+        // assigned. Saving its generated default without setting it leaves the
+        // first installation's settings in memory, even on a persistent controller.
+        context.uniqueIdentifier = identifier
+        Config.defaults.set(identifier, forKey: uuidKey)
+
+        // Keep extension pages and their origin storage reachable after relaunch.
+        let baseURLKey = "ext_base_url_\(url.lastPathComponent)"
+        if let saved = Config.defaults.string(forKey: baseURLKey), let baseURL = URL(string: saved) {
+            context.baseURL = baseURL
+        } else {
+            Config.defaults.set(context.baseURL.absoluteString, forKey: baseURLKey)
+        }
+        return context
+    }
+
+    private func grantManifestPermissions(to context: WKWebExtensionContext) {
+        // Loading restores saved WebKit state, so apply manifest grants afterward.
+        for permission in context.webExtension.requestedPermissions {
+            context.setPermissionStatus(.grantedExplicitly, for: permission, expirationDate: nil)
+        }
+        for pattern in context.webExtension.requestedPermissionMatchPatterns {
+            context.setPermissionStatus(.grantedExplicitly, for: pattern, expirationDate: nil)
+        }
+    }
+
+    func contextForActiveTab(_ context: WKWebExtensionContext) -> WKWebExtensionContext? {
+        guard let tab = activeTab else { return context }
+        guard !tab.isPrivateBrowsing,
+              let controller = (tab.webView ?? tab.underlyingWebView)?.configuration.webExtensionController,
+              let url = contextURLs[context] else { return nil }
+        return controller.extensionContexts.first { contextURLs[$0] == url }
     }
     
     /// Loads all extensions from disk. Only runs once; subsequent calls are no-ops.
@@ -2528,38 +2581,22 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
         Task { @MainActor in
             do {
                 let ext = try await WKWebExtension(resourceBaseURL: url)
-                let context = WKWebExtensionContext(for: ext)
-                
-                let uuidKey = "ext_uuid_\(url.lastPathComponent)"
-                if let saved = Config.sharedDefaults?.string(forKey: uuidKey) {
-                    context.uniqueIdentifier = saved
-                } else {
-                    Config.sharedDefaults?.set(context.uniqueIdentifier, forKey: uuidKey)
-                }
-                
-                contextURLs[context] = url
-                
-                // Grant all requested permissions from manifest
-                for permission in ext.requestedPermissions {
-                    context.setPermissionStatus(.grantedExplicitly, for: permission, expirationDate: nil)
-                }
-                
-                // Grant all requested match patterns from manifest
-                for pattern in ext.requestedPermissionMatchPatterns {
-                    context.setPermissionStatus(.grantedExplicitly, for: pattern, expirationDate: nil)
-                }
-                
+                guard !contextURLs.values.contains(url) else { return }
+                var representativeContext: WKWebExtensionContext?
                 var loadedControllers: [WKWebExtensionController] = []
                 for (key, controller) in controllers {
                     do {
+                        let context = makeContext(for: ext, at: url)
                         try controller.load(context)
+                        grantManifestPermissions(to: context)
+                        contextURLs[context] = url
+                        representativeContext = representativeContext ?? context
                         loadedControllers.append(controller)
                     } catch {
                         print("Failed to load extension into controller '\(key)': \(error)")
                     }
                 }
-                guard !loadedControllers.isEmpty else {
-                    contextURLs.removeValue(forKey: context)
+                guard let context = representativeContext else {
                     print("Extension was parsed but could not be activated: \(url)")
                     return
                 }
@@ -2581,11 +2618,13 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
     }
     
     func unloadExtension(_ context: WKWebExtensionContext) {
-        for (_, controller) in controllers {
-            try? controller.unload(context)
+        guard let url = contextURLs[context] else { return }
+        let profileContexts = contextURLs.filter { $0.value == url }.map(\.key)
+        for profileContext in profileContexts {
+            try? profileContext.webExtensionController?.unload(profileContext)
+            contextURLs.removeValue(forKey: profileContext)
         }
-        contexts.removeAll { $0 === context }
-        contextURLs.removeValue(forKey: context)
+        contexts.removeAll { profileContexts.contains($0) }
     }
 
     func installationURL(for context: WKWebExtensionContext) -> URL? {
@@ -2593,10 +2632,8 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
     }
     
     func unloadAll() {
-        for context in contexts {
-            for (_, controller) in controllers {
-                try? controller.unload(context)
-            }
+        for context in Array(contexts) {
+            unloadExtension(context)
         }
         contexts.removeAll()
         contextURLs.removeAll()
