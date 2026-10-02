@@ -26,7 +26,7 @@ let catSidebar = CategoryDef(
     name: "Sidebar",
     icon: "sidebar.left",
     color: .indigo,
-    description: "Customize sidebar visibility and width."
+    description: "Customize how sidebars behaves, including width and visibility."
 )
 
 let catAI = CategoryDef(
@@ -34,7 +34,7 @@ let catAI = CategoryDef(
     name: "AI",
     icon: "sparkles",
     color: .purple,
-    description: "Configures AI features including model behavior, prompts, and response settings."
+    description: "Configures local AI behavior for features like page summarization and chat."
 )
 
 let catAutofill = CategoryDef(
@@ -42,7 +42,7 @@ let catAutofill = CategoryDef(
     name: "Autofill",
     icon: "rectangle.and.pencil.and.ellipsis",
     color: .orange,
-    description: "Manage form autofill settings."
+    description: "Add and manage autofill data such as names, passwords, and other information."
 )
 
 
@@ -59,7 +59,7 @@ let catBookmarks = CategoryDef(
     name: "Bookmarks",
     icon: "bookmark",
     color: .yellow,
-    description: "Manage bookmark display and organization."
+    description: "Manage what sites are bookmarked and how bookmarks are displayed."
 )
 
 let catPrivacy = CategoryDef(
@@ -88,10 +88,10 @@ let catProfiles = CategoryDef(
 
 let catSync = CategoryDef(
     id:"sync",
-    name:"iCloud Sync",
+    name:"iCloud",
     icon:"icloud",
     color: .blue,
-    description: "Manage what syncs with iCloud, including history, bookmarks, and settings."
+    description: "Manage what data is synced across devices via iCloud."
 )
 
 let catLearnMore = CategoryDef(
@@ -115,7 +115,7 @@ let catExt = CategoryDef(
     name:"Extensions",
     icon:"puzzlepiece.extension",
     color: .cyan,
-    description: "Manage extensions."
+    description: "Extend browser functionality with Chrome-compatible extensions and custom Userscripts. Note: Some extensions may not work as expected due to platform limitations."
 )
 
 let catAppearance = CategoryDef(
@@ -123,7 +123,7 @@ let catAppearance = CategoryDef(
     name:"Appearance",
     icon:"paintbrush",
     color: .purple,
-    description: "Customize the browser's appearance, including themes and color schemes."
+    description: "Customize how Balance looks"
     )
 
 
@@ -139,6 +139,15 @@ let Settings: [Setting] = {
             category: catPrivacy,
             type: "toggle",
             appStorageKey: "recordHistory",
+            defaultValueBool: true
+        ),
+        
+        Setting(
+            name: "Handoff",
+            icon: "hand.point.up.left.and.text.fill",
+            category: catSync,
+            type: "toggle",
+            appStorageKey: "enableHandoff",
             defaultValueBool: true
         ),
         Setting(
@@ -423,14 +432,6 @@ let Settings: [Setting] = {
             category: catPalette,
             type: "toggle",
             appStorageKey: "paletteShowHistory",
-            defaultValueBool: true
-        ),
-        Setting(
-            name: "Enable Handoff",
-            icon: "hand.point.up.left",
-            category: catPrivacy,
-            type: "toggle",
-            appStorageKey: "enableHandoff",
             defaultValueBool: true
         ),
         Setting(
@@ -961,7 +962,8 @@ struct SettingsCardRow: View {
                 if isInlineSetting(setting.type) {
                     InlineSettingControl(setting: setting)
                         .controlSize(.small)
-                    if setting.category.id == catSync.id && setting.type == "toggle" {
+                    if setting.category.id == catSync.id && setting.type == "toggle"
+                        && setting.appStorageKey != "enableHandoff" {
                         SyncDeleteButton(setting: setting)
                     }
                 }
@@ -1013,11 +1015,11 @@ private struct SyncDeleteButton: View {
 
     var body: some View {
         Button { showingConfirmation = true }
-        label: {
-            Image(systemName: "trash")
-                .font(.system(size: 12, weight: .semibold))
-                .foregroundStyle(.red)
-        }
+            label: {
+                Image(systemName: "trash")
+                    .font(.system(size: 12, weight: .semibold))
+                    .foregroundStyle(.red)
+            }
             .buttonStyle(.borderless)
             .foregroundStyle(.red)
             .disabled(deleting)
@@ -1207,6 +1209,7 @@ struct SettingsSectionContent: View {
     @State private var lmpage = WebPage()
     
     @State var autofillType = 0
+    @State var extType = 0
     
     @State var showNewPassword = false
     
@@ -1215,6 +1218,8 @@ struct SettingsSectionContent: View {
     @State var showingNewEngine = false
     
     @State private var isAdvancedPressed = false
+    
+    @State private var showNewScript = false
     
     private func loadInitialURL() {
         if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
@@ -1251,6 +1256,17 @@ struct SettingsSectionContent: View {
                 }
             }
             
+            
+            if def.id == "ext" {
+                Picker("", selection: $extType.animation()) {
+                    Text("Extensions").tag(0)
+                    Text("Userscripts").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .controlSize(.small)
+                .frame(maxWidth: .infinity)
+            }
+            
             if def.id == "bookmarks" {
                 SettingsCardRow(
                     setting: Setting(
@@ -1282,8 +1298,31 @@ struct SettingsSectionContent: View {
             }
             
             if def.id == "ext" {
-                ExtensionsView(isSettings:true)
-                    .frame(maxWidth: .infinity)
+                if extType == 0 {
+                    ExtensionsView(isSettings:true)
+                        .frame(maxWidth: .infinity)
+                } else {
+                    SettingsCardRow(
+                        setting: Setting(
+                            name:"New Userscript",
+                            category: catExt,
+                            type:"button",
+                            appStorageKey:"",
+                            buttonText:"New",
+                            action: {
+                                showNewScript = true
+                            }
+                        ),
+                        icon: "plus",
+                        accentColor: def.color
+                    )
+                    .padding(.top, -7)
+                    .sheet(isPresented: $showNewScript) {
+                        NewScriptView()
+                    }
+                    ScriptsView()
+                        .frame(maxWidth: .infinity)
+                }
             }
             
         
@@ -1339,7 +1378,7 @@ struct SettingsSectionContent: View {
                     .font(.caption)
                     .padding(.horizontal)
             }
-
+            
             if def.id == "autofill" {
                 Picker("", selection: $autofillType.animation()) {
                     Text("Form").tag(0)

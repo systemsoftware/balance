@@ -63,10 +63,14 @@ public struct CachedAsyncImageCore<Content>: View where Content: View {
     }
   
     public init(urlRequest: URLRequest?, urlCache: URLCache = .shared, scale: CGFloat = 1, transaction: Transaction = Transaction(), @ViewBuilder content: @escaping (AsyncImagePhase) -> Content) {
-        let configuration = URLSessionConfiguration.default
-        configuration.urlCache = urlCache
         self.urlRequest = urlRequest
-        self.urlSession =  URLSession(configuration: configuration)
+        if urlCache === URLCache.shared {
+            self.urlSession = .shared
+        } else {
+            let configuration = URLSessionConfiguration.default
+            configuration.urlCache = urlCache
+            self.urlSession = URLSession(configuration: configuration)
+        }
         self.scale = scale
         self.transaction = transaction
         self.content = content

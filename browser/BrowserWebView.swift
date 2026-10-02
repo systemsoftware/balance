@@ -815,7 +815,78 @@ enum BrowserErrorKind {
 
 struct BrowserWebView: PlatformViewRepresentable {
     private static let errorPageRequestHeader = "X-Balance-Error-Page"
+    private static let userScriptMarker = "// balance-userscript:"
     static let internalContentWorld = WKContentWorld.world(name: "BalanceInternal")
+    private static var cachedUserScripts: (revision: UInt, scripts: [WKUserScript])?
+
+    private static func synchronizeUserScripts(on controller: WKUserContentController) {
+        let savedScripts: [(script: UserScript, source: String)]
+        do {
+            savedScripts = try UserScriptStore.enabledScripts()
+        } catch {
+            print("Unable to load userscripts: \(error)")
+            return
+        }
+
+        let desired: [WKUserScript]
+        if let cachedUserScripts, cachedUserScripts.revision == UserScriptStore.revision {
+            desired = cachedUserScripts.scripts
+        } else {
+            desired = savedScripts.compactMap { entry -> WKUserScript? in
+                guard let type = ScriptExecType(rawValue: entry.script.executionType) else { return nil }
+
+                let input = entry.script.domain.trimmingCharacters(in: .whitespacesAndNewlines)
+                let host = URLComponents(string: input.contains("://") ? input : "https://\(input)")?
+                    .host?.lowercased().replacingOccurrences(of: "*.", with: "") ?? ""
+                let domain = input.isEmpty ? "" : host
+                guard input.isEmpty || !domain.isEmpty else { return nil }
+
+                guard let domainData = try? JSONEncoder().encode(domain),
+                      let domainLiteral = String(data: domainData, encoding: .utf8) else { return nil }
+
+                let runSource = "(() => {\n\(entry.source)\n})()"
+                let execution: String
+                if type == .documentIdle {
+                    execution = """
+                    const run = () => { \(runSource); };
+                    if (typeof requestIdleCallback === 'function') {
+                        requestIdleCallback(run);
+                    } else {
+                        setTimeout(run, 0);
+                    }
+                    """
+                } else {
+                    execution = "\(runSource);"
+                }
+
+                let wrappedSource = """
+                \(userScriptMarker)\(entry.script.id.uuidString)
+                (() => {
+                    if (location.protocol !== 'http:' && location.protocol !== 'https:') return;
+                    const domain = \(domainLiteral);
+                    const host = location.hostname.toLowerCase();
+                    if (domain && host !== domain && !host.endsWith('.' + domain)) return;
+                    \(execution)
+                })();
+                """
+                return WKUserScript(
+                    source: wrappedSource,
+                    injectionTime: type == .documentStart ? .atDocumentStart : .atDocumentEnd,
+                    forMainFrameOnly: true,
+                    in: WKContentWorld.world(name: "BalanceUserScript.\(entry.script.id.uuidString)")
+                )
+            }
+            cachedUserScripts = (UserScriptStore.revision, desired)
+        }
+
+        let current = controller.userScripts.filter { $0.source.hasPrefix(userScriptMarker) }
+        guard current.map(\.source) != desired.map(\.source) else { return }
+
+        let otherScripts = controller.userScripts.filter { !$0.source.hasPrefix(userScriptMarker) }
+        controller.removeAllUserScripts()
+        for script in otherScripts { controller.addUserScript(script) }
+        for script in desired { controller.addUserScript(script) }
+    }
     static let pageScriptMessageHandlerNames = [
         "notificationRequestPermission", "notificationShow", "balanceLocation",
         "printPage", "webShare", "balancePermissionsQuery"
@@ -903,6 +974,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                 userContentController.removeScriptMessageHandler(forName: name, contentWorld: Self.internalContentWorld)
                 userContentController.add(context.coordinator, contentWorld: Self.internalContentWorld, name: name)
             }
+            Self.synchronizeUserScripts(on: userContentController)
             
             DispatchQueue.main.async {
                 state.attach(preloaded)
@@ -1057,6 +1129,7 @@ struct BrowserWebView: PlatformViewRepresentable {
             let documentEndScript = WKUserScript(source: BrowserScripts.documentEnd, injectionTime: .atDocumentEnd, forMainFrameOnly: true, in: Self.internalContentWorld)
             config.userContentController.addUserScript(documentEndScript)
         }
+        Self.synchronizeUserScripts(on: config.userContentController)
         
         if !priv {
             manager.activeTab = state
@@ -1946,6 +2019,11 @@ struct BrowserWebView: PlatformViewRepresentable {
                     return
                 }
             }
+            if navigationAction.targetFrame?.isMainFrame == true,
+               let scheme = navigationAction.request.url?.scheme?.lowercased(),
+               scheme == "http" || scheme == "https" {
+                BrowserWebView.synchronizeUserScripts(on: webView.configuration.userContentController)
+            }
             decisionHandler(.allow, preferences)
         }
 
@@ -2111,6 +2189,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                 }
             }
             
+            BrowserWebView.synchronizeUserScripts(on: configuration.userContentController)
             let newWebView = BrowserWKWebView(frame: .zero, configuration: configuration)
             let newState = BrowserState(initialURL: navigationAction.request.url)
             newState.preloadedWebView = newWebView
