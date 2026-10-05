@@ -98,12 +98,25 @@ struct ExtensionPopupView: PlatformViewRepresentable {
     #endif
 }
 
+extension View {
+    @ViewBuilder
+    func applyVerticalToolbarGating() -> some View {
+        if #available(iOS 27.1, *) {
+            /* uncomment later for iphone duo
+            self.toolbarVerticalBehavior(.disabled)
+             */
+            self
+        } else {
+            self
+        }
+    }
+}
+
 struct ContentView: View {
     @ObservedObject private var extensionManager = WebExtensionManager.shared
     @EnvironmentObject private var windowManager: WindowManager
     @State private var urlInput: String = ""
-    
-    
+        
     @State var showPageShine = false
     
     @State private var activeToolbarSheet: ToolbarSheet?
@@ -814,6 +827,7 @@ struct ContentView: View {
         .onChange(of: splitState.scrollX) { _, _ in updateTabState() }
         .onChange(of: splitState.scrollY) { _, _ in updateTabState() }
         .focusedSceneValue(\.dispatchBrowserCommand, commandDispatcher)
+        .applyVerticalToolbarGating()
     }
 
     private var commandDispatcher: ((BrowserCommand) -> Void)? {
