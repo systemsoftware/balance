@@ -127,7 +127,6 @@ struct TranslateToolbar: View {
                 configuration = nil
                 self.snapshot = nil
             }
-            do {
                 var changedCount = 0
                 var failedCount = 0
                 var firstFailure: Error?
@@ -179,9 +178,7 @@ struct TranslateToolbar: View {
                         ? "Could not translate \(sourceCode) to \(targetCode): \(firstFailure?.localizedDescription ?? "Unknown error")"
                         : "Translation returned the original text or the page changed before it could be replaced."
                 }
-            } catch {
-                translationError = "Translation failed: \(error.localizedDescription)"
-            }
+            
         }
     }
 }
