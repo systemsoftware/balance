@@ -91,6 +91,14 @@ class SitePermissionStore: ObservableObject {
         save()
     }
     
+    func removeSetting(for host: String, type: String) {
+        permissions[host]?.removeValue(forKey: type)
+        if permissions[host]?.isEmpty == true {
+            permissions.removeValue(forKey: host)
+        }
+        save()
+    }
+
     func zoomLevel(for host: String) -> Int {
         if let val = permissions[host]?["zoom"], let zoom = Int(val) {
             return zoom

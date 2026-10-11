@@ -1,4 +1,5 @@
 import SwiftUI
+internal import UniformTypeIdentifiers
 
 struct Bookmark: Codable, Identifiable, Equatable {
     let id: UUID
@@ -77,8 +78,36 @@ struct BookmarkRow: View {
     }
 }
 
+private struct BookmarkDropDelegate: DropDelegate {
+    let bookmark: Bookmark
+    let store: BookmarkStore
+    @Binding var draggedBookmarkID: UUID?
+
+    func dropEntered(info: DropInfo) {
+        guard let draggedBookmarkID,
+              draggedBookmarkID != bookmark.id,
+              let source = store.items.firstIndex(where: { $0.id == draggedBookmarkID }),
+              let destination = store.items.firstIndex(where: { $0.id == bookmark.id }) else { return }
+
+        withAnimation {
+            store.move(from: IndexSet(integer: source), to: destination > source ? destination + 1 : destination)
+        }
+    }
+
+    func dropUpdated(info: DropInfo) -> DropProposal? {
+        DropProposal(operation: .move)
+    }
+
+    func performDrop(info: DropInfo) -> Bool {
+        guard draggedBookmarkID != nil else { return false }
+        draggedBookmarkID = nil
+        return true
+    }
+}
+
 struct BookmarksView: View {
     @StateObject private var store = BookmarkStore()
+    @State private var draggedBookmarkID: UUID?
     
     @AppStorage("sidebarWidth", store: Config.sharedDefaults)
     var sidebarWidth: Int = 345
@@ -149,6 +178,11 @@ struct BookmarksView: View {
                                 },
                                 isSettings: isSettings
                             )
+                            .onDrag {
+                                draggedBookmarkID = mark.id
+                                return NSItemProvider(object: mark.id.uuidString as NSString)
+                            }
+                            .onDrop(of: [.plainText], delegate: BookmarkDropDelegate(bookmark: mark, store: store, draggedBookmarkID: $draggedBookmarkID))
                         }
                     }
                     .padding(.trailing, 16)

@@ -41,8 +41,8 @@ let builtInSidebar = [
     SidebarItem(icon:"calendar", view:"CalendarView"),
     SidebarItem(icon:"cloud.sun", view: "WeatherView"),
     SidebarItem(icon: "bag", view: "InventoryView"),
-    SidebarItem(icon: "internaldrive", view: "WebDataView"),
-    SidebarItem(icon: "translate", view:"TranslateView")
+    SidebarItem(icon: "internaldrive", view: "DataView"),
+    SidebarItem(icon: "translate", view:"TranslateView"),
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -445,9 +445,12 @@ struct ContentView: View {
                 }
                 
                 ZStack {
-                    if (location != nil) {
-                        
-                        
+                    if let internalView = builtInViewName(for: location) {
+                        builtInView(named: internalView, standalone: true)
+                            .onAppear { updateTabState() }
+                    } else if location != nil {
+
+
                         if showReader, let webView = browserState.webView {
                             ReaderView(sourceWebView: webView)
                                 .zIndex(100)
@@ -625,6 +628,15 @@ struct ContentView: View {
                                         }
                                         .onDrop(of: [.plainText], delegate: SidebarDropDelegate(item: item, store: sidebarStore, draggedItem: $draggedSidebarItem))
                                         .contextMenu {
+                                            
+                                            Button("Open in New Tab") {
+                                                if let targetURL = sidebarTargetURL(for: item) {
+                                                    createNewTab(with: targetURL)
+                                                }
+                                            }
+                                            
+                                            Divider()
+                                            
                                             if sidebarStore.count() > 1 {
                                                 Button("Remove", role: .destructive) {
                                                     Task { @MainActor in
@@ -636,7 +648,7 @@ struct ContentView: View {
                                                 }
                                                 Divider()
                                             }
-                                            Button("Add") {
+                                            Button("Add...") {
                                                 showAddPopover = true
                                             }
                                         }
@@ -1157,62 +1169,57 @@ struct ContentView: View {
         }
     }
 
+    private func builtInViewName(for url: URL?) -> String? {
+        guard let url else { return nil }
+        let value: String
+        if url.scheme?.lowercased() == "balance", url.path.isEmpty,
+           let host = url.host, !host.isEmpty {
+            value = host
+        } else if url.absoluteString.hasSuffix(".view") {
+            value = String(url.absoluteString.dropLast(5))
+        } else {
+            return nil
+        }
+
+        let name = value.lowercased()
+        if name == "permissions" { return "WebPermissionsView" }
+        if name == "data" || name == "webdataview" { return "DataView" }
+        return builtInSidebar.compactMap(\.view).first {
+            let fullName = $0.lowercased()
+            return name == fullName || name == fullName.replacingOccurrences(of: "view", with: "")
+        }
+    }
+
+    @ViewBuilder
+    private func builtInView(named name: String, standalone: Bool = false) -> some View {
+        switch name {
+        case "ChatView": ChatView(browserState: browserState)
+        case "EmailView": EmailView(profile: bProfile)
+        case "BookmarksView": BookmarksView(showAddBookmark: $falseBinding)
+        case "PasswordsView": PasswordsView()
+        case "SettingsView": SettingsView(isStandalone: standalone, activeProfile: bProfile)
+            .frame(maxWidth: .infinity)
+        case "NotesView": NoteView(tabID: tabID, browserState: browserState)
+        case "HistoryView": HistoryView(profile: bProfile)
+        case "DownloadsView": DownloadsView(profile: bProfile)
+        case "ExtensionsView": ExtensionsView()
+        case "ContentBlockersView": ContentBlockerView()
+        case "MapView": MapView(browserState: browserState)
+        case "RSSView": RSSView()
+        case "CalendarView": CalendarSidebarView()
+        case "WeatherView": WeatherSidebarView()
+        case "InventoryView": InventorySidebar()
+        case "DataView": WebDataView(profile: bProfile)
+        case "WebPermissionsView": WebPermissionsView(profile: bProfile)
+        case "TranslateView": TranslatePageView()
+        default: EmptyView()
+        }
+    }
+
     @ViewBuilder
     private func sidebarDetailView(for sidebarURL: URL) -> some View {
-        if sidebarURL.absoluteString.contains(".view") {
-            switch sidebarURL.absoluteString {
-            case let str where str.contains("Chat"):
-                ChatView(browserState: browserState)
-                
-            case let str where str.contains("Bookmark"):
-                BookmarksView(showAddBookmark: $falseBinding)
-                
-            case let str where str.contains("Settings"):
-                SettingsView(activeProfile: bProfile)
-                    .frame(maxWidth: .infinity)
-                
-            case let str where str.contains("Password"):
-                PasswordsView()
-                
-            case let str where str.contains("Note"):
-                NoteView(tabID: tabID, browserState: browserState)
-                
-            case let str where str.contains("History"):
-                HistoryView(profile: bProfile)
-                
-            case let str where str.contains("Download"):
-                DownloadsView(profile: bProfile)
-                
-            case let str where str.contains("Extension"):
-                ExtensionsView()
-                
-            case let str where str.contains("ContentBlocker"):
-                ContentBlockerView()
-                
-            case let str where str.contains("Map"):
-                MapView(browserState: browserState)
-                
-            case let str where str.contains("RSS"):
-                RSSView()
-                
-            case let str where str.contains("Calendar"):
-                CalendarSidebarView()
-                
-            case let str where str.contains("Email"):
-                EmailView(profile: bProfile)
-                
-            case let str where str.contains("Weather"):
-                WeatherSidebarView()
-                
-            case let str where str.contains("Inventory"):
-                InventorySidebar()
-                
-            case let str where str.contains("WebData"):
-                WebDataView(profile: bProfile)
-
-            default:
-                EmptyView()
-            }
+        if let name = builtInViewName(for: sidebarURL) {
+            builtInView(named: name)
         } else {
             WebView(sidebarPage)
                 .frame(width: isCompact ? nil : CGFloat(sidebarWidth))
@@ -1289,7 +1296,7 @@ struct ContentView: View {
            let engine = EngineManager.searchByName(String(match.output.engine)) {
             let query = String(match.output.query)
             url = EngineManager.searchURL(for: engine, query: query)
-        } else if trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("extension://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
+        } else if builtInViewName(for: URL(string: trimmed)) != nil || trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("extension://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
             url = URL(string: trimmed)
         } else if trimmed.hasPrefix("/") {
             // Bare POSIX path (e.g. /Users/foo/bar/index.html) — load as file://

@@ -509,6 +509,26 @@ let Settings: [Setting] = {
             defaultValueBool: false
         ),
         Setting(
+            name:"Manage Permissions",
+            icon:"lock.shield",
+            category: catPrivacy,
+            type:"button",
+            appStorageKey:"",
+            action: {
+                createNewTab(with: URL(string:"balance://permissions"))
+            }
+        ),
+        Setting(
+            name:"Manage Web Data",
+            icon:"internaldrive",
+            category: catPrivacy,
+            type:"button",
+            appStorageKey:"",
+            action: {
+                createNewTab(with: URL(string:"balance://data"))
+            }
+        ),
+        Setting(
             name: "App Store",
             icon: "app.badge",
             category: catLearnMore,

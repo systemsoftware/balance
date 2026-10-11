@@ -17,10 +17,10 @@ let commonDataTypes: [String] = [
     WKWebsiteDataTypeFileSystem // iOS 17.0+
 ]
 
-// MARK: - 3. History View
 struct WebDataView: View {
     
     @State private var items: [WKWebsiteDataRecord] = []
+    @ObservedObject private var forgetManager = ForgetManager.shared
         
     @State private var searchText: String = ""
     let profile: String
@@ -64,7 +64,7 @@ struct WebDataView: View {
                 Text("Website Data")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
-                Button("Delete All") {
+                Button("Bulk Delete...") {
                     confirmDeleteAll.toggle()
                 }
                 .buttonStyle(.plain)
@@ -188,7 +188,7 @@ struct WebDataView: View {
                     confirmDeleteAll = false
                     confirmDeleteEverything = true
                 } label: {
-                    Text("Delete Everything")
+                    Text("Delete Everything...")
                         .frame(maxWidth: .infinity)
                 }
                 .foregroundStyle(.red)
@@ -205,6 +205,7 @@ struct WebDataView: View {
             .presentationSizing(.fitted)
         }
         .onAppear {
+            forgetManager.load()
             Task { await loadData() }
         }
     }
@@ -364,8 +365,6 @@ struct WebDataRow: View {
     @Environment(\.modelContext) private var modelContext
     @ObservedObject private var forgetManager = ForgetManager.shared
 
-    @State var isForgotten = false
-
     @State var showPopover = false
 
     var profile: String
@@ -396,7 +395,6 @@ struct WebDataRow: View {
                 Spacer()
 
                 Button {
-         //           forgetManager.load()
                     showPopover.toggle()
                 } label: {
                     Text("Manage")
@@ -411,15 +409,22 @@ struct WebDataRow: View {
                 Text("Manage data for \(item.displayName)")
                     .font(.headline)
 
-                Toggle(isOn: $isForgotten) {
-                    Text("Forget on Close")
-                }
-                .onChange(of: isForgotten) { _, newValue in
-                    if newValue {
-                        forgetManager.add(item.displayName, profile:profile)
-                    } else {
-                        _ = forgetManager.remove(site: item.displayName.lowercased(), profile: profile)
+                Toggle(isOn: Binding(
+                    get: {
+                        forgetManager.list.contains {
+                            $0.site.caseInsensitiveCompare(item.displayName) == .orderedSame
+                                && $0.profile == profile
+                        }
+                    },
+                    set: { isForgotten in
+                        if isForgotten {
+                            forgetManager.add(item.displayName, profile: profile)
+                        } else {
+                            _ = forgetManager.remove(site: item.displayName, profile: profile)
+                        }
                     }
+                )) {
+                    Text("Forget on Close")
                 }
 
                 ForEach(Array(item.dataTypes).sorted(), id: \.self) { type in
@@ -462,12 +467,6 @@ struct WebDataRow: View {
         .buttonStyle(.plain)
         .background(Color.platformWindowBackground.opacity(0.5))
         .cornerRadius(12)
-        .task {
-            forgetManager.load()
-            isForgotten = forgetManager.list.contains(where: {
-                $0.site.caseInsensitiveCompare(item.displayName) == .orderedSame && $0.profile == profile
-            })
-        }
         .overlay(
             RoundedRectangle(cornerRadius: 12)
                 .stroke(Color.primary.opacity(0.05), lineWidth: 1)

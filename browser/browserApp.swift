@@ -22,6 +22,11 @@ func handleDeepLink(_ url: URL) {
 
     guard scheme == "balance" || scheme == "balance-focus" else { return }
 
+    if scheme == "balance", url.host?.lowercased() == "settings", url.path.isEmpty {
+        createNewTab(with: URL(string: "balance://settings"))
+        return
+    }
+
     let isFocus = scheme == "balance-focus"
 
     guard let host = url.host else {

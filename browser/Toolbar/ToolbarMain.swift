@@ -230,7 +230,7 @@ struct BrowserToolbar: View {
                         Button {
                             showEdit = true
                         } label: {
-                            Text("Customize Toolbar")
+                            Text("Customize Toolbar...")
                         }
                     }
                     
