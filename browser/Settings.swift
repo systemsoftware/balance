@@ -514,6 +514,7 @@ let Settings: [Setting] = {
             category: catPrivacy,
             type:"button",
             appStorageKey:"",
+            buttonText: "Open",
             action: {
                 createNewTab(with: URL(string:"balance://permissions"))
             }
@@ -524,6 +525,7 @@ let Settings: [Setting] = {
             category: catPrivacy,
             type:"button",
             appStorageKey:"",
+            buttonText: "Open",
             action: {
                 createNewTab(with: URL(string:"balance://data"))
             }
@@ -605,7 +607,7 @@ let Settings: [Setting] = {
     #if os(macOS)
     s.append(
         Setting(
-            name: "Developer Tools",
+            name: "Developer Mode",
             icon: "chevron.left.forwardslash.chevron.right",
             category: catAdvanced,
             type: "toggle",
@@ -1263,6 +1265,7 @@ struct SettingsSectionContent: View {
                         category: catProfiles,
                         type:"button",
                         appStorageKey:"",
+                        buttonText: "New",
                         action: {
                             newProfile.toggle()
                         }

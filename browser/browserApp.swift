@@ -617,21 +617,18 @@ extension FocusedValues {
 }
 
 struct BrowserCommands: Commands {
-    @FocusedValue(\.dispatchBrowserCommand) var dispatch
-    
     var body: some Commands {
         CommandMenu("Browser") {
-            MenuContent(section: .browser, dispatch: dispatch)
+            MenuContent(section: .browser)
         }
         CommandMenu("Page") {
-            MenuContent(section: .page, dispatch: dispatch)
+            MenuContent(section: .page)
         }
     }
 }
 
 struct MenuContent: View {
     let section: MenuBarSection
-    let dispatch: ((BrowserCommand) -> Void)?
     
     var body: some View {
         let commands = BrowserCommand.allCases.filter { $0.section == section }
@@ -641,14 +638,14 @@ struct MenuContent: View {
             if let group = itemOrGroup as? MenuGroup {
                 Menu(group.name) {
                     ForEach(group.commands, id: \.self) { cmd in
-                        CommandButton(command: cmd, dispatch: dispatch)
+                        CommandButton(command: cmd)
                     }
                 }
                 if group.requiresDividerAfter {
                     Divider()
                 }
             } else if let item = itemOrGroup as? MenuItem {
-                CommandButton(command: item.command, dispatch: dispatch)
+                CommandButton(command: item.command)
                 if item.command.requiresDividerAfter {
                     Divider()
                 }
@@ -658,21 +655,17 @@ struct MenuContent: View {
 }
 
 struct CommandButton: View {
+    @ObservedObject private var windowManager = WindowManager.shared
     let command: BrowserCommand
-    let dispatch: ((BrowserCommand) -> Void)?
     
     var body: some View {
         Button(command.title) {
-            if let dispatch = dispatch {
-                dispatch(command)
-            } else if command == .closeTab {
-                #if canImport(AppKit)
-                NSApp.keyWindow?.performClose(nil)
-                #endif
-            }
+            #if canImport(AppKit)
+            windowManager.dispatchToTopWindow(command)
+            #endif
         }
         .keyboardShortcut(command.shortcut)
-        .disabled(dispatch == nil && command != .closeTab)
+        .disabled(!windowManager.hasTopWindowCommandDispatcher)
     }
 }
 

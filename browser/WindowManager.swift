@@ -90,6 +90,61 @@ final class WindowManager: ObservableObject {
     private var queuedWindowIDs: [String] = []
     private var didRestoreSavedSession = false
     private var pendingTabCleanup: [String: BrowserTabModel] = [:]
+    #if canImport(AppKit)
+    private final class WeakWindow {
+        weak var value: NSWindow?
+        init(_ value: NSWindow) { self.value = value }
+    }
+    private var nativeWindows: [String: WeakWindow] = [:]
+    private var commandDispatchers: [String: (BrowserCommand) -> Void] = [:]
+
+    func registerWindow(_ window: NSWindow, for id: String) {
+        nativeWindows[id] = WeakWindow(window)
+        refreshMenuCommands()
+    }
+
+    func registerCommandDispatcher(_ dispatch: @escaping (BrowserCommand) -> Void, for tabID: String) {
+        commandDispatchers[tabID] = dispatch
+        refreshMenuCommands()
+    }
+
+    func unregisterCommandDispatcher(for tabID: String) {
+        commandDispatchers.removeValue(forKey: tabID)
+        refreshMenuCommands()
+    }
+
+    private func refreshMenuCommands() {
+        // These registrations happen during SwiftUI view lifecycle callbacks.
+        // Publish on the next turn so Commands re-evaluates its enabled state.
+        DispatchQueue.main.async { [weak self] in
+            self?.objectWillChange.send()
+        }
+    }
+
+    var topBrowserWindowID: String? {
+        for nativeWindow in NSApp.orderedWindows where nativeWindow.isVisible {
+            if let id = nativeWindows.first(where: { $0.value.value === nativeWindow })?.key,
+               browserWindows.contains(where: { $0.id == id }) {
+                return id
+            }
+        }
+        return nil
+    }
+
+    func dispatchToTopWindow(_ command: BrowserCommand) {
+        guard let id = topBrowserWindowID,
+              let tabID = window(for: id)?.activeTab?.id else { return }
+        commandDispatchers[tabID]?(command)
+    }
+
+    var hasTopWindowCommandDispatcher: Bool {
+        guard let id = topBrowserWindowID,
+              let tabID = window(for: id)?.activeTab?.id else { return false }
+        return commandDispatchers[tabID] != nil
+    }
+    #else
+    var hasTopWindowCommandDispatcher: Bool { false }
+    #endif
 
     var initialWindowID: String {
         ensureInitialWindow()
@@ -314,6 +369,18 @@ final class WindowManager: ObservableObject {
     func closeWindow(_ windowID: String) {
         guard let index = browserWindows.firstIndex(where: { $0.id == windowID }) else { return }
         let wasActiveWindow = activeWindowID == windowID
+        #if canImport(AppKit)
+        let shouldPromoteWindow = wasActiveWindow || nativeWindows[windowID]?.value?.isKeyWindow == true
+        let nextWindowID = NSApp.orderedWindows
+            .filter { $0.isVisible && $0 !== nativeWindows[windowID]?.value }
+            .compactMap { candidate in
+                nativeWindows.first(where: { $0.value.value === candidate })?.key
+            }
+            .first { id in browserWindows.contains(where: { $0.id == id && id != windowID }) }
+        nativeWindows.removeValue(forKey: windowID)
+        #else
+        let shouldPromoteWindow = wasActiveWindow
+        #endif
         PlatformApplication.dismissKeyboard()
         let window = browserWindows.remove(at: index)
         for tab in window.tabs {
@@ -330,8 +397,12 @@ final class WindowManager: ObservableObject {
             // We do not recreate a window here automatically because this prevents the app
             // from quitting when the last window closes.
             activeWindowID = nil
-        } else if wasActiveWindow {
+        } else if shouldPromoteWindow {
+            #if canImport(AppKit)
+            activeWindowID = nextWindowID ?? browserWindows.first?.id
+            #else
             activeWindowID = browserWindows.first?.id
+            #endif
         }
         syncExtensionActiveTab()
 
@@ -340,14 +411,14 @@ final class WindowManager: ObservableObject {
         // `willClose` returns. Its focused values then disappear, disabling the
         // menu commands, while new tabs continue targeting that stale scene.
         // Promote the surviving browser window after AppKit finishes closing.
-        if wasActiveWindow, let survivingWindowID = activeWindowID {
+        if shouldPromoteWindow, let survivingWindowID = activeWindowID {
             DispatchQueue.main.async { [weak self] in
                 guard let self,
                       self.activeWindowID == survivingWindowID,
                       let survivingWindow = self.browserWindows.first(where: { $0.id == survivingWindowID })
                 else { return }
 
-                self.tabWindow(for: survivingWindow)?.makeKeyAndOrderFront(nil)
+                (self.nativeWindows[survivingWindow.id]?.value ?? self.tabWindow(for: survivingWindow))?.makeKeyAndOrderFront(nil)
             }
         }
         #endif
@@ -450,6 +521,9 @@ final class WindowManager: ObservableObject {
     #endif
 
     private func scheduleCleanup(for tab: BrowserTabModel) {
+        #if canImport(AppKit)
+        commandDispatchers.removeValue(forKey: tab.id)
+        #endif
         pendingTabCleanup[tab.id] = tab
 
         // onDisappear normally drives teardown. Keep a fallback for tabs whose
@@ -478,7 +552,6 @@ final class WindowManager: ObservableObject {
 struct BrowserWindowHost: View {
     @Environment(\.openWindow) private var openWindow
     @Environment(\.dismiss) private var dismiss
-    @Environment(\.scenePhase) private var scenePhase
     @EnvironmentObject private var windowManager: WindowManager
     let windowID: String
 
@@ -495,24 +568,19 @@ struct BrowserWindowHost: View {
             }
         }
             .background(
-                WindowCloseObserver {
-                    windowManager.closeWindow(windowID)
-                }
+                WindowCloseObserver(windowID: windowID, windowManager: windowManager)
             )
             .onAppear {
                 windowManager.registerOpenWindow { id in
                     openWindow(value: id)
                 }
-                windowManager.activeWindowID = windowID
+                if windowManager.activeWindowID == nil {
+                    windowManager.activeWindowID = windowID
+                }
             }
             .onChange(of: windowManager.browserWindows.contains(where: { $0.id == windowID })) { _, exists in
                 if !exists {
                     dismiss()
-                }
-            }
-            .onChange(of: scenePhase) { _, newState in
-                if newState == .active {
-                    windowManager.activeWindowID = windowID
                 }
             }
     }
@@ -521,49 +589,65 @@ struct BrowserWindowHost: View {
 
 #if canImport(AppKit)
 private struct WindowCloseObserver: NSViewRepresentable {
-    let onClose: () -> Void
+    let windowID: String
+    let windowManager: WindowManager
 
     func makeCoordinator() -> Coordinator {
-        Coordinator(onClose: onClose)
+        Coordinator(windowID: windowID, windowManager: windowManager)
     }
 
     func makeNSView(context: Context) -> NSView {
-        let view = NSView(frame: .zero)
-        context.coordinator.attach(to: view)
+        let view = ObservingView(frame: .zero)
+        view.onWindowChange = { [weak coordinator = context.coordinator] window in
+            coordinator?.attach(to: window)
+        }
         return view
     }
 
     func updateNSView(_ nsView: NSView, context: Context) {
-        context.coordinator.onClose = onClose
-        context.coordinator.attach(to: nsView)
+        context.coordinator.attach(to: nsView.window)
     }
 
     static func dismantleNSView(_ nsView: NSView, coordinator: Coordinator) {
         coordinator.stopObserving()
     }
 
+    final class ObservingView: NSView {
+        var onWindowChange: ((NSWindow?) -> Void)?
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            onWindowChange?(window)
+        }
+    }
+
     final class Coordinator {
-        var onClose: () -> Void
+        let windowID: String
+        let windowManager: WindowManager
         private weak var observedWindow: NSWindow?
         private var closeObserver: NSObjectProtocol?
+        private var keyObserver: NSObjectProtocol?
 
-        init(onClose: @escaping () -> Void) {
-            self.onClose = onClose
+        init(windowID: String, windowManager: WindowManager) {
+            self.windowID = windowID
+            self.windowManager = windowManager
         }
 
-        func attach(to view: NSView) {
-            DispatchQueue.main.async { [weak self, weak view] in
-                guard let self, let window = view?.window,
-                      window !== self.observedWindow else { return }
-                self.stopObserving()
-                self.observedWindow = window
-                self.closeObserver = NotificationCenter.default.addObserver(
-                    forName: NSWindow.willCloseNotification,
-                    object: window,
-                    queue: .main
-                ) { [weak self] _ in
-                    self?.onClose()
-                }
+        func attach(to window: NSWindow?) {
+            guard let window, window !== observedWindow else { return }
+            stopObserving()
+            observedWindow = window
+            windowManager.registerWindow(window, for: windowID)
+            closeObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.willCloseNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.windowManager.closeWindow(self.windowID)
+            }
+            keyObserver = NotificationCenter.default.addObserver(
+                forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main
+            ) { [weak self] _ in
+                guard let self else { return }
+                self.windowManager.activeWindowID = self.windowID
             }
         }
 
@@ -571,7 +655,11 @@ private struct WindowCloseObserver: NSViewRepresentable {
             if let closeObserver {
                 NotificationCenter.default.removeObserver(closeObserver)
             }
+            if let keyObserver {
+                NotificationCenter.default.removeObserver(keyObserver)
+            }
             closeObserver = nil
+            keyObserver = nil
             observedWindow = nil
         }
 
@@ -582,7 +670,8 @@ private struct WindowCloseObserver: NSViewRepresentable {
 }
 #else
 private struct WindowCloseObserver: View {
-    let onClose: () -> Void
+    let windowID: String
+    let windowManager: WindowManager
     var body: some View { Color.clear }
 }
 #endif

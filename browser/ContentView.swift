@@ -818,6 +818,9 @@ struct ContentView: View {
             }
         }
         .onAppear {
+            #if canImport(AppKit)
+            windowManager.registerCommandDispatcher(handleBrowserCommand, for: tabID)
+            #endif
             updateTabState()
             if windowManager.isActiveTab(tabID), enableHandoff, let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
                 if currentUserActivity == nil {
@@ -839,6 +842,11 @@ struct ContentView: View {
         .onChange(of: splitState.scrollX) { _, _ in updateTabState() }
         .onChange(of: splitState.scrollY) { _, _ in updateTabState() }
         .focusedSceneValue(\.dispatchBrowserCommand, commandDispatcher)
+        .onDisappear {
+            #if canImport(AppKit)
+            windowManager.unregisterCommandDispatcher(for: tabID)
+            #endif
+        }
         .applyVerticalToolbarGating()
     }
 
