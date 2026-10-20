@@ -90,6 +90,7 @@ final class WindowManager: ObservableObject {
     private var queuedWindowIDs: [String] = []
     private var didRestoreSavedSession = false
     private var pendingTabCleanup: [String: BrowserTabModel] = [:]
+    private let initialSceneID = UUID().uuidString
     #if canImport(AppKit)
     private final class WeakWindow {
         weak var value: NSWindow?
@@ -147,27 +148,9 @@ final class WindowManager: ObservableObject {
     #endif
 
     var initialWindowID: String {
-        ensureInitialWindow()
-    }
-
-    @discardableResult
-    func ensureInitialWindow() -> String {
-        if let first = browserWindows.first {
-            return first.id
-        }
-
-        if let session = SessionManager.shared.getSessionState(), !didRestoreSavedSession {
-            restoreSession(session, openAdditionalWindows: false)
-            if let first = browserWindows.first {
-                return first.id
-            }
-        }
-
-        let tab = BrowserTabModel(spaceIndex: currentSpaceIndex)
-        let window = BrowserWindowModel(tabs: [tab])
-        browserWindows = [window]
-        activeWindowID = window.id
-        return window.id
+        // SwiftUI evaluates WindowGroup.defaultValue while building the scene.
+        // Creating a published window model here would publish during that update.
+        browserWindows.first?.id ?? SessionManager.shared.getSessionState()?.windows.first?.windowID ?? initialSceneID
     }
 
     func registerOpenWindow(_ action: @escaping (String) -> Void) {
@@ -195,7 +178,7 @@ final class WindowManager: ObservableObject {
             self.currentSpaceIndex = min(max(session.currentSpaceIndex ?? 0, 0), names.count - 1)
         }
 
-        let restoredWindows = session.windows.compactMap { windowState -> BrowserWindowModel? in
+        let restoredWindows = session.windows.enumerated().compactMap { windowIndex, windowState -> BrowserWindowModel? in
             let tabs = windowState.tabs.enumerated().map { index, tabState in
                 let tabID = tabState.tabID ?? UUID().uuidString
                 SessionManager.shared.restoredIDs.append(tabID)
@@ -211,7 +194,7 @@ final class WindowManager: ObservableObject {
             guard !tabs.isEmpty else { return nil }
             let activeIndex = min(max(windowState.activeTabIndex, 0), tabs.count - 1)
             return BrowserWindowModel(
-                id: windowState.windowID ?? UUID().uuidString,
+                id: windowState.windowID ?? (windowIndex == 0 ? initialSceneID : UUID().uuidString),
                 tabs: tabs,
                 activeTabID: tabs[activeIndex].id,
                 frameString: windowState.frameString
@@ -252,7 +235,7 @@ final class WindowManager: ObservableObject {
     func createTab(initialURL: URL? = nil, inBackground: Bool = false, providedState: BrowserState? = nil) -> String {
         // The app deliberately stays running after its last window closes. In
         // that state a new tab must also create and present a window; merely
-        // calling ensureInitialWindow() would leave the new tab in an invisible
+        // creating an unpresented model would leave the new tab in an invisible
         // window model and make the command appear to have hung.
         guard let windowID = activeWindowID,
               let window = browserWindows.first(where: { $0.id == windowID }) else {
@@ -647,7 +630,11 @@ private struct WindowCloseObserver: NSViewRepresentable {
                 forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main
             ) { [weak self] _ in
                 guard let self else { return }
-                self.windowManager.activeWindowID = self.windowID
+                DispatchQueue.main.async { [weak self, weak window] in
+                    guard let self, let window, window.isKeyWindow,
+                          self.windowManager.window(for: self.windowID) != nil else { return }
+                    self.windowManager.activeWindowID = self.windowID
+                }
             }
         }
 
