@@ -1,5 +1,6 @@
 import SwiftUI
 internal import UniformTypeIdentifiers
+import WebKit
 
 enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
     case clock
@@ -178,6 +179,8 @@ struct BrowserToolbar: View {
     @AppStorage("showToolbarDragHandle") private var showDrag = false
     @AppStorage("toolbarLocation") private var toolbarLocation = 0
     @AppStorage("tabMode", store: Config.sharedDefaults) private var tabMode = 0
+    
+    @EnvironmentObject var windowManager: WindowManager
 
     private var hasCompactHeight: Bool { verticalSizeClass == .compact }
     
@@ -227,6 +230,27 @@ struct BrowserToolbar: View {
                         )
                     )
                     .contextMenu {
+                        
+                        Button("Reload") {
+                            browserState.webView?.reload()
+                        }
+                        
+                        Divider()
+                        
+                        Button("Copy URL") {
+                            if let url = browserState.webView?.url {
+                                PlatformApplication.copy(url.absoluteString)
+                            }
+                        }
+                        
+                        Divider()
+                        
+                        Button("Close Other Tabs") {
+                            windowManager.closeOtherTabs(except: browserState.tabID)
+                        }
+                        
+                        Divider()
+                        
                         Button {
                             showEdit = true
                         } label: {

@@ -115,8 +115,6 @@ final class WindowManager: ObservableObject {
     }
 
     private func refreshMenuCommands() {
-        // These registrations happen during SwiftUI view lifecycle callbacks.
-        // Publish on the next turn so Commands re-evaluates its enabled state.
         DispatchQueue.main.async { [weak self] in
             self?.objectWillChange.send()
         }
@@ -148,9 +146,7 @@ final class WindowManager: ObservableObject {
     #endif
 
     var initialWindowID: String {
-        // SwiftUI evaluates WindowGroup.defaultValue while building the scene.
-        // Creating a published window model here would publish during that update.
-        browserWindows.first?.id ?? SessionManager.shared.getSessionState()?.windows.first?.windowID ?? initialSceneID
+         browserWindows.first?.id ?? SessionManager.shared.getSessionState()?.windows.first?.windowID ?? initialSceneID
     }
 
     func registerOpenWindow(_ action: @escaping (String) -> Void) {
@@ -298,14 +294,10 @@ final class WindowManager: ObservableObject {
         let window = browserWindows[windowIndex]
         guard let tabIndex = window.tabs.firstIndex(where: { $0.id == tabID }) else { return }
 
-        // Resign any address/search/sidebar field while its full view hierarchy
-        // still exists. AppKit can then repair the key-view loop before SwiftUI
-        // removes the active tab's hosting views.
         if window.activeTabID == tabID {
             PlatformApplication.dismissKeyboard()
         }
 
-        // Determine next active tab BEFORE removing the current one to prevent SwiftUI from rendering a gray window
         if window.activeTabID == tabID && window.tabs.count > 1 {
             let nextActiveIndex = (tabIndex == window.tabs.count - 1) ? tabIndex - 1 : tabIndex + 1
             window.activeTabID = window.tabs[nextActiveIndex].id
@@ -332,6 +324,15 @@ final class WindowManager: ObservableObject {
         objectWillChange.send()
     }
 
+    func closeOtherTabs(except tabID: String) {
+        guard let windowIndex = browserWindows.firstIndex(where: { $0.tabs.contains(where: { $0.id == tabID }) }) else { return }
+        let window = browserWindows[windowIndex]
+        let otherTabIDs = window.tabs.map(\.id).filter { $0 != tabID }
+        for otherTabID in otherTabIDs {
+            closeTab(otherTabID)
+        }
+    }
+    
     func moveTab(_ fromTabID: String, toTabID targetTabID: String) {
         guard fromTabID != targetTabID else { return }
         guard let windowIndex = browserWindows.firstIndex(where: { $0.tabs.contains(where: { $0.id == fromTabID }) }) else { return }

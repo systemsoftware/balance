@@ -792,6 +792,12 @@ private struct TabRow: View {
             Button(state.isSleeping ? "Wake Tab" : "Sleep Tab") {
                 state.isSleeping.toggle()
             }
+            
+            Divider()
+            
+            Button("Reload") {
+                state.webView?.reload()
+            }
 
             if tabMode == 1 || tabMode == 2 {
                 if pinStore.items.first(where: { $0.url == state.url?.absoluteString }) == nil {
@@ -818,18 +824,17 @@ private struct TabRow: View {
             
             Divider()
             
-            Button("Close") {
-                windowManager.closeTab(state.tabID)
-            }
-            
-            Divider()
-            
             Menu("Move to Space") {
-                ForEach(Array(windowManager.spaceNames.enumerated()), id: \.offset) { index, spaceName in
-                    if index != state.spaceIndex {
-                        Button(spaceName) {
-                            withAnimation {
-                                state.spaceIndex = index
+                if windowManager.spaceNames.count <= 1 {
+                    Text("No other spaces available")
+                        .disabled(true)
+                } else {
+                    ForEach(Array(windowManager.spaceNames.enumerated()), id: \.offset) { index, spaceName in
+                        if index != state.spaceIndex {
+                            Button(spaceName) {
+                                withAnimation {
+                                    state.spaceIndex = index
+                                }
                             }
                         }
                     }
@@ -840,6 +845,28 @@ private struct TabRow: View {
             
             Button("Trail") {
                 showTrail.toggle()
+            }
+            
+            Divider()
+            
+            Menu("Duplicate") {
+                Button("In This Window") {
+                    createNewTab(with: state.url)
+                }
+                
+                Button("In New Window") {
+                    createNewWindow(with: state.url)
+                }
+            }
+            
+            Divider()
+            
+            Button("Close") {
+                windowManager.closeTab(state.tabID)
+            }
+            
+            Button("Close Other Tabs") {
+                windowManager.closeOtherTabs(except: state.tabID)
             }
         }
     }
