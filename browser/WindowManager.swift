@@ -631,7 +631,7 @@ private struct WindowCloseObserver: NSViewRepresentable {
                 forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main
             ) { [weak self] _ in
                 guard let self else { return }
-                DispatchQueue.main.async { [weak self, weak window] in
+                DispatchQueue.main.async { [weak self, weak window = window] in
                     guard let self, let window, window.isKeyWindow,
                           self.windowManager.window(for: self.windowID) != nil else { return }
                     self.windowManager.activeWindowID = self.windowID

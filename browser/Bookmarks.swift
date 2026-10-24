@@ -51,6 +51,12 @@ struct BookmarkRow: View {
                 Spacer()
                 
                 if isSettings {
+                    Button(action: onEdit) {
+                        Image(systemName: "pencil")
+                    }
+                    .foregroundStyle(.secondary)
+                    .buttonStyle(.plain)
+                    
                     Button(action: onDelete) {
                         Image(systemName: "trash")
                             .foregroundStyle(.red)

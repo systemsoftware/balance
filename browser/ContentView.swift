@@ -43,6 +43,7 @@ let builtInSidebar = [
     SidebarItem(icon: "bag", view: "InventoryView"),
     SidebarItem(icon: "internaldrive", view: "DataView"),
     SidebarItem(icon: "translate", view:"TranslateView"),
+    SidebarItem(icon:"list.star", view: "ListView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -821,6 +822,7 @@ struct ContentView: View {
             #if canImport(AppKit)
             windowManager.registerCommandDispatcher(handleBrowserCommand, for: tabID)
             #endif
+            updateBuiltInTabTitle(for: location)
             updateTabState()
             if windowManager.isActiveTab(tabID), enableHandoff, let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
                 if currentUserActivity == nil {
@@ -830,7 +832,10 @@ struct ContentView: View {
                 currentUserActivity?.becomeCurrent()
             }
         }
-        .onChange(of: location) { _, _ in updateTabState() }
+        .onChange(of: location) { _, newURL in
+            updateBuiltInTabTitle(for: newURL)
+            updateTabState()
+        }
         .onChange(of: splitURL) { _, newValue in
             splitState.navigate(to: newValue.isEmpty ? nil : URL(string: newValue))
             updateTabState()
@@ -1198,6 +1203,19 @@ struct ContentView: View {
         }
     }
 
+    private func updateBuiltInTabTitle(for url: URL?) {
+        guard browserState.customTitle == nil,
+              let name = builtInViewName(for: url) else { return }
+
+        let viewName = name == "WebPermissionsView" ? "Permissions" : name
+        let rawTitle = viewName.replacingOccurrences(of: "View", with: "")
+        browserState.title = rawTitle.replacingOccurrences(
+            of: "([a-z])([A-Z])",
+            with: "$1 $2",
+            options: .regularExpression
+        )
+    }
+
     @ViewBuilder
     private func builtInView(named name: String, standalone: Bool = false) -> some View {
         switch name {
@@ -1212,7 +1230,7 @@ struct ContentView: View {
         case "DownloadsView": DownloadsView(profile: bProfile)
         case "ExtensionsView": ExtensionsView()
         case "ContentBlockersView": ContentBlockerView()
-        case "MapView": MapView(browserState: browserState)
+        case "MapView": MapView(browserState: browserState)                                    .clipShape(RoundedRectangle(cornerRadius: Layout.cornerRadius))
         case "RSSView": RSSView()
         case "CalendarView": CalendarSidebarView()
         case "WeatherView": WeatherSidebarView()
@@ -1220,6 +1238,7 @@ struct ContentView: View {
         case "DataView": WebDataView(profile: bProfile)
         case "WebPermissionsView": WebPermissionsView(profile: bProfile)
         case "TranslateView": TranslatePageView()
+        case "ListView": SidebarListView(sidebarURL: $sidebarURL)
         default: EmptyView()
         }
     }
@@ -1307,7 +1326,6 @@ struct ContentView: View {
         } else if builtInViewName(for: URL(string: trimmed)) != nil || trimmed.hasPrefix("http://") || trimmed.hasPrefix("https://") || trimmed.hasPrefix("extension://") || trimmed.hasPrefix("webkit-extension://") || trimmed.hasPrefix("chrome-extension://") || trimmed.hasPrefix("file://") {
             url = URL(string: trimmed)
         } else if trimmed.hasPrefix("/") {
-            // Bare POSIX path (e.g. /Users/foo/bar/index.html) — load as file://
             url = URL(fileURLWithPath: trimmed)
         } else if trimmed.contains(".") && !trimmed.contains(" ") {
             url = URL(string: "https://\(trimmed)")
@@ -1516,7 +1534,7 @@ struct ContentView: View {
         
 
         let opts = GenerationOptions(
-            sampling: .greedy,
+            samplingMode: .greedy,
             temperature: 0.0
         )
         

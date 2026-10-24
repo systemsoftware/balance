@@ -635,22 +635,7 @@ struct BrowserHomepage: View {
                 .ignoresSafeArea()
             
             ScrollView {
-                
-                #if os(iOS)
-                HStack {
-                    Text("Hello, iOS user! This browser was originally designed for macOS, so some features may not work as expected on iOS.")
-                        .font(.system(size: 13))
-                        .foregroundColor(.secondary)
-                    Button("If you find any issues, please, report an issue on GitHub") {
-                        createNewTab(with: URL(string:"https://github.com/systemsoftware/balance/issues"))
-                    }
-                    .underline()
-                }
-                    .font(.system(size: 13))
-                    .foregroundColor(.secondary)
-                    
-                #endif
-                
+          
                 VStack(spacing: 50) {
                     
                     if showClock {
