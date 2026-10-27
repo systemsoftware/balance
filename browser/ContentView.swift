@@ -137,7 +137,7 @@ struct ContentView: View {
     private var userAgent = DEFAULT_USER_AGENT
     
     @AppStorage("homepage", store: Config.sharedDefaults)
-    private var homepage: String = "default-home"
+    private var homepage: String = "balance://home"
     
     // 0: hidden, 1: only new tab, 2: always
     @AppStorage("bookmarkBar", store: Config.sharedDefaults)
@@ -219,7 +219,7 @@ struct ContentView: View {
             return true
 
         case .newTabOnly:
-            return location == URL(string: homepage != "default-home" ? homepage : "")
+            return location == URL(string: homepage != "default-home" && homepage != "balance://home" ? homepage : "")
         }
     }
     
@@ -255,7 +255,8 @@ struct ContentView: View {
         let latestState = TabRegistry.shared.states[tabID] ?? restoredState
         self.restoredState = latestState
         
-        let initURLString = providedState?.url?.absoluteString ?? latestState?.url ?? initialURL?.absoluteString
+        let storedURLString = providedState?.url?.absoluteString ?? latestState?.url ?? initialURL?.absoluteString
+        let initURLString = ["default-home", "balance://home"].contains(storedURLString ?? "") ? nil : storedURLString
         if(initURLString != nil) { self.initialURLString = initURLString } else { print("nil initial url") }
 
         // For file:// URLs, preserve the original URL object so sandbox access
@@ -468,6 +469,14 @@ struct ContentView: View {
                                     .clipShape(RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius))
                                     .onChange(of: browserState.url) { oldValue, newValue in
                                         handleURLChange(from: oldValue, to: newValue)
+                                    }
+                                    .onChange(of: browserState.hidesHomepageURL) { _, hidden in
+                                        if hidden {
+                                            urlInput = ""
+                                        } else if let url = browserState.url {
+                                            urlInput = url.absoluteString
+                                        }
+                                        updateTabState()
                                     }
                                     .onChange(of: browserState.title) { _, newTitle in
                                         handleTitleChange(to: newTitle)
@@ -759,17 +768,23 @@ struct ContentView: View {
               shouldAutoFocusAddress = false
             if let initialURLString {
                 print("has initialURLString: \(initialURLString)")
-                urlInput = initialURLString
+                urlInput = browserState.hidesHomepageURL ? "" : initialURLString
                 if browserState.webView?.url == nil && !browserState.isLoading {
-                    browserState.navigate(to: browserState.url ?? URL(string: initialURLString))
+                    if browserState.hidesHomepageURL,
+                       let url = browserState.url ?? URL(string: initialURLString) {
+                        browserState.navigateToHomepage(url)
+                    } else {
+                        browserState.navigate(to: browserState.url ?? URL(string: initialURLString))
+                    }
                 }
                 return
             }
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.2) {
-                if homepage == "default-home" {
+                if homepage == "default-home" || homepage == "balance://home" {
                     browserState.title = "Home"
                 } else if let url = URL(string: homepage) {
-                    browserState.navigate(to: url)
+                    urlInput = ""
+                    browserState.navigateToHomepage(url)
                 } else {
                     print("Homepage URL was invalid: \(homepage)")
                 }
@@ -1272,6 +1287,7 @@ struct ContentView: View {
         let state = TabSessionState(
             tabID: tabID,
             url: browserState.url?.absoluteString ?? location?.absoluteString,
+            hidesHomepageURL: browserState.hidesHomepageURL,
             splitURL: splitURL.isEmpty ? nil : splitURL,
             sidebarURL: sidebarURL?.absoluteString,
             showSidebar: showSidebar,
@@ -1329,7 +1345,7 @@ struct ContentView: View {
             url = URL(fileURLWithPath: trimmed)
         } else if trimmed.contains(".") && !trimmed.contains(" ") {
             url = URL(string: "https://\(trimmed)")
-        } else if(trimmed == "default-home" || trimmed.count == 0) {
+        } else if(trimmed == "default-home" || trimmed == "balance://home" || trimmed.count == 0) {
             url = nil
         } else if trimmed.hasPrefix("localhost") {
                 url = URL(string: "http://\(trimmed)")
@@ -1591,7 +1607,11 @@ struct ContentView: View {
     private func handleURLChange(from oldValue: URL?, to newValue: URL?) {
         guard let newURL = newValue else { return }
         
-        urlInput = newURL.absoluteString
+        if browserState.hidesHomepageURL {
+            urlInput = ""
+        } else {
+            urlInput = newURL.absoluteString
+        }
         updateTabState()
         
         if !priv, enableHandoff, let scheme = newURL.scheme?.lowercased(), scheme == "http" || scheme == "https" {

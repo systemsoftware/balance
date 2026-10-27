@@ -22,6 +22,12 @@ final class BookmarkStore: ObservableObject {
         }
     }
 
+    deinit {
+        if let cloudObserver {
+            NotificationCenter.default.removeObserver(cloudObserver)
+        }
+    }
+
     private func load() {
         guard
             let data = defaults.data(forKey: storageKey),

@@ -1,10 +1,3 @@
-//
-//  BrowserScripts.swift
-//  Balance
-//
-//  Dedicated JavaScript user scripts injected into WKWebView
-//
-
 import Foundation
 
 enum BrowserScripts {

@@ -211,7 +211,16 @@ let Settings: [Setting] = {
             category: catBrowsing,
             type: "text",
             appStorageKey: "homepage",
-            defaultValueString: "default-home"
+            defaultValueString: "balance://home"
+        ),
+
+        Setting(
+            name: "Expose Bookmarks to Homepage",
+            icon: "house.and.flag",
+            category: catBrowsing,
+            type: "toggle",
+            appStorageKey: "exposeBookmarksToHomepage",
+            defaultValueBool: false
         ),
         Setting(
             name: "Tabs",
@@ -866,7 +875,29 @@ struct ToggleRow: View {
         Toggle("", isOn: $isEnabled)
             .toggleStyle(.switch)
             .labelsHidden()
-            .help(setting.appStorageKey == "syncHistory"
+            .onChange(of: isEnabled) { _, enabled in
+                guard setting.appStorageKey == "exposeBookmarksToHomepage" else { return }
+                guard enabled else {
+                    Config.defaults.removeObject(forKey: "approvedBookmarkHomepage")
+                    return
+                }
+                guard let homepage = Config.defaults.string(forKey: "homepage"),
+                      let url = URL(string: homepage),
+                      url.scheme?.lowercased() == "https", url.host != nil else {
+                    isEnabled = false
+                    return
+                }
+                Config.defaults.set(homepage, forKey: "approvedBookmarkHomepage")
+            }
+            .onAppear {
+                guard setting.appStorageKey == "exposeBookmarksToHomepage", isEnabled else { return }
+                if Config.defaults.string(forKey: "approvedBookmarkHomepage") != Config.defaults.string(forKey: "homepage") {
+                    isEnabled = false
+                }
+            }
+            .help(setting.appStorageKey == "exposeBookmarksToHomepage"
+                  ? "Allow the configured HTTPS homepage to read bookmarks in non-private tabs. Changing the homepage turns this off."
+                  : setting.appStorageKey == "syncHistory"
                   ? "Takes effect after restarting Balance. To remove previously synced history, use Clear All in History."
                   : setting.name.contains("Restart Required")
                     ? "Takes effect after restarting Balance. Existing iCloud data is kept when sync is turned off."
@@ -887,6 +918,11 @@ struct TextFieldRow: View {
     var body: some View {
         TextField("Enter \(setting.name)", text: $textValue)
             .textFieldStyle(.roundedBorder)
+            .onChange(of: textValue) { _, _ in
+                guard setting.appStorageKey == "homepage" else { return }
+                Config.defaults.set(false, forKey: "exposeBookmarksToHomepage")
+                Config.defaults.removeObject(forKey: "approvedBookmarkHomepage")
+            }
     }
 }
 

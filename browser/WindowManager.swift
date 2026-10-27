@@ -2,6 +2,25 @@ import Foundation
 import SwiftUI
 internal import Combine
 
+private func isBuiltInHomepageMarker(_ url: URL) -> Bool {
+    ["default-home", "balance://home"].contains(url.absoluteString)
+}
+
+private func matchesConfiguredHomepage(_ url: URL) -> Bool {
+    guard let homepage = Config.defaults.string(forKey: "homepage").flatMap(URL.init(string:)),
+          let saved = URLComponents(url: url, resolvingAgainstBaseURL: false),
+          let configured = URLComponents(url: homepage, resolvingAgainstBaseURL: false),
+          let scheme = saved.scheme?.lowercased(),
+          ["http", "https"].contains(scheme),
+          scheme == configured.scheme?.lowercased(),
+          saved.host?.lowercased() == configured.host?.lowercased() else { return false }
+
+    let defaultPort = scheme == "https" ? 443 : 80
+    return (saved.port ?? defaultPort) == (configured.port ?? defaultPort)
+        && (saved.path.isEmpty ? "/" : saved.path) == (configured.path.isEmpty ? "/" : configured.path)
+        && saved.query == configured.query
+}
+
 final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
     let id: String
     let initialURL: URL?
@@ -29,8 +48,18 @@ final class BrowserTabModel: ObservableObject, Identifiable, Hashable {
         self.profile = restoredState?.profile ?? profile
         self.profileIcon = profileIcon
         self.restoredState = restoredState
-        let restoredURL = restoredState?.url.flatMap(URL.init(string:))
-        self.browserState = browserState ?? BrowserState(initialURL: restoredURL ?? initialURL)
+        let restoredURL = restoredState?.url.flatMap(URL.init(string:)).flatMap {
+            isBuiltInHomepageMarker($0) ? nil : $0
+        }
+        let startingURL = restoredURL ?? initialURL.flatMap { isBuiltInHomepageMarker($0) ? nil : $0 }
+        self.browserState = browserState ?? BrowserState(initialURL: startingURL)
+        if let currentURL = self.browserState.url, isBuiltInHomepageMarker(currentURL) {
+            self.browserState.url = nil
+        }
+        if let restoredState {
+            self.browserState.hidesHomepageURL = restoredState.hidesHomepageURL
+                ?? (restoredURL.map(matchesConfiguredHomepage) ?? false)
+        }
         self.splitState = BrowserState(initialURL: restoredState?.splitURL.flatMap(URL.init(string:)))
         self.splitState.tabID = id + "_split"
         self.splitState.isPrivateBrowsing = self.isPrivate

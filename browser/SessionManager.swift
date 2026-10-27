@@ -17,6 +17,7 @@ struct WindowSessionState: Codable {
 struct TabSessionState: Codable {
     var tabID: String?
     var url: String?
+    var hidesHomepageURL: Bool?
     var splitURL: String?
     var sidebarURL: String?
     var showSidebar: Bool

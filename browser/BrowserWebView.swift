@@ -71,6 +71,8 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var mimeType: String? = nil
     
     @Published var url: URL?
+    @Published var hidesHomepageURL = false
+    var hasFinishedHiddenHomepageNavigation = false
     @Published private(set) var navigationRevision: UInt = 0
     @Published var title: String = ""
     @Published var customTitle: String? = nil
@@ -401,12 +403,24 @@ extension BrowserState {
     }
 
     func navigate(to url: URL?) {
+        hidesHomepageURL = false
+        hasFinishedHiddenHomepageNavigation = false
+        self.url = url
+        navigationRevision &+= 1
+    }
+
+    func navigateToHomepage(_ url: URL) {
+        hidesHomepageURL = true
+        hasFinishedHiddenHomepageNavigation = false
         self.url = url
         navigationRevision &+= 1
     }
 
     func rebuildWebView(to url: URL) {
         cleanup()
+        if hidesHomepageURL {
+            hasFinishedHiddenHomepageNavigation = false
+        }
         self.url = url
         navigationRevision &+= 1
         webViewIdentity = UUID()
@@ -970,6 +984,8 @@ struct BrowserWebView: PlatformViewRepresentable {
                 userContentController.removeScriptMessageHandler(forName: name)
                 userContentController.add(context.coordinator, name: name)
             }
+            userContentController.removeScriptMessageHandler(forName: "bookmarks", contentWorld: .page)
+            userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "bookmarks")
             for name in Self.internalScriptMessageHandlerNames {
                 userContentController.removeScriptMessageHandler(forName: name, contentWorld: Self.internalContentWorld)
                 userContentController.add(context.coordinator, contentWorld: Self.internalContentWorld, name: name)
@@ -1073,17 +1089,16 @@ struct BrowserWebView: PlatformViewRepresentable {
         for name in Self.pageScriptMessageHandlerNames {
             config.userContentController.add(context.coordinator, name: name)
         }
+        config.userContentController.addScriptMessageHandler(context.coordinator, contentWorld: .page, name: "bookmarks")
         for name in Self.internalScriptMessageHandlerNames {
             config.userContentController.add(context.coordinator, contentWorld: Self.internalContentWorld, name: name)
         }
         
-        // 1. Inject document-start scripts (Notification, Geolocation, Print, Web Share, Permissions)
         if !BrowserScripts.preload.isEmpty {
             let preloadScript = WKUserScript(source: BrowserScripts.preload, injectionTime: .atDocumentStart, forMainFrameOnly: false)
             config.userContentController.addUserScript(preloadScript)
         }
         
-        // Apply site-specific notification permission at document start
         let notificationsSetting = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
         let notifSettingStr = notificationsSetting == .allow ? "granted" : (notificationsSetting == .deny ? "denied" : "default")
         if notifSettingStr != "default" {
@@ -1106,6 +1121,32 @@ struct BrowserWebView: PlatformViewRepresentable {
             config.userContentController.addUserScript(gpcScript)
         }
         
+        if !priv,
+           Config.defaults.bool(forKey: "exposeBookmarksToHomepage"),
+           let homepageString = Config.defaults.string(forKey: "homepage"),
+           Config.defaults.string(forKey: "approvedBookmarkHomepage") == homepageString,
+           let homepageURL = URL(string: homepageString),
+           let scheme = homepageURL.scheme?.lowercased(), scheme == "https",
+           let host = homepageURL.host?.lowercased(),
+           let scriptPath = Bundle.main.url(forResource: "bookmarks", withExtension: "js"),
+           let script = try? String(contentsOf: scriptPath, encoding: .utf8),
+           let originData = try? JSONSerialization.data(withJSONObject: [scheme, host, homepageURL.port ?? (scheme == "https" ? 443 : 80)]),
+           let origin = String(data: originData, encoding: .utf8) {
+            let source = """
+            (() => {
+                const [scheme, host, port] = \(origin);
+                if (location.protocol !== scheme + ':' || location.hostname.toLowerCase() !== host ||
+                    Number(location.port || (scheme === 'https' ? 443 : 80)) !== port) return;
+                \(script)
+            })();
+            """
+            config.userContentController.addUserScript(WKUserScript(
+                source: source,
+                injectionTime: .atDocumentStart,
+                forMainFrameOnly: true
+            ))
+        }
+
         // Chrome Web Store integration: Pass installed extension IDs
         let installedIDs = WebExtensionManager.shared.contexts.compactMap { context -> String? in
             for component in context.baseURL.pathComponents.reversed() {
@@ -1358,7 +1399,7 @@ struct BrowserWebView: PlatformViewRepresentable {
     }
     #endif
 
-    static let scriptMessageHandlerNames = pageScriptMessageHandlerNames + internalScriptMessageHandlerNames
+    static let scriptMessageHandlerNames = pageScriptMessageHandlerNames + internalScriptMessageHandlerNames + ["bookmarks"]
 
     private static func configureContentBlockers(
         on webView: WKWebView,
@@ -1434,7 +1475,7 @@ struct BrowserWebView: PlatformViewRepresentable {
         }
     }
 
-    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, CLLocationManagerDelegate {
+    final class Coordinator: NSObject, WKNavigationDelegate, WKUIDelegate, WKDownloadDelegate, WKScriptMessageHandler, WKScriptMessageHandlerWithReply, CLLocationManagerDelegate {
         
         var observers: [NSKeyValueObservation] = []
         let downloadStore: DownloadStore
@@ -1786,6 +1827,59 @@ struct BrowserWebView: PlatformViewRepresentable {
             }
         }
 
+        func userContentController(_ userContentController: WKUserContentController,
+                                   didReceive message: WKScriptMessage,
+                                   replyHandler: @escaping (Any?, String?) -> Void) {
+            guard message.name == "bookmarks" else {
+                replyHandler(["error": "Unknown message handler"], nil)
+                return
+            }
+            guard !isPrivate,
+                  Config.defaults.bool(forKey: "exposeBookmarksToHomepage"),
+                  message.frameInfo.isMainFrame,
+                  let homepageString = Config.defaults.string(forKey: "homepage"),
+                  Config.defaults.string(forKey: "approvedBookmarkHomepage") == homepageString,
+                  let homepageURL = URL(string: homepageString),
+                  let scheme = homepageURL.scheme?.lowercased(), scheme == "https",
+                  let host = homepageURL.host?.lowercased(),
+                  message.frameInfo.securityOrigin.protocol.lowercased() == scheme,
+                  message.frameInfo.securityOrigin.host.lowercased() == host,
+                  (message.frameInfo.securityOrigin.port == (homepageURL.port ?? 0) ||
+                   (homepageURL.port == nil && message.frameInfo.securityOrigin.port == (scheme == "https" ? 443 : 80))) else {
+                replyHandler(["error": "Bookmarks are unavailable on this page"], nil)
+                return
+            }
+            guard let body = message.body as? [String: Any],
+                  let action = body["action"] as? String else {
+                replyHandler(["error": "Invalid bookmark request"], nil)
+                return
+            }
+
+            let store = BookmarkStore(profile: profile)
+            switch action {
+            case "get":
+                let bookmarks = store.items.map { bookmark in
+                    ["id": bookmark.id.uuidString, "name": bookmark.title, "url": bookmark.url]
+                }
+                replyHandler(["bookmarks": bookmarks], nil)
+            case "open":
+                guard let idString = body["id"] as? String,
+                      let id = UUID(uuidString: idString),
+                      let bookmark = store.items.first(where: { $0.id == id }),
+                      let url = URL(string: bookmark.url),
+                      let scheme = url.scheme?.lowercased(), ["http", "https", "file"].contains(scheme) else {
+                    replyHandler(["error": "Bookmark not found or URL is invalid"], nil)
+                    return
+                }
+                replyHandler(["success": true], nil)
+                DispatchQueue.main.async { [weak self] in
+                    self?.state.navigate(to: url)
+                }
+            default:
+                replyHandler(["error": "Unknown bookmark action"], nil)
+            }
+        }
+
 
 
 
@@ -1808,8 +1902,6 @@ struct BrowserWebView: PlatformViewRepresentable {
             state.failedToLoad = showErrorPageIfNeeded(webView, error: error as NSError)
         }
 
-        /// Classifies the failure and, if it's a real navigation error (not a cancellation),
-        /// renders our own error page in place of WebKit's built-in one.
         private func showErrorPageIfNeeded(_ webView: WKWebView, error: NSError) -> Bool {
             guard let kind = ErrorPageBuilder.classify(error) else { return false }
 
@@ -1831,6 +1923,9 @@ struct BrowserWebView: PlatformViewRepresentable {
         func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
             state.isLoading = false
             state.url = webView.url
+            if state.hidesHomepageURL {
+                state.hasFinishedHiddenHomepageNavigation = true
+            }
             state.serverTrust = webView.serverTrust
             syncNotificationPermission(in: webView)
             if state.customTitle == nil {
@@ -2023,6 +2118,13 @@ struct BrowserWebView: PlatformViewRepresentable {
                let scheme = navigationAction.request.url?.scheme?.lowercased(),
                scheme == "http" || scheme == "https" {
                 BrowserWebView.synchronizeUserScripts(on: webView.configuration.userContentController)
+            }
+            if state.hidesHomepageURL,
+               state.hasFinishedHiddenHomepageNavigation,
+               navigationAction.targetFrame?.isMainFrame == true,
+               navigationAction.navigationType != .reload {
+                state.hidesHomepageURL = false
+                state.hasFinishedHiddenHomepageNavigation = false
             }
             decisionHandler(.allow, preferences)
         }

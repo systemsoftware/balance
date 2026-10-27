@@ -346,7 +346,7 @@ struct MapView: View {
         
         
         let opts = GenerationOptions(
-            sampling: .greedy,
+            samplingMode: .greedy,
             temperature: 0.0
         )
         
