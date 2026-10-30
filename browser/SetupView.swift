@@ -3,6 +3,7 @@ import SQLite3
 import Security
 import CommonCrypto
 import SwiftData
+internal import UniformTypeIdentifiers
 internal import Combine
 #if canImport(AppKit)
 import AppKit
@@ -180,6 +181,7 @@ class BrowserImporter: ObservableObject {
                             PasswordImport(domain: $0.domain, username: $0.username, password: $0.password)
                         }
                     )
+                    payload.result.passwordsCount += self.results[browser]?.passwordsCount ?? 0
                     self.results[browser] = payload.result
                     self.currentlyImporting = nil
                     SandboxedFileAccess.shared.release(accessURL)
@@ -427,14 +429,8 @@ class BrowserImporter: ObservableObject {
             payload.result.errors.append("places.sqlite not found")
         }
         
-        // Passwords
-        let loginsPath = "\(profilePath)/logins.json"
-        if FileManager.default.fileExists(atPath: loginsPath) {
-            payload.passwords = readFirefoxPasswords(at: loginsPath)
-            payload.result.passwordsCount = payload.passwords.count
-        } else {
-            payload.result.errors.append("logins.json not found")
-        }
+        // Firefox encrypts both fields with NSS. Import an explicit Firefox
+        // export instead of storing encrypted usernames as usable credentials.
         return payload
     }
     
@@ -519,33 +515,78 @@ class BrowserImporter: ObservableObject {
         return entries
     }
     
-    // MARK: Firefox Passwords (logins.json — usernames only, passwords are NSS-encrypted)
-    
-    private func readFirefoxPasswords(at path: String) -> [ImportedPassword] {
-        guard let data = FileManager.default.contents(atPath: path),
-              let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let logins = json["logins"] as? [[String: Any]]
-        else { return [] }
-        
-        var passwords: [ImportedPassword] = []
-        for login in logins {
-            guard let hostname = login["hostname"] as? String,
-                  let username = login["encryptedUsername"] as? String
-            else { continue }
-            
-            // Firefox passwords are NSS/PKCS#11 encrypted — we can only import the domain + encrypted username
-            // The username field itself is encrypted too, so we store the hostname
-            let domain = URL(string: hostname)?.host ?? hostname
-            if !domain.isEmpty {
-                // We can't decrypt Firefox passwords without NSS; import as credential placeholder
-                passwords.append(ImportedPassword(
-                    domain: domain,
-                    username: username,
-                    password: ""
-                ))
+    func importFirefoxPasswordsCSV(_ url: URL) {
+        let accessed = url.startAccessingSecurityScopedResource()
+        defer { if accessed { url.stopAccessingSecurityScopedResource() } }
+        do {
+            let csv = try String(contentsOf: url, encoding: .utf8)
+            let rows = try Self.parseCSV(csv)
+            guard let header = rows.first else { throw ImportCSVError.invalidFormat }
+            let columns = header.map { $0.trimmingCharacters(in: .whitespacesAndNewlines).lowercased().replacingOccurrences(of: "\u{feff}", with: "") }
+            guard let urlIndex = columns.firstIndex(of: "url"),
+                  let usernameIndex = columns.firstIndex(of: "username"),
+                  let passwordIndex = columns.firstIndex(of: "password") else {
+                throw ImportCSVError.invalidFormat
+            }
+            let credentials: [PasswordImport] = rows.dropFirst().compactMap { row in
+                guard row.count > max(urlIndex, max(usernameIndex, passwordIndex)),
+                      let host = URL(string: row[urlIndex])?.host,
+                      !host.isEmpty, !row[usernameIndex].isEmpty,
+                      !row[passwordIndex].isEmpty else { return nil }
+                return PasswordImport(domain: host, username: row[usernameIndex], password: row[passwordIndex])
+            }
+            guard !credentials.isEmpty else { throw ImportCSVError.noCredentials }
+            PasswordManager.shared.savePasswords(credentials)
+            var result = results[.firefox] ?? ImportResult()
+            result.passwordsCount = credentials.count
+            result.completed = true
+            results[.firefox] = result
+        } catch {
+            var result = results[.firefox] ?? ImportResult()
+            result.errors.append(error.localizedDescription)
+            results[.firefox] = result
+        }
+    }
+
+    private enum ImportCSVError: LocalizedError {
+        case invalidFormat, noCredentials
+        var errorDescription: String? {
+            switch self {
+            case .invalidFormat: "Choose a Firefox password CSV export with url, username, and password columns."
+            case .noCredentials: "No usable passwords were found in the CSV file."
             }
         }
-        return passwords
+    }
+
+    private static func parseCSV(_ text: String) throws -> [[String]] {
+        var rows: [[String]] = []
+        var row: [String] = []
+        var field = ""
+        var quoted = false
+        let characters = Array(text)
+        var index = 0
+        while index < characters.count {
+            let character = characters[index]
+            if character == "\"" && quoted && index + 1 < characters.count && characters[index + 1] == "\"" {
+                field.append("\"")
+                index += 1
+            } else if character == "\"" {
+                if quoted { quoted = false }
+                else if field.isEmpty { quoted = true }
+                else { throw ImportCSVError.invalidFormat }
+            } else if !quoted && character == "," {
+                row.append(field); field = ""
+            } else if !quoted && character == "\n" {
+                row.append(field.trimmingCharacters(in: .newlines)); rows.append(row)
+                row = []; field = ""
+            } else if character != "\r" || quoted {
+                field.append(character)
+            }
+            index += 1
+        }
+        if quoted { throw ImportCSVError.invalidFormat }
+        if !row.isEmpty || !field.isEmpty { row.append(field); rows.append(row) }
+        return rows
     }
 }
 
@@ -553,6 +594,7 @@ class BrowserImporter: ObservableObject {
 
 struct SetupView: View {
     @State private var currentStep = 0
+    @State private var showFirefoxPasswordPicker = false
     @StateObject private var importer = BrowserImporter()
     
     @AppStorage("sawSetup", store: Config.sharedDefaults)
@@ -601,6 +643,11 @@ struct SetupView: View {
         #else
         .background(.regularMaterial)
         #endif
+        .fileImporter(isPresented: $showFirefoxPasswordPicker, allowedContentTypes: [.commaSeparatedText, .plainText]) { result in
+            if case .success(let url) = result {
+                importer.importFirefoxPasswordsCSV(url)
+            }
+        }
     }
     
     // MARK: - Step Indicator
@@ -785,14 +832,21 @@ struct SetupView: View {
                     }
                     .font(.system(size: 10, design: .rounded))
                     .foregroundStyle(.secondary)
+                    if browser == .firefox {
+                        Text("Passwords: export CSV from Firefox Passwords, then import it here.")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                    }
                 } else if !browser.isInstalled {
                     Text("Not installed")
                         .font(.system(size: 11, design: .rounded))
                         .foregroundStyle(.tertiary)
                 } else {
-                    Text("Bookmarks, history, and passwords")
+                    Text(browser == .firefox ? "Bookmarks and history; passwords from CSV" : "Bookmarks, history, and passwords")
                         .font(.system(size: 11, design: .rounded))
                         .foregroundStyle(.secondary)
+                }
+                if let error = result?.errors.last {
+                    Text(error).font(.system(size: 10)).foregroundStyle(.red)
                 }
             }
             
@@ -803,19 +857,22 @@ struct SetupView: View {
                 ProgressView()
                     .scaleEffect(0.7)
                     .frame(width: 70)
-            } else if isCompleted {
-                Image(systemName: "checkmark.circle.fill")
-                    .font(.system(size: 20))
-                    .foregroundStyle(.green)
-                    .frame(width: 70)
             } else {
-                Button("Import") {
-                    importer.importFrom(browser)
+                VStack(spacing: 5) {
+                    if isCompleted {
+                        Image(systemName: "checkmark.circle.fill")
+                            .foregroundStyle(.green)
+                    } else {
+                        Button("Import") { importer.importFrom(browser) }
+                            .buttonStyle(.bordered).controlSize(.small)
+                            .disabled(!browser.isInstalled)
+                    }
+                    if browser == .firefox {
+                        Button("Import CSV") { showFirefoxPasswordPicker = true }
+                            .buttonStyle(.bordered).controlSize(.small)
+                    }
                 }
-                .buttonStyle(.bordered)
-                .controlSize(.small)
-                .disabled(!browser.isInstalled)
-                .frame(width: 70)
+                .frame(width: 90)
             }
         }
         .padding(.horizontal, 16)

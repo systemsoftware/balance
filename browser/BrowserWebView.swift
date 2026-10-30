@@ -5,6 +5,7 @@ import ZIPFoundation
 import CoreLocation
 import AuthenticationServices
 import UserNotifications
+internal import UniformTypeIdentifiers
 
 private func storedProfile(withID id: UUID) -> Profile? {
     guard let profilesJSON = Config.sharedDefaults?.string(forKey: "profiles"),
@@ -110,7 +111,103 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
         super.init()
     }
 
-    
+    func exportWebViewToPDF() {
+        guard let webView else { return }
+        let pageSizeScript = """
+            (() => {
+                const root = document.documentElement;
+                const body = document.body;
+                return {
+                    width: Math.max(root.scrollWidth, root.offsetWidth, root.clientWidth,
+                                    body?.scrollWidth || 0, body?.offsetWidth || 0,
+                                    window.innerWidth),
+                    height: Math.max(root.scrollHeight, root.offsetHeight, root.clientHeight,
+                                     body?.scrollHeight || 0, body?.offsetHeight || 0,
+                                     window.innerHeight)
+                };
+            })()
+            """
+
+        webView.evaluateJavaScript(pageSizeScript) { [weak self, weak webView] result, error in
+            guard let self, let webView else { return }
+            if let error {
+                print("Failed to measure page for PDF: \(error.localizedDescription)")
+                return
+            }
+            guard let dimensions = result as? [String: NSNumber],
+                  let width = dimensions["width"]?.doubleValue,
+                  let height = dimensions["height"]?.doubleValue,
+                  width.isFinite, height.isFinite, width > 0, height > 0 else {
+                print("Failed to measure page for PDF")
+                return
+            }
+
+            let configuration = WKPDFConfiguration()
+            configuration.rect = CGRect(x: 0, y: 0, width: width, height: height)
+            webView.createPDF(configuration: configuration) { result in
+                switch result {
+                case .success(let data):
+                    self.savePDFDataToDisk(data: data, from: webView)
+                case .failure(let error):
+                    print("Failed to generate PDF: \(error.localizedDescription)")
+                }
+            }
+        }
+    }
+
+    private func savePDFDataToDisk(data: Data, from webView: WKWebView) {
+        let pageName = (title.isEmpty ? webView.url?.host ?? "Page" : title)
+            .replacingOccurrences(of: "/", with: "-")
+            .replacingOccurrences(of: ":", with: "-")
+#if canImport(AppKit)
+        let panel = NSSavePanel()
+        panel.allowedContentTypes = [.pdf]
+        panel.nameFieldStringValue = pageName + ".pdf"
+        panel.canCreateDirectories = true
+        let save: (NSApplication.ModalResponse) -> Void = { response in
+            guard response == .OK, let destination = panel.url else { return }
+            do {
+                try data.write(to: destination, options: .atomic)
+            } catch {
+                print("Failed to save PDF: \(error.localizedDescription)")
+            }
+        }
+        // Tab search is itself a sheet. Attaching another sheet to its window
+        // leaves the save panel hidden, so present this panel independently.
+        panel.begin(completionHandler: save)
+#else
+        guard pendingPDFExportURL == nil else { return }
+        let temporaryURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent(pageName + ".pdf")
+        do {
+            guard let rootController = webView.window?.rootViewController else { return }
+            try FileManager.default.createDirectory(at: temporaryURL.deletingLastPathComponent(), withIntermediateDirectories: true)
+            try data.write(to: temporaryURL, options: .atomic)
+            var presenter = rootController
+            while let presented = presenter.presentedViewController {
+                presenter = presented
+            }
+            let picker = UIDocumentPickerViewController(forExporting: [temporaryURL])
+            picker.delegate = self
+            pendingPDFExportURL = temporaryURL
+            presenter.present(picker, animated: true)
+        } catch {
+            print("Failed to prepare PDF export: \(error.localizedDescription)")
+        }
+#endif
+    }
+
+#if !canImport(AppKit)
+    private var pendingPDFExportURL: URL?
+
+    private func finishPDFExport() {
+        guard let pendingPDFExportURL else { return }
+        try? FileManager.default.removeItem(at: pendingPDFExportURL.deletingLastPathComponent())
+        self.pendingPDFExportURL = nil
+    }
+#endif
+
     // MARK: - WKWebExtensionTab
     
     func window(for context: WKWebExtensionContext) -> (any WKWebExtensionWindow)? {
@@ -331,6 +428,18 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
         self.underlyingWebView = nil
     }
 }
+
+#if !canImport(AppKit)
+extension BrowserState: UIDocumentPickerDelegate {
+    func documentPicker(_ controller: UIDocumentPickerViewController, didPickDocumentsAt urls: [URL]) {
+        finishPDFExport()
+    }
+
+    func documentPickerWasCancelled(_ controller: UIDocumentPickerViewController) {
+        finishPDFExport()
+    }
+}
+#endif
 
 // MARK: - Browser Window
 
@@ -1044,9 +1153,6 @@ struct BrowserWebView: PlatformViewRepresentable {
             return preloaded
         }
 
-        // A WKWebView captures its autoplay policy when it is created. A popup's
-        // preloaded view can inherit a different site's policy, so do not reuse it
-        // when that policy disagrees with the destination site's setting.
         if let stalePreloaded = state.preloadedWebView {
             stalePreloaded.stopLoading()
             stalePreloaded.navigationDelegate = nil
@@ -1209,6 +1315,7 @@ struct BrowserWebView: PlatformViewRepresentable {
 
         let webView = BrowserWKWebView(frame: .zero, configuration: config)
         webView.downloadStore = DownloadStore(profile: profile)
+        webView.isInspectable = Config.defaults.bool(forKey: "developerMode")
         if !userAgent.isEmpty {
             webView.customUserAgent = userAgent
         } else {
@@ -2169,6 +2276,21 @@ struct BrowserWebView: PlatformViewRepresentable {
         var downloadFrom: [WKDownload: String] = [:]
         var downloadTo: [WKDownload: String] = [:]
         var downloadTemporaryURLs: [WKDownload: URL] = [:]
+        var resumedRecords: [WKDownload: Download] = [:]
+        var inheritedTemporaryPaths: [WKDownload: [String]] = [:]
+
+        func resumeFailedDownload(_ item: Download, resumeData: Data, in webView: WKWebView) {
+            webView.resumeDownload(fromResumeData: resumeData) { [weak self] resumed in
+                guard let self else { return }
+                self.downloads.insert(resumed)
+                self.downloadTitles[resumed] = item.title
+                self.downloadFrom[resumed] = item.from
+                self.resumedRecords[resumed] = item
+                self.inheritedTemporaryPaths[resumed] = item.temporaryPaths ?? []
+                DockProgressManager.shared.add(download: resumed)
+                resumed.delegate = self
+            }
+        }
 
         func download(_ download: WKDownload,
                       decideDestinationUsing response: URLResponse,
@@ -2187,10 +2309,16 @@ struct BrowserWebView: PlatformViewRepresentable {
 #if canImport(AppKit)
             let panel = NSSavePanel()
             panel.nameFieldStringValue = filename
+            if let previousPath = resumedRecords[download]?.to, !previousPath.isEmpty {
+                panel.directoryURL = URL(fileURLWithPath: previousPath).deletingLastPathComponent()
+            }
 
             panel.begin { [weak self] result in
                 if result == .OK, let url = panel.url {
                     self?.downloadTo[download] = url.path
+                    if let previous = self?.resumedRecords.removeValue(forKey: download) {
+                        self?.downloadStore.remove(id: previous.id)
+                    }
 
                     // WKDownload writes directly to its destination. Using the user's
                     // final path here exposes a partial ZIP/DMG to Finder, where it can
@@ -2210,6 +2338,9 @@ struct BrowserWebView: PlatformViewRepresentable {
 #else
             let temporaryURL = FileManager.default.temporaryDirectory.appendingPathComponent(filename)
             downloadTo[download] = temporaryURL.path
+            if let previous = resumedRecords.removeValue(forKey: download) {
+                downloadStore.remove(id: previous.id)
+            }
             downloadTemporaryURLs[download] = temporaryURL
             completionHandler(temporaryURL)
 #endif
@@ -2252,13 +2383,32 @@ struct BrowserWebView: PlatformViewRepresentable {
                             time:Date()
                         ))
                     }
+                    for path in inheritedTemporaryPaths[download] ?? [] {
+                        try? FileManager.default.removeItem(atPath: path)
+                    }
                     finishTracking(download)
                 }
 
                 func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
                     print("Download failed with error: \(error.localizedDescription)")
-                    if let temporaryURL = downloadTemporaryURLs[download] {
-                        try? FileManager.default.removeItem(at: temporaryURL)
+                    let temporaryPaths = (inheritedTemporaryPaths[download] ?? [])
+                        + (downloadTemporaryURLs[download].map { [$0.path] } ?? [])
+                    if !isPrivate, resumedRecords[download] == nil,
+                       downloadTo[download] != nil {
+                        downloadStore.add(Download(
+                            title: downloadTitles[download] ?? "Download",
+                            from: downloadFrom[download] ?? download.originalRequest?.url?.absoluteString ?? "",
+                            to: downloadTo[download] ?? "",
+                            time: Date(),
+                            failureDescription: error.localizedDescription,
+                            resumeData: resumeData,
+                            temporaryPaths: resumeData == nil ? nil : temporaryPaths
+                        ))
+                    }
+                    if (resumeData == nil || isPrivate) && resumedRecords[download] == nil {
+                        for path in temporaryPaths {
+                            try? FileManager.default.removeItem(atPath: path)
+                        }
                     }
                     finishTracking(download)
                 }
@@ -2270,6 +2420,8 @@ struct BrowserWebView: PlatformViewRepresentable {
                     downloadFrom.removeValue(forKey: download)
                     downloadTo.removeValue(forKey: download)
                     downloadTemporaryURLs.removeValue(forKey: download)
+                    resumedRecords.removeValue(forKey: download)
+                    inheritedTemporaryPaths.removeValue(forKey: download)
                 }
 
         func webView(_ webView: WKWebView,

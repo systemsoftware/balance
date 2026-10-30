@@ -517,7 +517,7 @@ struct BrowserToolbar: View {
                     ExtensionsToolbarButton(browserState: browserState, location: $location)
                     
                 case .saveTo:
-                    SaveToToolbarButton(location: $location, sidebarStore: sidebarStore, bookmarkStore: bookmarkStore, expandedLabel: expandedLabel)
+                    SaveToToolbarButton(location: $location, sidebarStore: sidebarStore, bookmarkStore: bookmarkStore, browserState: browserState, expandedLabel: expandedLabel)
                     
                 case .splitView:
                     SplitViewToolbarButton(

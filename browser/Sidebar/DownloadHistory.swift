@@ -1,4 +1,5 @@
 import SwiftUI
+import WebKit
 #if canImport(UIKit)
 import UIKit
 #endif
@@ -9,6 +10,9 @@ struct Download: Codable, Identifiable {
     var from: String
     var to:String
     var time: Date
+    var failureDescription: String? = nil
+    var resumeData: Data? = nil
+    var temporaryPaths: [String]? = nil
 }
 
 
@@ -18,6 +22,7 @@ struct DownloadRow: View {
     let Download: Download
     let action: () -> Void
     let onDelete: () -> Void
+    let onResume: () -> Void
     
     var body: some View {
         Button(action: action) {
@@ -34,6 +39,12 @@ struct DownloadRow: View {
                         .font(.system(.body, design: .rounded))
                         .fontWeight(.semibold)
                         .foregroundColor(.primary)
+                    if let failure = Download.failureDescription {
+                        Text(failure)
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                            .lineLimit(2)
+                    }
                     
                     Text(Download.to)
                         .font(.system(size: 10))
@@ -48,7 +59,7 @@ struct DownloadRow: View {
                 
                 Spacer()
                 
-                Image(systemName: "chevron.right")
+                Image(systemName: Download.resumeData == nil ? "chevron.right" : "arrow.clockwise")
                     .font(.system(size: 12, weight: .bold))
                     .foregroundColor(.secondary.opacity(0.5))
             }
@@ -63,6 +74,9 @@ struct DownloadRow: View {
         }
         .buttonStyle(PlainButtonStyle())
         .contextMenu {
+            if Download.resumeData != nil {
+                Button("Resume", action: onResume)
+            }
             Button(role: .destructive, action: onDelete) {
                 Label("Remove", systemImage: "trash")
             }
@@ -85,6 +99,7 @@ struct DownloadsView: View {
     @State private var titleInput: String = ""
     
     @State private var searchText: String = ""
+    @State private var resumeError: String?
     
     var filteredHistory: [Download] {
         if searchText.isEmpty {
@@ -105,7 +120,7 @@ struct DownloadsView: View {
                 Spacer()
                 Button("Clear All") {
                     for item in Array(downloadStore.items) {
-                        downloadStore.remove(id: item.id)
+                        downloadStore.discard(id: item.id)
                     }
                 }
                 .buttonStyle(.plain)
@@ -118,6 +133,9 @@ struct DownloadsView: View {
                 SearchInputView(text:$searchText)
                     .padding(.horizontal)
                     .padding(.bottom, 10)
+                if let resumeError {
+                    Text(resumeError).font(.caption).foregroundStyle(.red).padding(.horizontal)
+                }
 
                 ScrollView {
                     if downloadStore.items.isEmpty {
@@ -129,9 +147,11 @@ struct DownloadsView: View {
                                 DownloadRow(
                                     Download: mark,
                                     action: {
-                                        revealDownload(mark)
+                                        if mark.resumeData != nil { resumeDownload(mark) }
+                                        else { revealDownload(mark) }
                                     },
-                                    onDelete: { downloadStore.remove(id: mark.id) }
+                                    onDelete: { downloadStore.discard(id: mark.id) },
+                                    onResume: { resumeDownload(mark) }
                                 )
                             }
                         }
@@ -169,6 +189,21 @@ struct DownloadsView: View {
         #else
         UIApplication.shared.open(url)
         #endif
+    }
+
+    private func resumeDownload(_ item: Download) {
+        guard let resumeData = item.resumeData else { return }
+        let candidate = WindowManager.shared.browserWindows
+            .flatMap(\.tabs)
+            .first { $0.profile == downloadStore.profileName && !$0.isPrivate
+                && ($0.browserState.webView ?? $0.browserState.underlyingWebView) != nil }
+        guard let webView = candidate?.browserState.webView ?? candidate?.browserState.underlyingWebView,
+              let coordinator = webView.navigationDelegate as? BrowserWebView.Coordinator else {
+            resumeError = "Open a tab in this profile to resume the download."
+            return
+        }
+        resumeError = nil
+        coordinator.resumeFailedDownload(item, resumeData: resumeData, in: webView)
     }
 }
 

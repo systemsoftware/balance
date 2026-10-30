@@ -246,7 +246,7 @@ private func performCloseCleanup() async {
     if clearDownloadHistory {
         let downloadStore = DownloadStore()
         for download in downloadStore.items {
-            downloadStore.remove(id: download.id)
+            downloadStore.discard(id: download.id)
         }
     }
     cleanTemporaryDirectory()
@@ -513,7 +513,7 @@ enum BrowserCommand: String, CaseIterable {
         switch self {
         case .commandPalette: return "Command Palette"
         case .showSetup: return "Setup & Import"
-        case .searchTabs: return "Search All Tabs"
+        case .searchTabs: return "Tabs"
         case .reopenLastTab: return "Reopen Closed Tab"
         case .downloads: return "Downloads"
         case .history: return "History"

@@ -48,7 +48,7 @@ struct SidebarListView: View {
     
     @State var searchText: String = ""
     
-    @State var openInNewTab = 0
+    @AppStorage("listOpenType") var openInNewTab = 0
     
     var filtered: [SidebarItem] {
         if searchText.isEmpty {
