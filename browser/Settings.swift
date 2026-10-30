@@ -610,11 +610,7 @@ let Settings: [Setting] = {
             appStorageKey: "loadImages",
             defaultValueBool: true
         ),
-        Setting(name: "Weather City", icon: "cloud.sun", category: catBrowsing, type: "text", appStorageKey: "homepageWeatherCity")
-    ]
-
-    #if os(macOS)
-    s.append(
+        Setting(name: "Weather City", icon: "cloud.sun", category: catBrowsing, type: "text", appStorageKey: "homepageWeatherCity"),
         Setting(
             name: "Developer Mode",
             icon: "chevron.left.forwardslash.chevron.right",
@@ -623,7 +619,9 @@ let Settings: [Setting] = {
             appStorageKey: "developerMode",
             defaultValueBool: false
         ),
-    )
+    ]
+
+    #if os(macOS)
     s.append(
         Setting(
             name: "Right Sidebar",
