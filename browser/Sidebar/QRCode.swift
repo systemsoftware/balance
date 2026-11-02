@@ -1,5 +1,16 @@
 import SwiftUI
 import CoreImage.CIFilterBuiltins
+internal import UniformTypeIdentifiers
+
+private struct QRCodeShareItem: Transferable {
+    let pngData: Data
+
+    static var transferRepresentation: some TransferRepresentation {
+        DataRepresentation(exportedContentType: .png) { item in
+            item.pngData
+        }
+    }
+}
 
 struct QRCodeSidebar: View {
     var browserState: BrowserState
@@ -67,8 +78,10 @@ struct QRCodeSidebar: View {
                     .background(.white, in: RoundedRectangle(cornerRadius: 12))
                     .accessibilityLabel("Generated QR code")
                 
-                ShareLink(item: image, preview: SharePreview("QR Code", image: Image(universalImage: image))) {
-                    Label("Share QR Code", systemImage: "square.and.arrow.up")
+                if let pngData = image.pngData {
+                    ShareLink(item: QRCodeShareItem(pngData: pngData), preview: SharePreview("QR Code", image: Image(universalImage: image))) {
+                        Label("Share QR Code", systemImage: "square.and.arrow.up")
+                    }
                 }
                 
             } else {
@@ -93,6 +106,10 @@ struct QRCodeSidebar: View {
               let cgImage = context.createCGImage(outputImage, from: outputImage.extent) else {
             return nil
         }
+        #if canImport(UIKit)
+        return UniversalImage(cgImage: cgImage)
+        #elseif canImport(AppKit)
         return UniversalImage(cgImage: cgImage, size: outputImage.extent.size)
+        #endif
     }
 }

@@ -48,6 +48,8 @@ struct SidebarListView: View {
     
     @State var searchText: String = ""
     
+    @State var rawUrlIn = ""
+    
     @AppStorage("listOpenType") var openInNewTab = 0
     
     var filtered: [SidebarItem] {
@@ -68,7 +70,7 @@ struct SidebarListView: View {
         
         VStack {
             HStack {
-                Text("Built-in Pages")
+                Text("Apps")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
             }
@@ -104,7 +106,32 @@ struct SidebarListView: View {
                             }
                         }
                         .padding(16)
-                        
+                                                
+                        HStack {
+                            Text("Or, a URL")
+                                
+                            TextField("https://example.com", text:$rawUrlIn)
+                            Button {
+                                
+                                    var newValue = rawUrlIn.trimmingCharacters(in: .whitespacesAndNewlines)
+                                
+                                    if !newValue.starts(with: "http") {
+                                        newValue = "https://\(newValue)"
+                                    }
+                                    
+                                    guard let url = URL(string:newValue) else { return }
+                                    if openInNewTab == 1 {
+                                            createNewTab(with: url, inBackground: false)
+                                    } else {
+                                        sidebarURL = url
+                                }
+                            } label: {
+                                Image(systemName: "arrow.right.circle.fill")
+                            }
+                            .buttonStyle(.plain)
+                        }
+                        .padding(.horizontal)
+                        .padding(.bottom, 8)
                         
                         Picker("Open in", selection: $openInNewTab) {
                             Text("Sidebar").tag(0)
