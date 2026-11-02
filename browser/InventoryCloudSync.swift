@@ -3,7 +3,7 @@ import Foundation
 import SwiftData
 
 /// Mirrors Inventory's local catalog into the private CloudKit `Inventory` type.
-/// Files use the schema's `file` asset; links use its `url` string.
+/// Files use the schema's `file` asset; links use `url`; notes use `text`.
 @MainActor
 enum InventoryCloudSync {
     private static let container = CKContainer(identifier: "iCloud.com.systemsoftware.balance")
@@ -104,7 +104,7 @@ enum InventoryCloudSync {
                 page = try await database.recordZoneChanges(
                     inZoneWith: zoneID,
                     since: token,
-                    desiredKeys: ["id", "name", "mime", "url", "file"],
+                    desiredKeys: ["id", "name", "mime", "url", "file", "text"],
                     resultsLimit: 100
                 )
             } catch {
@@ -179,9 +179,13 @@ enum InventoryCloudSync {
     private static func importRecord(_ record: CKRecord, id: UUID, into context: ModelContext) throws {
         let name = (record["name"] as? String) ?? id.uuidString
         let mime = (record["mime"] as? String) ?? "application/octet-stream"
+        let text = record["text"] as? String
         let url: URL
         let isLink: Bool
-        if let asset = record["file"] as? CKAsset, let source = asset.fileURL {
+        if let text, !text.isEmpty {
+            url = URL(fileURLWithPath: "")
+            isLink = false
+        } else if let asset = record["file"] as? CKAsset, let source = asset.fileURL {
             let directory = inventoryDirectory.appendingPathComponent(id.uuidString, isDirectory: true)
             try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
             let component = URL(fileURLWithPath: name).lastPathComponent
@@ -211,8 +215,9 @@ enum InventoryCloudSync {
             item.mime = mime
             item.url = url
             item.isRemoteLink = isLink
+            item.text = text
         } else {
-            context.insert(InventoryItem(id: id, name: name, url: url, mime: mime, isRemoteLink: isLink))
+            context.insert(InventoryItem(id: id, name: name, url: url, mime: mime, isRemoteLink: isLink, text: text))
         }
     }
 
@@ -228,7 +233,9 @@ enum InventoryCloudSync {
             record["name"] = item.name as NSString
             record["mime"] = item.mime as NSString
             record["url"] = (item.isRemoteLink ? item.url.absoluteString : "") as NSString
-            if !item.isRemoteLink {
+            if let text = item.text {
+                record["text"] = text as NSString
+            } else if !item.isRemoteLink {
                 guard FileManager.default.fileExists(atPath: item.url.path) else {
                     throw InventorySyncError.missingLocalFile(item.url)
                 }
@@ -248,7 +255,7 @@ enum InventoryCloudSync {
     }
 
     static func removeLocalFile(for item: InventoryItem) {
-        guard !item.isRemoteLink,
+        guard item.text == nil, !item.isRemoteLink,
               item.url.standardizedFileURL.path.hasPrefix(inventoryDirectory.standardizedFileURL.path + "/") else { return }
         try? FileManager.default.removeItem(at: item.url)
     }
@@ -270,7 +277,7 @@ private enum InventorySyncError: LocalizedError {
 
     var errorDescription: String? {
         switch self {
-        case .missingContent(let id): "Inventory record \(id) has no file or URL"
+        case .missingContent(let id): "Inventory record \(id) has no file, URL, or text"
         case .missingLocalFile(let url): "Inventory file is missing: \(url.lastPathComponent)"
         }
     }

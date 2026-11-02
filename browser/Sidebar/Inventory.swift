@@ -24,13 +24,15 @@ final class InventoryItem: Identifiable, Hashable {
     var mime: String = "application/octet-stream"
     var url = URL(fileURLWithPath: "")
     var isRemoteLink: Bool = false
+    var text: String?
 
-    init(id: UUID = UUID(), name: String, url: URL, mime: String, isRemoteLink: Bool = false) {
+    init(id: UUID = UUID(), name: String, url: URL, mime: String, isRemoteLink: Bool = false, text: String? = nil) {
         self.id = id
         self.name = name
         self.url = url
         self.mime = mime
         self.isRemoteLink = isRemoteLink
+        self.text = text
     }
 
 }
@@ -63,6 +65,7 @@ struct InventorySidebar: View {
 
     @State private var items: [InventoryItem] = []
     @State private var syncFailed = false
+    @State private var newText = ""
 
     var body: some View {
         VStack(spacing: 0) {
@@ -81,6 +84,10 @@ struct InventorySidebar: View {
             .padding()
 
             Divider()
+
+            textComposer
+                .padding(.horizontal)
+                .padding(.top, 12)
 
             ScrollView {
                 if !items.isEmpty {
@@ -135,21 +142,52 @@ struct InventorySidebar: View {
         }
     }
 
+    private var textComposer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(spacing: 8) {
+                Image(systemName: "text.alignleft")
+                    .foregroundStyle(.secondary)
+                    .frame(width: 16)
+                Text("New text")
+                    .font(.system(.body, design: .rounded))
+                Spacer()
+                Button(action: { addTextItem() }) {
+                    Label("Save", systemImage: "plus")
+                }
+                .buttonStyle(.bordered)
+                .controlSize(.small)
+                .disabled(newText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+
+            TextField("Write something to keep…", text: $newText, axis: .vertical)
+                .font(.system(.body, design: .rounded))
+                .lineLimit(2...5)
+                .textFieldStyle(.plain)
+                .padding(8)
+                .background(
+                    RoundedRectangle(cornerRadius: 8)
+                        .fill(Color.platformWindowBackground.opacity(0.6))
+                )
+        }
+        .padding(10)
+        .background(
+            RoundedRectangle(cornerRadius: 10)
+                .fill(Color.platformControlBackground)
+        )
+    }
+
     @ViewBuilder
     private func itemRow(_ item: InventoryItem) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(spacing: 10) {
-                Button(action: { open(item) }) {
-                    HStack(spacing: 8) {
-                        Image(systemName: iconName(for: item))
-                            .foregroundStyle(.secondary)
-                            .frame(width: 16)
-                        Text(item.name)
-                            .font(.system(.body, design: .rounded))
-                            .lineLimit(1)
+                if item.text == nil {
+                    Button(action: { open(item) }) {
+                        itemTitle(item)
                     }
+                    .buttonStyle(.plain)
+                } else {
+                    itemTitle(item)
                 }
-                .buttonStyle(.plain)
 
                 Spacer(minLength: 8)
 
@@ -159,7 +197,7 @@ struct InventorySidebar: View {
                     }
                     .buttonStyle(.plain)
                     .foregroundStyle(.secondary)
-                    .help(item.isRemoteLink ? "Copy link" : "Copy image")
+                    .help(item.text != nil ? "Copy text" : (item.isRemoteLink ? "Copy link" : "Copy image"))
                 }
 
                 Button(action: { delete(item) }) {
@@ -167,6 +205,14 @@ struct InventorySidebar: View {
                 }
                 .buttonStyle(.plain)
                 .foregroundStyle(.red)
+            }
+
+            if let text = item.text {
+                Text(text)
+                    .font(.system(.body, design: .rounded))
+                    .lineLimit(4)
+                    .foregroundStyle(.secondary)
+                    .textSelection(.enabled)
             }
 
             if !item.isRemoteLink, item.mime.lowercased().contains("image") {
@@ -183,7 +229,21 @@ struct InventorySidebar: View {
         }
     }
 
+    private func itemTitle(_ item: InventoryItem) -> some View {
+        HStack(spacing: 8) {
+            Image(systemName: iconName(for: item))
+                .foregroundStyle(.secondary)
+                .frame(width: 16)
+            Text(item.name)
+                .font(.system(.body, design: .rounded))
+                .lineLimit(1)
+        }
+    }
+
     private func dragProvider(for item: InventoryItem) -> NSItemProvider {
+        if let text = item.text {
+            return NSItemProvider(object: text as NSString)
+        }
         if item.isRemoteLink {
             return NSItemProvider(object: item.url as NSURL)
         }
@@ -203,10 +263,14 @@ struct InventorySidebar: View {
     }
 
     private func isCopyable(_ item: InventoryItem) -> Bool {
-        item.isRemoteLink || item.mime.lowercased().contains("image")
+        item.text != nil || item.isRemoteLink || item.mime.lowercased().contains("image")
     }
 
     private func copy(_ item: InventoryItem) {
+        if let text = item.text {
+            PlatformApplication.copy(text)
+            return
+        }
         if item.isRemoteLink {
             PlatformApplication.copy(item.url.absoluteString)
             return
@@ -232,7 +296,9 @@ struct InventorySidebar: View {
     }
 
     private func iconName(for item: InventoryItem) -> String {
-        if item.isRemoteLink {
+        if item.text != nil {
+            return "text.alignleft"
+        } else if item.isRemoteLink {
             return "link"
         } else if item.mime.lowercased().contains("image") {
             return "photo"
@@ -253,6 +319,29 @@ struct InventorySidebar: View {
         } catch {
             context.rollback()
             print("Error deleting item: \(error)")
+        }
+    }
+
+    @MainActor
+    private func addTextItem() {
+        let text = newText.trimmingCharacters(in: .whitespacesAndNewlines)
+        guard !text.isEmpty,
+              let context = InventorySidebar.sharedContainer?.mainContext else { return }
+        let item = InventoryItem(
+            name: "Text",
+            url: URL(fileURLWithPath: ""),
+            mime: "text/plain",
+            text: text
+        )
+        do {
+            context.insert(item)
+            try context.save()
+            items.insert(item, at: 0)
+            newText = ""
+            Task { syncFailed = !(await InventoryCloudSync.sync()) }
+        } catch {
+            context.rollback()
+            print("Couldn't add text item:", error)
         }
     }
 

@@ -1,6 +1,15 @@
 {
-  "originHash" : "d0d4edfdf2bf3cd05b3ba2dec0af1a9c271c93f944cbba8677cc647f74a6b323",
+  "originHash" : "649ec0f8d2c7e2322a9c900d0f1a0017c8d49e5de12eb278092b596521d3e562",
   "pins" : [
+    {
+      "identity" : "expression",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/nicklockwood/Expression.git",
+      "state" : {
+        "revision" : "95ffe4c352e456cede933d9910d25b9c84039d1b",
+        "version" : "0.13.9"
+      }
+    },
     {
       "identity" : "zipfoundation",
       "kind" : "remoteSourceControl",

@@ -39,6 +39,8 @@ struct TabSearchView: View {
 
     var store = PinStore()
 
+    var noGlass = false
+    
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject var windowManager: WindowManager
 
@@ -261,7 +263,8 @@ struct TabSearchView: View {
                 layout: layout,
                 isActive: activeTab === state,
                 onSelect: { open(state) },
-                onClose: { close(state) }
+                onClose: { close(state) },
+                noGlass: noGlass
             )
             .transition(.scale(scale: 0.92).combined(with: .opacity))
         }
@@ -292,6 +295,7 @@ struct WindowRow: View {
     var isActive = false
     var onSelect: () -> Void = {}
     var onClose: (() -> Void)? = nil
+    var noGlass = false
 
     @State private var snapshot: UniversalImage?
     @State private var isHovering = false
@@ -309,10 +313,12 @@ struct WindowRow: View {
     var body: some View {
         content
             .padding(layout == .grid ? 10 : 8)
-            .glassEffect(.regular.interactive(), in: cardShape)
+            .glassEffect(noGlass ? .identity : .regular.interactive(), in: cardShape)
             .overlay {
                 if isActive {
                     cardShape.strokeBorder(Color.accentColor, lineWidth: 2)
+                } else if noGlass {
+                    cardShape.strokeBorder(Color.secondary, lineWidth: 1)
                 }
             }
             .overlay(alignment: .topTrailing) { closeButton }

@@ -10,6 +10,7 @@
 		A517F73E305DD94A00F0A7AD /* CREDITS.md in Resources */ = {isa = PBXBuildFile; fileRef = A517F73D305DD94A00F0A7AD /* CREDITS.md */; };
 		A517F740305DD95600F0A7AD /* LICENSE in Resources */ = {isa = PBXBuildFile; fileRef = A517F73F305DD95600F0A7AD /* LICENSE */; };
 		A57B78F62F94B57D000398CF /* ZIPFoundation in Frameworks */ = {isa = PBXBuildFile; productRef = A57B78F52F94B57D000398CF /* ZIPFoundation */; };
+		A58F445030980CFC00E4B814 /* Expression in Frameworks */ = {isa = PBXBuildFile; productRef = A58F444F30980CFC00E4B814 /* Expression */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXFileReference section */
@@ -31,6 +32,7 @@
 			isa = PBXFrameworksBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				A58F445030980CFC00E4B814 /* Expression in Frameworks */,
 				A57B78F62F94B57D000398CF /* ZIPFoundation in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -77,6 +79,7 @@
 			name = Balance;
 			packageProductDependencies = (
 				A57B78F52F94B57D000398CF /* ZIPFoundation */,
+				A58F444F30980CFC00E4B814 /* Expression */,
 			);
 			productName = browser;
 			productReference = A5892D782F8D68CA00512319 /* Balance.app */;
@@ -108,6 +111,7 @@
 			minimizedProjectReferenceProxies = 1;
 			packageReferences = (
 				A57B78F42F94B57D000398CF /* XCRemoteSwiftPackageReference "ZIPFoundation" */,
+				A58F444E30980CFC00E4B814 /* XCRemoteSwiftPackageReference "Expression" */,
 			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = A5892D792F8D68CA00512319 /* Products */;
@@ -271,7 +275,7 @@
 				CODE_SIGN_ENTITLEMENTS = browser/browser.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 8K8948D7UD;
 				ENABLE_APP_SANDBOX = YES;
@@ -319,7 +323,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.7.1;
+				MARKETING_VERSION = 1.7.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.systemsoftware.balance;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -353,7 +357,7 @@
 				CODE_SIGN_ENTITLEMENTS = browser/browser.entitlements;
 				CODE_SIGN_IDENTITY = "Apple Development";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 2;
+				CURRENT_PROJECT_VERSION = 1;
 				DEAD_CODE_STRIPPING = YES;
 				DEVELOPMENT_TEAM = 8K8948D7UD;
 				ENABLE_APP_SANDBOX = YES;
@@ -401,7 +405,7 @@
 				LD_RUNPATH_SEARCH_PATHS = "@executable_path/Frameworks";
 				"LD_RUNPATH_SEARCH_PATHS[sdk=macosx*]" = "@executable_path/../Frameworks";
 				MACOSX_DEPLOYMENT_TARGET = 26.0;
-				MARKETING_VERSION = 1.7.1;
+				MARKETING_VERSION = 1.7.2;
 				PRODUCT_BUNDLE_IDENTIFIER = com.systemsoftware.balance;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				PROVISIONING_PROFILE_SPECIFIER = "";
@@ -458,6 +462,14 @@
 				minimumVersion = 0.9.20;
 			};
 		};
+		A58F444E30980CFC00E4B814 /* XCRemoteSwiftPackageReference "Expression" */ = {
+			isa = XCRemoteSwiftPackageReference;
+			repositoryURL = "https://github.com/nicklockwood/Expression.git";
+			requirement = {
+				kind = upToNextMajorVersion;
+				minimumVersion = 0.13.9;
+			};
+		};
 /* End XCRemoteSwiftPackageReference section */
 
 /* Begin XCSwiftPackageProductDependency section */
@@ -465,6 +477,11 @@
 			isa = XCSwiftPackageProductDependency;
 			package = A57B78F42F94B57D000398CF /* XCRemoteSwiftPackageReference "ZIPFoundation" */;
 			productName = ZIPFoundation;
+		};
+		A58F444F30980CFC00E4B814 /* Expression */ = {
+			isa = XCSwiftPackageProductDependency;
+			package = A58F444E30980CFC00E4B814 /* XCRemoteSwiftPackageReference "Expression" */;
+			productName = Expression;
 		};
 /* End XCSwiftPackageProductDependency section */
 	};

@@ -53,10 +53,13 @@ struct SidebarListView: View {
     var filtered: [SidebarItem] {
         if searchText.isEmpty {
             return builtInSidebar.sorted { $0.view ?? "" < $1.view ?? "" }
+                .filter {
+                    $0.view != "ListView"
+                }
         }
         
         return builtInSidebar.filter {
-            $0.view?.localizedCaseInsensitiveContains(searchText) ?? false
+            $0.view != "ListView" && $0.view?.localizedCaseInsensitiveContains(searchText) ?? false
         }
         .sorted { $0.view ?? "" < $1.view ?? "" }
     }

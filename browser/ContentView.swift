@@ -43,7 +43,11 @@ let builtInSidebar = [
     SidebarItem(icon: "bag", view: "InventoryView"),
     SidebarItem(icon: "internaldrive", view: "DataView"),
     SidebarItem(icon: "translate", view:"TranslateView"),
-    SidebarItem(icon:"list.star", view: "ListView")
+    SidebarItem(icon:"list.star", view: "ListView"),
+    SidebarItem(icon: "rectangle.on.rectangle", view:"TabsView"),
+    SidebarItem(icon: "qrcode", view:"QRView"),
+    SidebarItem(icon: "list.bullet.indent", view: "OutlineView"),
+    SidebarItem(icon:"minus.forwardslash.plus", view:"CalculatorView")
 ]
 
 enum BookmarkBarMode: Int, CaseIterable {
@@ -360,11 +364,6 @@ struct ContentView: View {
     @State private var addIndex = 0
     @State private var shouldAutoFocusAddress = true
     
-    
-    @State var showTranslateSheet = false
-    @State var showTranslation = false
-    @State var translateText = ""
-    
     @AppStorage("toolbarLocation") var toolbarLocation = 0
 
     private var usesCompactTitlebar: Bool {
@@ -604,14 +603,8 @@ struct ContentView: View {
                             VStack(spacing: isCompact ? 4 : Layout.sidebarItemSpacing) {
                                 ForEach(sidebarStore.items) { item in
                                       Button(action: {
-                                          if item.view == "TranslateView" {
-                                              withAnimation {
-                                                  showTranslateSheet.toggle()
-                                              }
-                                          } else {
                                               sidebarBounceCounts[item.id, default: 0] += 1
                                               toggleSidebar(sidebarTargetURL(for: item))
-                                          }
                                         }) {
                                             if item.icon.starts(with: "https") {
                                                 Favicon(item.icon, width: isCompact ? 17 : Layout.sidebarIconSize, height: isCompact ? 17 : Layout.sidebarIconSize)
@@ -666,34 +659,6 @@ struct ContentView: View {
                                     }
                             }
                         }
-                        .popover(isPresented: $showTranslateSheet) {
-                            VStack(alignment: .leading) {
-                                Text("Translate Text")
-                                    .font(.headline)
-                                    .padding(.bottom, 5)
-                                Text("Enter the text you want to translate.")
-                                    .font(.subheadline)
-                                    .padding(.bottom, 10)
-                                    .foregroundStyle(.secondary)
-                                TextField("", text: $translateText)
-                                HStack {
-                                    Spacer()
-                                    Button("Close") {
-                                        showTranslateSheet = false
-                                    }
-                                    .buttonStyle(.bordered)
-                                    Button("Translate") {
-                                        showTranslateSheet = false
-                                        showTranslation = true
-                                    }
-                                    .buttonStyle(.borderedProminent)
-                                }
-                                .padding(.top, 10)
-                            }
-                            .frame(width: 300)
-                            .padding()
-                        }
-                        .translationPresentation(isPresented: $showTranslation, text: translateText)
                      
                         .scrollBounceBehavior(.basedOnSize)
                         .background {
@@ -1254,6 +1219,11 @@ struct ContentView: View {
         case "WebPermissionsView": WebPermissionsView(profile: bProfile)
         case "TranslateView": TranslatePageView()
         case "ListView": SidebarListView(sidebarURL: $sidebarURL)
+        case "TabsView": TabSearchView(noGlass:true)
+        case "BoostView": BoostView(browserState: browserState, profile: bProfile)
+        case "QRView": QRCodeSidebar(browserState: browserState)
+        case "OutlineView": OutlineView(browserState: browserState)
+        case "CalculatorView": CalculatorView()
         default: EmptyView()
         }
     }

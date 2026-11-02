@@ -57,8 +57,36 @@ struct AutocompleteView: View {
         }
     }
     
+    var calculatorResult: MathSuggestion? {
+        mathSuggestion(for: cleanSearchTerm)
+    }
+    
     var body: some View {
         Group {
+        if let suggestion = calculatorResult {
+                Button {
+                    PlatformApplication.copy(suggestion.result)
+                } label: {
+                    HStack(spacing: 12) {
+                        Image(systemName: "calculator")
+
+                        VStack(alignment: .leading) {
+                            Text(suggestion.result)
+                                .font(.headline)
+
+                            Text(suggestion.expression)
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                        }
+
+                        Spacer()
+
+                        Image(systemName: "doc.on.doc")
+                            .foregroundStyle(.secondary)
+                    }
+                }
+            }
+
             
             if !searchTerm.isEmpty {
                 Button {
