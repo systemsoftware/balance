@@ -606,7 +606,7 @@ struct CommandsView: View {
                 arrangeScreen
             }
         }
-        .frame(minWidth: 420, minHeight: 350)
+        .frame(minWidth: showData ? 420 : nil, minHeight: 350)
         .animation(.snappy(duration: 0.2), value: screen)
         .onChange(of: showNewProfile) { _, isShowing in
             // Finished creating a profile from the "New Profile…" command: return to the palette.
@@ -921,19 +921,20 @@ struct CommandsView: View {
                         Spacer()
                         Toggle("Show \(section.title)", isOn: visibility(for: section))
                             .labelsHidden()
+                            .toggleStyle(.switch)
                     }
                     .padding(.vertical, 2)
+                    .listRowBackground(Color.clear)
                 }
                 .onMove { source, destination in
                     var order = sectionOrder
                     order.move(fromOffsets: source, toOffset: destination)
                     sectionOrderBinding.wrappedValue = order
                 }
-            } header: {
-                Text("Drag to reorder. Turn off sections you don’t need.")
             }
         }
         .listStyle(.inset)
+        .scrollContentBackground(.hidden)
     }
 
     // MARK: Actions

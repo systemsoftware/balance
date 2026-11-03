@@ -111,6 +111,7 @@ struct SidebarListView: View {
                             Text("Or, a URL")
                                 
                             TextField("https://example.com", text:$rawUrlIn)
+                                .textFieldStyle(.roundedBorder)
                             Button {
                                 
                                     var newValue = rawUrlIn.trimmingCharacters(in: .whitespacesAndNewlines)

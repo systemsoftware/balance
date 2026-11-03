@@ -26,7 +26,7 @@ struct SidebarItem: Identifiable, Codable {
 
 
 let builtInSidebar = [
-    SidebarItem(icon: "message", view: "ChatView"),
+    SidebarItem(icon: "text.bubble.badge.sparkles", view: "AIView"),
     SidebarItem(icon: "envelope", view: "EmailView"),
     SidebarItem(icon: "bookmark", view: "BookmarksView"),
     SidebarItem(icon: "key", view: "PasswordsView"),
@@ -35,7 +35,7 @@ let builtInSidebar = [
     SidebarItem(icon:"clock.arrow.trianglehead.counterclockwise.rotate.90", view:"HistoryView"),
     SidebarItem(icon:"folder", view:"DownloadsView"),
     SidebarItem(icon:"puzzlepiece.extension", view:"ExtensionsView"),
-    SidebarItem(icon:"hand.raised", view:"ContentBlockersView"),
+  //  SidebarItem(icon:"hand.raised", view:"ContentBlockersView"),
     SidebarItem(icon:"map", view:"MapView"),
     SidebarItem(icon:"antenna.radiowaves.left.and.right", view:"RSSView"),
     SidebarItem(icon:"calendar", view:"CalendarView"),
@@ -44,7 +44,7 @@ let builtInSidebar = [
     SidebarItem(icon: "internaldrive", view: "DataView"),
     SidebarItem(icon: "translate", view:"TranslateView"),
     SidebarItem(icon:"list.star", view: "ListView"),
-    SidebarItem(icon: "rectangle.on.rectangle", view:"TabsView"),
+   // SidebarItem(icon: "rectangle.on.rectangle", view:"TabsView"),
     SidebarItem(icon: "qrcode", view:"QRView"),
     SidebarItem(icon: "list.bullet.indent", view: "OutlineView"),
     SidebarItem(icon:"minus.forwardslash.plus", view:"CalculatorView")
@@ -861,6 +861,15 @@ struct ContentView: View {
             ToolbarSummarySheet(browserState: browserState, isSummarizing: $summarizing)
         case .wordCount:
             WordCountView(browserState: browserState)
+        case .tabs:
+            VStack {
+                TabSearchView(isPopover: true)
+                Button("Close") {
+                    activeToolbarSheet = nil
+                }
+                .padding()
+                .buttonStyle(.borderedProminent)
+            }
         }
     }
 
@@ -1199,6 +1208,7 @@ struct ContentView: View {
     @ViewBuilder
     private func builtInView(named name: String, standalone: Bool = false) -> some View {
         switch name {
+        case "AIView": ChatView(browserState: browserState)
         case "ChatView": ChatView(browserState: browserState)
         case "EmailView": EmailView(profile: bProfile)
         case "BookmarksView": BookmarksView(showAddBookmark: $falseBinding)

@@ -51,7 +51,7 @@ let catPalette = CategoryDef(
     name: "Palette",
     icon: "magnifyingglass",
     color: .teal,
-    description: "Manage what appears in the command palette."
+    description: "Drag to reorder or turn off sections you don’t need."
 )
 
 let catBookmarks = CategoryDef(
@@ -404,46 +404,6 @@ let Settings: [Setting] = {
             defaultValueBool: false
         ),
         Setting(
-            name: "Tabs",
-            icon: "square.on.square",
-            category: catPalette,
-            type: "toggle",
-            appStorageKey: "paletteShowTabs",
-            defaultValueBool: true
-        ),
-        Setting(
-            name: "Bookmarks",
-            icon: "bookmark",
-            category: catPalette,
-            type: "toggle",
-            appStorageKey: "paletteShowBookmarks",
-            defaultValueBool: true
-        ),
-        Setting(
-            name: "Search",
-            icon: "magnifyingglass.circle",
-            category: catPalette,
-            type: "toggle",
-            appStorageKey: "paletteShowSearch",
-            defaultValueBool: true
-        ),
-        Setting(
-            name: "Commands",
-            icon: "terminal",
-            category: catPalette,
-            type: "toggle",
-            appStorageKey: "paletteShowCommands",
-            defaultValueBool: true
-        ),
-        Setting(
-            name: "History",
-            icon: "clock.arrow.circlepath",
-            category: catPalette,
-            type: "toggle",
-            appStorageKey: "paletteShowHistory",
-            defaultValueBool: true
-        ),
-        Setting(
             name: "User Agent",
             icon: "person.crop.rectangle",
             category: catAdvanced,
@@ -667,13 +627,6 @@ let Settings: [Setting] = {
     s.append(Setting(
         name:"Manage",
         category: catBookmarks,
-        type:"header",
-        appStorageKey:"",
-    ))
-    
-    s.append(Setting(
-        name:"Reorder",
-        category: catPalette,
         type:"header",
         appStorageKey:"",
     ))
@@ -1424,16 +1377,10 @@ struct SettingsSectionContent: View {
 
             }
             
-            if def.id == "palette" && isStandalone {
-                    CommandsView(searchText:$st, showData: false, searchQuery: $st)
-                        .padding(.vertical, -15)
-                        .padding(.leading)
-                        .background(Color.clear)
-            } else if def.id == "palette" {
-                Text("Drag the section titles in the palette to reorder them.")
-                    .foregroundStyle(.secondary)
-                    .font(.caption)
-                    .padding(.horizontal)
+            if def.id == "palette" {
+                CommandsView(searchText: $st, showData: false, searchQuery: $st)
+                    .padding(.vertical, -15)
+               //     .padding(.leading, isStandalone ? 16 : 0)
             }
             
             if def.id == "autofill" {
