@@ -33,6 +33,9 @@ struct WeatherSidebarView: View {
                         detailsSection(weather)
 
                         astronomySection(weather)
+                        
+                        Text("Powered by wttr.in")
+                        
                     } else {
                         ContentUnavailableView(
                             "Weather unavailable",
@@ -45,6 +48,7 @@ struct WeatherSidebarView: View {
                 .padding(16)
             }
             .scrollIndicators(.hidden)
+            
         }
         .frame(minWidth: CGFloat(sidebarWidth))
         .background(Color.primary.opacity(0.025))

@@ -114,7 +114,7 @@ enum ToolbarItemType: String, Codable, CaseIterable, Identifiable {
         case .closeTab: "rectangle.badge.xmark"
         case .wordCount: "text.quote"
         case .translate: "translate"
-        case .tabs: "rectangle.on.rectangle"
+        case .tabs: "square.on.square"
         }
     }
 }

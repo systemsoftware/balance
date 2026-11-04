@@ -224,7 +224,7 @@ let Settings: [Setting] = {
         ),
         Setting(
             name: "Tabs",
-            icon: "rectangle.on.rectangle",
+            icon: "square.on.square",
             category: catAppearance,
             type: "dropdown",
             appStorageKey: "tabMode",

@@ -1,6 +1,9 @@
 import SwiftUI
 import FoundationModels
 import WebKit
+import PhotosUI
+internal import UniformTypeIdentifiers
+import ImageIO
 
 private let model = SystemLanguageModel.default
 
@@ -8,6 +11,7 @@ struct ChatItem: Identifiable, Codable {
     var id = UUID()
     var query: String
     var response: String
+    var imageName: String? = nil
 }
 
 
@@ -17,7 +21,385 @@ struct ChatSession: Identifiable, Codable {
     var items: [ChatItem]
 }
 
+
+@available(iOS 27.0, macOS 27.0, *)
 struct ChatView: View {
+    @AppStorage("instructions", store: Config.sharedDefaults) var inst: String = ""
+    @AppStorage("temp", store: Config.sharedDefaults) var temp: Double = 0.7
+    @AppStorage("maxTokens", store: Config.sharedDefaults) var maxTokens: Int = 1000
+    @AppStorage("pageCutoff", store: Config.sharedDefaults) var pageCutoff: Int = 12000
+
+    @ObservedObject var browserState: BrowserState
+    @State private var chatStore: ChatStore
+    @State private var sessions: [ChatSession]
+    @State private var selectedSessionID: UUID
+    @State private var modelSessions: [UUID: LanguageModelSession] = [:]
+    @State private var respondingIDs: Set<UUID> = []
+    @State private var query = ""
+    @State private var selectedPhoto: PhotosPickerItem?
+    @State private var imageData: Data?
+    @State private var imageName: String?
+    @State private var isImporting = false
+    @State private var pageText = ""
+    @State private var pageTitle = ""
+    @State private var isLoadingPage = false
+    @State private var pageRequestID: UUID?
+    @State private var renamingID: UUID?
+    @State private var renameText = ""
+    @State private var errorMessage: String?
+
+    init(browserState: BrowserState) {
+        self.browserState = browserState
+        let store = ChatStore()
+        let saved = store.items.isEmpty ? [ChatSession(title: "New Chat", items: [])] : store.items
+        _chatStore = State(initialValue: store)
+        _sessions = State(initialValue: saved)
+        _selectedSessionID = State(initialValue: saved[0].id)
+    }
+
+    private var selectedIndex: Int {
+        sessions.firstIndex { $0.id == selectedSessionID } ?? 0
+    }
+
+    private var canSend: Bool {
+        (!query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty || imageData != nil)
+            && !respondingIDs.contains(selectedSessionID)
+            && model.availability == .available
+    }
+
+    var body: some View {
+        VStack(spacing: 0) {
+            header
+            Divider()
+            conversation
+            composer
+        }
+        .background(Color.black.opacity(0.04))
+        .fileImporter(isPresented: $isImporting, allowedContentTypes: [.image]) { result in
+            switch result {
+            case .success(let url):
+                let access = url.startAccessingSecurityScopedResource()
+                defer { if access { url.stopAccessingSecurityScopedResource() } }
+                do { try setImage(Data(contentsOf: url), name: url.lastPathComponent) }
+                catch { errorMessage = error.localizedDescription }
+            case .failure(let error): errorMessage = error.localizedDescription
+            }
+        }
+        .onChange(of: selectedPhoto) { _, photo in
+            guard let photo else { return }
+            Task {
+                do {
+                    guard let data = try await photo.loadTransferable(type: Data.self) else { return }
+                    try setImage(data, name: "Photo")
+                } catch { errorMessage = error.localizedDescription }
+                selectedPhoto = nil
+            }
+        }
+        .onChange(of: browserState.url) { _, _ in
+            pageRequestID = nil
+            isLoadingPage = false
+            pageText = ""
+            pageTitle = ""
+        }
+        .alert("Rename Chat", isPresented: Binding(
+            get: { renamingID != nil },
+            set: { if !$0 { renamingID = nil } }
+        )) {
+            TextField("Name", text: $renameText)
+            Button("Save") { renameChat() }
+            Button("Cancel", role: .cancel) { renamingID = nil }
+        }
+        .alert("Chat Error", isPresented: Binding(
+            get: { errorMessage != nil },
+            set: { if !$0 { errorMessage = nil } }
+        )) {
+            Button("OK") { errorMessage = nil }
+        } message: {
+            Text(errorMessage ?? "")
+        }
+    }
+
+    private var header: some View {
+        HStack(spacing: 8) {
+            ScrollView(.horizontal, showsIndicators: false) {
+                HStack(spacing: 6) {
+                    ForEach(sessions) { session in
+                        Button(session.title) { selectedSessionID = session.id }
+                            .buttonStyle(.plain)
+                            .font(.caption.weight(session.id == selectedSessionID ? .semibold : .regular))
+                            .padding(.horizontal, 11)
+                            .padding(.vertical, 7)
+                            .glassEffect(session.id == selectedSessionID ? .clear : .regular, in: .capsule)
+                            .background(session.id == selectedSessionID ? Color.accentColor.opacity(0.15) : Color.clear, in: .capsule)
+                            .contextMenu {
+                                Button("Rename") {
+                                    renameText = session.title
+                                    renamingID = session.id
+                                }
+                                Button("Delete", role: .destructive) { deleteChat(session.id) }
+                            }
+                    }
+                }
+                .padding(.horizontal, 10)
+            }
+            Button { newChat() } label: { Image(systemName: "plus") }
+                .help("New chat")
+                .buttonStyle(.plain)
+                .accessibilityLabel("New chat")
+                .padding(.trailing, 10)
+        }
+        .padding(.vertical, 8)
+    }
+
+    private var conversation: some View {
+        ScrollViewReader { proxy in
+            ScrollView {
+                LazyVStack(alignment: .leading, spacing: 18) {
+                    if sessions[selectedIndex].items.isEmpty {
+                        ContentUnavailableView("Ask anything", systemImage: "sparkles",
+                                               description: Text("Ask about this page or add an image."))
+                            .frame(maxWidth: .infinity, minHeight: 220)
+                    }
+                    ForEach(sessions[selectedIndex].items) { item in
+                        VStack(alignment: .leading, spacing: 8) {
+                            HStack {
+                                Spacer(minLength: 40)
+                                VStack(alignment: .trailing, spacing: 6) {
+                                    if let imageName = item.imageName {
+                                        Label(imageName, systemImage: "photo")
+                                            .font(.caption)
+                                    }
+                                    if !item.query.isEmpty { Text(item.query).textSelection(.enabled) }
+                                }
+                                .padding(12)
+                                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 18))
+                                .foregroundStyle(.white)
+                            }
+                            HStack(alignment: .top) {
+                                if item.response.isEmpty {
+                                    ProgressView().controlSize(.small).padding(12)
+                                } else {
+                                    Text(.init(item.response))
+                                        .textSelection(.enabled)
+                                        .padding(12)
+                                        .glassEffect(in: .rect(cornerRadius: 18))
+                                }
+                                Spacer(minLength: 40)
+                            }
+                        }
+                        .id(item.id)
+                    }
+                }
+                .padding(12)
+            }
+            .onChange(of: sessions[selectedIndex].items.last?.response) { _, _ in
+                if let id = sessions[selectedIndex].items.last?.id { proxy.scrollTo(id, anchor: .bottom) }
+            }
+            .onChange(of: selectedSessionID) { _, _ in
+                if let id = sessions[selectedIndex].items.last?.id { proxy.scrollTo(id, anchor: .bottom) }
+            }
+        }
+    }
+
+    private var composer: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            if !pageText.isEmpty || imageData != nil {
+                HStack(spacing: 8) {
+                    if !pageText.isEmpty {
+                        attachmentChip(pageTitle.isEmpty ? "Current page" : pageTitle, icon: "doc.text") {
+                            pageText = ""; pageTitle = ""
+                        }
+                    }
+                    if let imageName {
+                        attachmentChip(imageName, icon: "photo") {
+                            imageData = nil; self.imageName = nil
+                        }
+                    }
+                }
+            }
+            TextField("Ask anything…", text: $query, axis: .vertical)
+                .lineLimit(1...5)
+                .textFieldStyle(.plain)
+                .onSubmit(sendMessage)
+            HStack(spacing: 12) {
+                Button { togglePage() } label: {
+                    if isLoadingPage { ProgressView().controlSize(.small) }
+                    else { Image(systemName: pageText.isEmpty ? "doc.text" : "doc.text.fill") }
+                }
+                .disabled(isLoadingPage || browserState.webView == nil)
+                .help(pageText.isEmpty ? "Add current page" : "Remove current page")
+                PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Image(systemName: "photo.on.rectangle")
+                }
+                .help("Add photo")
+                Button { isImporting = true } label: { Image(systemName: "paperclip") }
+                    .help("Add image file")
+                Spacer()
+                if model.availability != .available {
+                    Text(modelStatus).font(.caption).foregroundStyle(.secondary)
+                        .lineLimit(2)
+                }
+                Button(action: sendMessage) {
+                    Image(systemName: "arrow.up.circle.fill").font(.title2)
+                }
+                .disabled(!canSend)
+                .help("Send message")
+            }
+            .buttonStyle(.plain)
+        }
+        .padding(12)
+        .glassEffect(in: .rect(cornerRadius: 20))
+        .padding(10)
+    }
+
+    private func attachmentChip(_ title: String, icon: String, remove: @escaping () -> Void) -> some View {
+        HStack(spacing: 4) {
+            Label(title, systemImage: icon).lineLimit(1)
+            Button(action: remove) { Image(systemName: "xmark.circle.fill") }
+                .buttonStyle(.plain)
+                .accessibilityLabel("Remove \(title)")
+        }
+        .font(.caption)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 5)
+        .background(.quaternary, in: Capsule())
+    }
+
+    private var modelStatus: String {
+        switch model.availability {
+        case .available: return ""
+        case .unavailable(.deviceNotEligible): return "Apple Intelligence unavailable on this device"
+        case .unavailable(.appleIntelligenceNotEnabled): return "Enable Apple Intelligence in Settings"
+        case .unavailable(.modelNotReady): return "Model is preparing"
+        case .unavailable: return "Model unavailable"
+        }
+    }
+
+    private func setImage(_ data: Data, name: String) throws {
+        guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+              CGImageSourceCreateImageAtIndex(source, 0, nil) != nil else {
+            throw CocoaError(.fileReadCorruptFile)
+        }
+        imageData = data
+        imageName = name
+    }
+
+    private func togglePage() {
+        if !pageText.isEmpty { pageText = ""; pageTitle = ""; return }
+        guard let webView = browserState.webView else { return }
+        let requestID = UUID()
+        let sourceURL = webView.url
+        pageRequestID = requestID
+        isLoadingPage = true
+        webView.getTextForAI(maxCharacters: min(max(pageCutoff, 1), 50_000)) { [weak webView] text in
+            DispatchQueue.main.async {
+                guard pageRequestID == requestID else { return }
+                pageRequestID = nil
+                isLoadingPage = false
+                guard let webView, webView === browserState.webView, webView.url == sourceURL else { return }
+                pageText = text ?? ""
+                pageTitle = webView.title ?? sourceURL?.host ?? "Current page"
+            }
+        }
+    }
+
+    private func sendMessage() {
+        guard canSend else { return }
+        let message = query.trimmingCharacters(in: .whitespacesAndNewlines)
+        let data = imageData
+        let name = imageName
+        let page = String(pageText.prefix(min(max(pageCutoff, 1), 50_000)))
+        let title = pageTitle
+        let sessionID = selectedSessionID
+        let item = ChatItem(query: message, response: "", imageName: name)
+        sessions[selectedIndex].items.append(item)
+        respondingIDs.insert(sessionID)
+        query = ""
+        imageData = nil
+        imageName = nil
+        pageText = ""
+        pageTitle = ""
+        persist()
+
+        Task {
+            defer { respondingIDs.remove(sessionID) }
+            do {
+                let session: LanguageModelSession
+                var previousConversation = ""
+                if let existing = modelSessions[sessionID] { session = existing }
+                else {
+                    session = LanguageModelSession(instructions: inst)
+                    modelSessions[sessionID] = session
+                    if let index = sessions.firstIndex(where: { $0.id == sessionID }) {
+                        let pastItems = sessions[index].items.dropLast()
+                        previousConversation = String(pastItems.suffix(12).map {
+                            "User: \($0.query)\nAssistant: \($0.response)"
+                        }.joined(separator: "\n\n").suffix(10_000))
+                    }
+                }
+                let request = message.isEmpty ? "Describe this image." : message
+                let pageContext = page.isEmpty ? "" : "Page title: \(title)\nPage context:\n\(page)\n\n"
+                let historyContext = previousConversation.isEmpty ? "" : "Conversation so far:\n\(previousConversation)\n\n"
+                let text = "\(historyContext)\(pageContext)User request:\n\(request)"
+                let prompt: Prompt
+                if let data, let source = CGImageSourceCreateWithData(data as CFData, nil),
+                   let image = CGImageSourceCreateImageAtIndex(source, 0, nil) {
+                    prompt = Prompt { text; Attachment(image) }
+                } else {
+                    prompt = Prompt { text }
+                }
+                let stream = session.streamResponse(to: prompt, options: GenerationOptions(
+                    temperature: temp, maximumResponseTokens: maxTokens))
+                for try await snapshot in stream {
+                    guard let sessionIndex = sessions.firstIndex(where: { $0.id == sessionID }),
+                          let itemIndex = sessions[sessionIndex].items.firstIndex(where: { $0.id == item.id }) else { break }
+                    sessions[sessionIndex].items[itemIndex].response = snapshot.content
+                }
+                if let sessionIndex = sessions.firstIndex(where: { $0.id == sessionID }),
+                   sessions[sessionIndex].items.count == 1,
+                   sessions[sessionIndex].title == "New Chat" {
+                    sessions[sessionIndex].title = String((message.isEmpty ? name ?? "Image" : message).prefix(36))
+                }
+                persist()
+            } catch {
+                if let sessionIndex = sessions.firstIndex(where: { $0.id == sessionID }),
+                   let itemIndex = sessions[sessionIndex].items.firstIndex(where: { $0.id == item.id }) {
+                    sessions[sessionIndex].items[itemIndex].response = "Error: \(error.localizedDescription)"
+                }
+                persist()
+            }
+        }
+    }
+
+    private func newChat() {
+        let new = ChatSession(title: "New Chat", items: [])
+        sessions.append(new)
+        selectedSessionID = new.id
+        persist()
+    }
+
+    private func deleteChat(_ id: UUID) {
+        sessions.removeAll { $0.id == id }
+        modelSessions.removeValue(forKey: id)
+        if sessions.isEmpty { sessions = [ChatSession(title: "New Chat", items: [])] }
+        if selectedSessionID == id { selectedSessionID = sessions[0].id }
+        persist()
+    }
+
+    private func renameChat() {
+        guard let id = renamingID, let index = sessions.firstIndex(where: { $0.id == id }) else { return }
+        let name = renameText.trimmingCharacters(in: .whitespacesAndNewlines)
+        if !name.isEmpty { sessions[index].title = name; persist() }
+        renamingID = nil
+    }
+
+    private func persist() {
+        chatStore.items = sessions
+        chatStore.save()
+    }
+}
+
+struct ChatViewLegacy: View {
     @AppStorage("instructions", store: Config.sharedDefaults) var inst: String = ""
     @AppStorage("temp", store: Config.sharedDefaults) var temp: Double = 0.7
     @AppStorage("maxTokens", store: Config.sharedDefaults) var maxTokens: Int = 1000

@@ -9,7 +9,7 @@ struct TabsToolbarButton: View {
         Button {
             presentSheet()
         } label: {
-            ToolbarItemLabel(expanded: expandedLabel, title: "Tab Overview", systemImage: "rectangle.on.rectangle")
+            ToolbarItemLabel(expanded: expandedLabel, title: "Tab Overview", systemImage: "square.on.square")
         }
         .frame(width: expandedLabel ? nil : 40, height: 40)
         .buttonStyle(.plain)

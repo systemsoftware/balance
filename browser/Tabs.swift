@@ -51,7 +51,7 @@ struct Tabs: View {
                 VStack(spacing: 12) {
                     if tabMode == 1 {
                         HStack {
-                            Image(systemName: "rectangle.on.rectangle")
+                            Image(systemName: "square.on.square")
                                 .font(.system(size: 13, weight: .semibold))
                                 .foregroundStyle(.secondary)
                             Text("Tabs")

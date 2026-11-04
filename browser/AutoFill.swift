@@ -216,6 +216,7 @@ struct AutoFillSettingsView: View {
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.vertical, 8)
+                        .listRowBackground(Color.clear)
                 } else {
                     ForEach(items) { item in
                         HStack {
@@ -248,9 +249,11 @@ struct AutoFillSettingsView: View {
                             .buttonStyle(BorderlessButtonStyle())
                         }
                         .padding(.bottom, 4)
+                        .listRowBackground(Color.clear)
                     }
                 }
             }
+            .scrollContentBackground(.hidden)
             .padding(.top, 0)
         }
         .frame(maxWidth: .infinity, minHeight: 200)

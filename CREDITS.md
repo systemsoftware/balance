@@ -1,6 +1,6 @@
 # Open Source Credits
 
-Balance is built with help from the following open-source projects. Thank you
+Balance is built with help from the following open-source projects and services. Thank you
 to their authors and contributors.
 
 ## ZIPFoundation
@@ -30,6 +30,22 @@ image loading and URL-cache integration.
 
 Readability powers article extraction for Reader View. The copy included in
 Balance retains its upstream copyright and license notice.
+
+## Expression
+
+- Project: [nicklockwood/Expression](https://github.com/nicklockwood/Expression)
+- Version: 0.13.9
+- Copyright: © 2016 Nick Lockwood
+- License: [MIT License](https://github.com/nicklockwood/Expression/blob/0.13.9/LICENSE.md)
+
+Expression evaluates mathematical expressions for calculator suggestions.
+
+## wttr.in
+
+- Project: [chubin/wttr.in](https://github.com/chubin/wttr.in)
+- License: [Apache License 2.0](https://github.com/chubin/wttr.in/blob/master/LICENSE)
+
+Balance uses the wttr.in service to show current weather on the homepage.
 
 ---
 

@@ -51,6 +51,7 @@ struct QRCodeSidebar: View {
                     image = generateQRCode(from: trimmedSource)
                 } label: {
                     Text("Generate QR Code")
+                        .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
                 .disabled(trimmedSource.isEmpty)

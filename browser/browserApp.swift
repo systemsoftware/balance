@@ -455,6 +455,7 @@ class AppDelegate: NSObject, UIApplicationDelegate {
 
     func application(_ application: UIApplication,
                      didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil) -> Bool {
+        CheckSite.shared.registerBackgroundTasks()
         WindowManager.shared.restoreSavedSessionIfNeeded()
         didFinishLaunching = true
         BrowserAppShortcuts.updateAppShortcutParameters()
@@ -465,7 +466,12 @@ class AppDelegate: NSObject, UIApplicationDelegate {
         SessionManager.shared.saveSession()
     }
 
+    func applicationDidBecomeActive(_ application: UIApplication) {
+        CheckSite.shared.resumeForegroundChecks()
+    }
+
     func applicationDidEnterBackground(_ application: UIApplication) {
+        CheckSite.shared.pauseForegroundChecks()
         guard closeCleanupTask == nil else { return }
 
         backgroundTaskID = application.beginBackgroundTask(withName: "Clear browsing data") { [weak self, weak application] in

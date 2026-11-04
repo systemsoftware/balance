@@ -1208,8 +1208,8 @@ struct ContentView: View {
     @ViewBuilder
     private func builtInView(named name: String, standalone: Bool = false) -> some View {
         switch name {
-        case "AIView": ChatView(browserState: browserState)
-        case "ChatView": ChatView(browserState: browserState)
+        case "AIView": chatView
+        case "ChatView": chatView
         case "EmailView": EmailView(profile: bProfile)
         case "BookmarksView": BookmarksView(showAddBookmark: $falseBinding)
         case "PasswordsView": PasswordsView()
@@ -1235,6 +1235,15 @@ struct ContentView: View {
         case "OutlineView": OutlineView(browserState: browserState)
         case "CalculatorView": CalculatorView()
         default: EmptyView()
+        }
+    }
+
+    @ViewBuilder
+    private var chatView: some View {
+        if #available(iOS 27.0, macOS 27.0, *) {
+            ChatView(browserState: browserState)
+        } else {
+            ChatViewLegacy(browserState: browserState)
         }
     }
 
