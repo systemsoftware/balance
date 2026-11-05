@@ -654,7 +654,9 @@ private struct WindowCloseObserver: NSViewRepresentable {
                 forName: NSWindow.willCloseNotification, object: window, queue: .main
             ) { [weak self] _ in
                 guard let self else { return }
-                self.windowManager.closeWindow(self.windowID)
+                MainActor.assumeIsolated {
+                    self.windowManager.closeWindow(self.windowID)
+                }
             }
             keyObserver = NotificationCenter.default.addObserver(
                 forName: NSWindow.didBecomeKeyNotification, object: window, queue: .main

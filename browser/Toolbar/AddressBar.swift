@@ -27,7 +27,7 @@ struct AddressBar: View {
                         url: location,
                         webView: browserState.webView,
                         dataStore: browserState.webView?.configuration.websiteDataStore,
-                        onAttemptHTTPS: attemptHTTPS
+                        browserState: browserState, onAttemptHTTPS: attemptHTTPS
                     )
                     .roomyToolbarPopover()
                 }

@@ -141,15 +141,7 @@ let Settings: [Setting] = {
             appStorageKey: "recordHistory",
             defaultValueBool: true
         ),
-        
-        Setting(
-            name:"Smart Dark Mode",
-            icon: "moon.stars",
-            category: catAppearance,
-            type:"toggle",
-            appStorageKey:"smartDarkMode",
-            defaultValueBool:false
-        ),
+      
         
         Setting(
             name: "Handoff",
@@ -1349,21 +1341,11 @@ struct SettingsSectionContent: View {
         
             ForEach(settingsForCategory) { setting in
                 if !setting.hidden && !(setting.advanced && !isAdvancedPressed) {
-                    if setting.appStorageKey == "smartDarkMode" {
-                        if colorScheme == .dark {
-                            SettingsCardRow(
-                                setting: setting,
-                                icon: setting.icon,
-                                accentColor: def.color
-                            )
-                        }
-                    } else {
                         SettingsCardRow(
                             setting: setting,
                             icon: setting.icon,
                             accentColor: def.color
                         )
-                    }
             }
             }
             

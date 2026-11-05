@@ -9,12 +9,15 @@ struct ServerTrustView: View {
     let webView: WKWebView?
     let dataStore: WKWebsiteDataStore?
     @StateObject private var store = SitePermissionStore.shared
+    @ObservedObject var browserState: BrowserState
     @State private var isTrusted: Bool = false
     @State private var certificates: [SecCertificate] = []
     @State private var cookies: [HTTPCookie] = []
     @State private var errorMessage: String? = nil
     
     @Query private var historyItems: [HistoryItem]
+    
+    @Environment(\.colorScheme) private var colorScheme
     
     private var host: String {
         url?.host() ?? ""
@@ -70,6 +73,25 @@ struct ServerTrustView: View {
                     }
                 }
                 
+                if colorScheme == .dark {
+                    Divider()
+                    HStack {
+                        Text("Smart Dark Mode")
+                        Spacer()
+                        Toggle("", isOn: Binding(
+                            get: { SmartDarkModePreferences.isEnabled(for: host) },
+                            set: {
+                                SmartDarkModePreferences.setEnabled($0, for: host)
+                                    if let webView {
+                                        BrowserWebView.updateSmartDarkMode(on: webView, for: url)
+                                    }
+                            }
+                        ))
+                        .toggleStyle(.switch)
+                    }
+                    .frame(maxWidth: .infinity)
+                }
+
                 if let host = url?.host {
                     Divider()
                     

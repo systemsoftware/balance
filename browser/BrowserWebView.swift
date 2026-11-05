@@ -1016,17 +1016,41 @@ struct BrowserWebView: PlatformViewRepresentable {
         for script in desired { controller.addUserScript(script) }
     }
 
+    private static var smartDarkSource: String? {
+        let enabledHosts = SmartDarkModePreferences.enabledHosts
+        guard !enabledHosts.isEmpty, let smartDarkScriptSource,
+              let hosts = try? JSONEncoder().encode(enabledHosts),
+              let hostLiteral = String(data: hosts, encoding: .utf8) else { return nil }
+        return """
+        \(smartDarkScriptMarker)if ((location.protocol === 'http:' || location.protocol === 'https:') && \(hostLiteral).includes(location.hostname.toLowerCase())) {
+        \(smartDarkScriptSource)
+        window.__balanceSmartDarkMode.setEnabled(true);
+        }
+        """
+    }
+
     @discardableResult
-    private static func synchronizeSmartDarkMode(on controller: WKUserContentController, enabled: Bool) -> Bool {
-        guard let smartDarkScriptSource else { return false }
-        let source = smartDarkScriptMarker + smartDarkScriptSource
-            + "\nwindow.__balanceSmartDarkMode.setEnabled(\(enabled ? "true" : "false"));"
-        guard !controller.userScripts.contains(where: { $0.source == source }) else { return false }
+    private static func synchronizeSmartDarkMode(on controller: WKUserContentController) -> Bool {
+        let source = smartDarkSource
+        let current = controller.userScripts.filter { $0.source.hasPrefix(smartDarkScriptMarker) }
+        let desiredSources = source.map { [$0] } ?? []
+        guard current.map(\.source) != desiredSources else { return false }
         let otherScripts = controller.userScripts.filter { !$0.source.hasPrefix(smartDarkScriptMarker) }
         controller.removeAllUserScripts()
         for script in otherScripts { controller.addUserScript(script) }
-        controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: false))
+        if let source {
+            controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: false))
+        }
         return true
+    }
+
+    static func updateSmartDarkMode(on webView: WKWebView, for url: URL?) {
+        guard synchronizeSmartDarkMode(on: webView.configuration.userContentController) else { return }
+        if SmartDarkModePreferences.isEnabled(for: url), let source = smartDarkSource {
+            webView.evaluateJavaScript(source, completionHandler: nil)
+        } else {
+            webView.evaluateJavaScript("window.__balanceSmartDarkMode?.setEnabled(false)", completionHandler: nil)
+        }
     }
     static let pageScriptMessageHandlerNames = [
         "notificationRequestPermission", "notificationShow", "balanceLocation",
@@ -1046,7 +1070,6 @@ struct BrowserWebView: PlatformViewRepresentable {
 
     let request: URLRequest
     @ObservedObject var state: BrowserState
-    @AppStorage("smartDarkMode", store: Config.sharedDefaults) private var smartDarkMode = false
     let navigationRevision: UInt
     @ObservedObject var permissions = SitePermissionStore.shared
     
@@ -1119,9 +1142,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                 userContentController.add(context.coordinator, contentWorld: Self.internalContentWorld, name: name)
             }
             Self.synchronizeUserScripts(on: userContentController)
-            if Self.synchronizeSmartDarkMode(on: userContentController, enabled: smartDarkMode) {
-                preloaded.evaluateJavaScript("window.__balanceSmartDarkMode?.setEnabled(\(smartDarkMode ? "true" : "false"))", completionHandler: nil)
-            }
+            Self.updateSmartDarkMode(on: preloaded, for: preloaded.url ?? request.url)
             
             DispatchQueue.main.async {
                 state.attach(preloaded)
@@ -1227,7 +1248,7 @@ struct BrowserWebView: PlatformViewRepresentable {
             config.userContentController.addUserScript(preloadScript)
         }
         
-        Self.synchronizeSmartDarkMode(on: config.userContentController, enabled: smartDarkMode)
+        Self.synchronizeSmartDarkMode(on: config.userContentController)
 
         let notificationsSetting = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
         let notifSettingStr = notificationsSetting == .allow ? "granted" : (notificationsSetting == .deny ? "denied" : "default")
@@ -1439,9 +1460,7 @@ struct BrowserWebView: PlatformViewRepresentable {
 
     private func updateWebView(_ webView: WKWebView, context: Context) {
         let nsView = webView
-        if Self.synchronizeSmartDarkMode(on: nsView.configuration.userContentController, enabled: smartDarkMode) {
-            nsView.evaluateJavaScript("window.__balanceSmartDarkMode?.setEnabled(\(smartDarkMode ? "true" : "false"))", completionHandler: nil)
-        }
+        Self.updateSmartDarkMode(on: nsView, for: nsView.url ?? request.url)
         let host = nsView.url?.host ?? request.url?.host ?? "default"
         
         let siteZoom = SitePermissionStore.shared.zoomLevel(for: host)
@@ -2252,6 +2271,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                let scheme = navigationAction.request.url?.scheme?.lowercased(),
                scheme == "http" || scheme == "https" {
                 BrowserWebView.synchronizeUserScripts(on: webView.configuration.userContentController)
+                BrowserWebView.synchronizeSmartDarkMode(on: webView.configuration.userContentController)
             }
             if state.hidesHomepageURL,
                state.hasFinishedHiddenHomepageNavigation,
