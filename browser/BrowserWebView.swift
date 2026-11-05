@@ -939,6 +939,11 @@ enum BrowserErrorKind {
 struct BrowserWebView: PlatformViewRepresentable {
     private static let errorPageRequestHeader = "X-Balance-Error-Page"
     private static let userScriptMarker = "// balance-userscript:"
+    private static let smartDarkScriptMarker = "// balance-smart-dark-mode\n"
+    private static let smartDarkScriptSource: String? = {
+        guard let url = Bundle.main.url(forResource: "smartdark", withExtension: "js") else { return nil }
+        return try? String(contentsOf: url, encoding: .utf8)
+    }()
     static let internalContentWorld = WKContentWorld.world(name: "BalanceInternal")
     private static var cachedUserScripts: (revision: UInt, scripts: [WKUserScript])?
 
@@ -1010,6 +1015,19 @@ struct BrowserWebView: PlatformViewRepresentable {
         for script in otherScripts { controller.addUserScript(script) }
         for script in desired { controller.addUserScript(script) }
     }
+
+    @discardableResult
+    private static func synchronizeSmartDarkMode(on controller: WKUserContentController, enabled: Bool) -> Bool {
+        guard let smartDarkScriptSource else { return false }
+        let source = smartDarkScriptMarker + smartDarkScriptSource
+            + "\nwindow.__balanceSmartDarkMode.setEnabled(\(enabled ? "true" : "false"));"
+        guard !controller.userScripts.contains(where: { $0.source == source }) else { return false }
+        let otherScripts = controller.userScripts.filter { !$0.source.hasPrefix(smartDarkScriptMarker) }
+        controller.removeAllUserScripts()
+        for script in otherScripts { controller.addUserScript(script) }
+        controller.addUserScript(WKUserScript(source: source, injectionTime: .atDocumentEnd, forMainFrameOnly: false))
+        return true
+    }
     static let pageScriptMessageHandlerNames = [
         "notificationRequestPermission", "notificationShow", "balanceLocation",
         "printPage", "webShare", "balancePermissionsQuery"
@@ -1028,6 +1046,7 @@ struct BrowserWebView: PlatformViewRepresentable {
 
     let request: URLRequest
     @ObservedObject var state: BrowserState
+    @AppStorage("smartDarkMode", store: Config.sharedDefaults) private var smartDarkMode = false
     let navigationRevision: UInt
     @ObservedObject var permissions = SitePermissionStore.shared
     
@@ -1100,6 +1119,9 @@ struct BrowserWebView: PlatformViewRepresentable {
                 userContentController.add(context.coordinator, contentWorld: Self.internalContentWorld, name: name)
             }
             Self.synchronizeUserScripts(on: userContentController)
+            if Self.synchronizeSmartDarkMode(on: userContentController, enabled: smartDarkMode) {
+                preloaded.evaluateJavaScript("window.__balanceSmartDarkMode?.setEnabled(\(smartDarkMode ? "true" : "false"))", completionHandler: nil)
+            }
             
             DispatchQueue.main.async {
                 state.attach(preloaded)
@@ -1205,6 +1227,8 @@ struct BrowserWebView: PlatformViewRepresentable {
             config.userContentController.addUserScript(preloadScript)
         }
         
+        Self.synchronizeSmartDarkMode(on: config.userContentController, enabled: smartDarkMode)
+
         let notificationsSetting = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
         let notifSettingStr = notificationsSetting == .allow ? "granted" : (notificationsSetting == .deny ? "denied" : "default")
         if notifSettingStr != "default" {
@@ -1415,6 +1439,9 @@ struct BrowserWebView: PlatformViewRepresentable {
 
     private func updateWebView(_ webView: WKWebView, context: Context) {
         let nsView = webView
+        if Self.synchronizeSmartDarkMode(on: nsView.configuration.userContentController, enabled: smartDarkMode) {
+            nsView.evaluateJavaScript("window.__balanceSmartDarkMode?.setEnabled(\(smartDarkMode ? "true" : "false"))", completionHandler: nil)
+        }
         let host = nsView.url?.host ?? request.url?.host ?? "default"
         
         let siteZoom = SitePermissionStore.shared.zoomLevel(for: host)

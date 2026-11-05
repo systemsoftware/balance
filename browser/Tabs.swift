@@ -107,20 +107,35 @@ struct Tabs: View {
                         
                         // MARK: Pinned Section
                         if !store.items.isEmpty {
-                            VStack(alignment: .leading, spacing: 6) {
-                                ScrollView(.horizontal, showsIndicators: false) {
-                                    HStack(spacing: 8) {
-                                        ForEach(store.items) { bookmark in
-                                            PinnedSiteButton(bookmark: bookmark, pinStore: store)
-                                                .onDrag {
-                                                    self.draggedPin = bookmark
-                                                    return NSItemProvider(object: bookmark.id.uuidString as NSString)
-                                                }
-                                                .onDrop(of: [UTType.text], delegate: PinDropDelegate(item: bookmark, store: store, draggedItem: $draggedPin))
-                                        }
+                            if tabMode == 6 {
+                                VStack(spacing: 8) {
+                                    ForEach(store.items) { bookmark in
+                                        PinnedSiteButton(bookmark: bookmark, pinStore: store)
+                                            .onDrag {
+                                                self.draggedPin = bookmark
+                                                return NSItemProvider(object: bookmark.id.uuidString as NSString)
+                                            }
+                                            .onDrop(of: [UTType.text], delegate: PinDropDelegate(item: bookmark, store: store, draggedItem: $draggedPin))
                                     }
-                                    .padding(.horizontal, 14)
-                                    .padding(.bottom, 4)
+                                }
+                                .frame(maxWidth: .infinity)
+                                .padding(.top, 8)
+                            } else {
+                                VStack(alignment: .leading, spacing: 6) {
+                                    ScrollView(.horizontal, showsIndicators: false) {
+                                        HStack(spacing: 8) {
+                                            ForEach(store.items) { bookmark in
+                                                PinnedSiteButton(bookmark: bookmark, pinStore: store)
+                                                    .onDrag {
+                                                        self.draggedPin = bookmark
+                                                        return NSItemProvider(object: bookmark.id.uuidString as NSString)
+                                                    }
+                                                    .onDrop(of: [UTType.text], delegate: PinDropDelegate(item: bookmark, store: store, draggedItem: $draggedPin))
+                                            }
+                                        }
+                                        .padding(.horizontal, 14)
+                                        .padding(.bottom, 4)
+                                    }
                                 }
                             }
                             
@@ -132,13 +147,13 @@ struct Tabs: View {
                         
                         // MARK: Open Tabs Section
                         VStack(alignment: .leading, spacing: 2) {
-                            if store.items.isEmpty {
+                            if tabMode != 6 && store.items.isEmpty {
                                 SectionLabel(title: windowManager.spaceNames.indices.contains(windowManager.currentSpaceIndex) ? windowManager.spaceNames[windowManager.currentSpaceIndex] : "Space \(windowManager.currentSpaceIndex + 1)", count: filteredTabs.count)
                                     .padding(.top)
                                     .padding(.horizontal, 14)
                                     .padding(.top, 12)
                                     .padding(.bottom, 4)
-                            } else {
+                            } else if tabMode != 6 {
                                 SectionLabel(title: windowManager.spaceNames.indices.contains(windowManager.currentSpaceIndex) ? windowManager.spaceNames[windowManager.currentSpaceIndex] : "Space \(windowManager.currentSpaceIndex + 1)", count: filteredTabs.count)
                                     .padding(.top)
                                     .padding(.horizontal, 14)
@@ -150,9 +165,11 @@ struct Tabs: View {
                                     Image(systemName: "magnifyingglass")
                                         .font(.system(size: 22, weight: .light))
                                         .foregroundStyle(.tertiary)
-                                    Text("No tabs here")
-                                        .font(.system(size: 12))
-                                        .foregroundStyle(.tertiary)
+                                    if tabMode != 6 {
+                                        Text("No tabs here")
+                                            .font(.system(size: 12))
+                                            .foregroundStyle(.tertiary)
+                                    }
                                 }
                                 .frame(maxWidth: .infinity)
                                 .padding(.vertical, 30)
@@ -164,7 +181,8 @@ struct Tabs: View {
                                         isHovered: hoveredID == ObjectIdentifier(tab),
                                         pinStore: store,
                                         applyGlass:true,
-                                        animateInsertion: tab.shouldAnimateTabInsertion
+                                        animateInsertion: tab.shouldAnimateTabInsertion,
+                                        compact: (tabMode == 6)
                                     )
                                     .padding(.horizontal, 8)
                                     .onHover { over in
@@ -199,6 +217,41 @@ struct Tabs: View {
                 if showSpaces {
                     VStack(spacing: 8) {
                         Divider().opacity(0.3)
+                        if tabMode == 6 {
+                            Menu {
+                                ForEach(Array(windowManager.spaceNames.enumerated()), id: \.offset) { index, spaceName in
+                                    Button {
+                                        withAnimation { selectSpace(at: index) }
+                                    } label: {
+                                        if windowManager.currentSpaceIndex == index {
+                                            Label(spaceName, systemImage: "checkmark")
+                                        } else {
+                                            Text(spaceName)
+                                        }
+                                    }
+                                }
+                                Divider()
+                                Button("New Space") {
+                                    withAnimation { createSpace() }
+                                }
+                                Button("Rename Space") {
+                                    promptRenameSpace(at: windowManager.currentSpaceIndex)
+                                }
+                                if windowManager.spaceNames.count > 1 {
+                                    Button("Remove Space", role: .destructive) {
+                                        windowManager.removeSpace(at: windowManager.currentSpaceIndex)
+                                    }
+                                }
+                            } label: {
+                                Image(systemName: "rectangle.on.rectangle.angled")
+                                    .frame(width: 34, height: 34)
+                            }
+                            .menuStyle(.borderlessButton)
+                            .menuIndicator(.hidden)
+                            .help("Spaces")
+                            .padding()
+                            .frame(maxWidth: .infinity)
+                        } else {
                         HStack(spacing: 12) {
                             ForEach(Array(windowManager.spaceNames.enumerated()), id: \.offset) { index, spaceName in
                                 Circle()
@@ -239,6 +292,7 @@ struct Tabs: View {
                             .help("New Space")
                         }
                         .padding(.vertical, 8)
+                        }
                     }
                     .background(Color.clear)
                 }
@@ -613,6 +667,7 @@ private struct PinnedSiteButton: View {
             }
         }
         .buttonStyle(.plain)
+        .help(bookmark.title)
         .onHover { isHovered = $0 }
         .contextMenu {
             Button("Remove Pin") {
@@ -632,6 +687,7 @@ private struct TabRow: View {
     var pinStore: PinStore
     var showURL = true
     let animateInsertion: Bool
+    var compact: Bool = false
     @EnvironmentObject var windowManager: WindowManager
     @State private var insertionFinished: Bool
     @State private var faviconURL: URL?
@@ -650,6 +706,7 @@ private struct TabRow: View {
         showURL: Bool = true,
         applyGlass: Bool = false,
         animateInsertion: Bool = false,
+        compact: Bool = false
     ) {
         self.state = state
         self.isActive = isActive
@@ -658,11 +715,12 @@ private struct TabRow: View {
         self.showURL = showURL
         self.animateInsertion = animateInsertion
         self.glass = applyGlass
+        self.compact = compact
         self._insertionFinished = State(initialValue: !animateInsertion)
     }
 
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(alignment: .center, spacing: 8) {
             ZStack {
                 if state.isLoading {
                     ProgressView()
@@ -683,52 +741,55 @@ private struct TabRow: View {
                 }
             }
             .frame(width: 16, height: 16)
-
+            
             // Title + URL
-            VStack(alignment: .leading, spacing: 1) {
-                HStack(spacing: 4) {
-                    Text(state.title.isEmpty ? "New Tab" : state.title)
-                        .font(.system(size: 12, weight: isActive ? .semibold : .regular))
-                        .lineLimit(1)
-                    
-                    if state.isSleeping {
-                        Image(systemName: "moon.zzz.fill")
-                            .font(.system(size: 9))
-                            .foregroundStyle(.secondary)
-                    }
-                }
-
-                if let url = state.url {
-                    if showURL {
-                        Text(url.host ?? url.absoluteString)
-                            .font(.system(size: 10))
-                            .foregroundStyle(.secondary)
+            if !compact {
+                VStack(alignment: .leading, spacing: 1) {
+                    HStack(spacing: 4) {
+                        Text(state.title.isEmpty ? "New Tab" : state.title)
+                            .font(.system(size: 12, weight: isActive ? .semibold : .regular))
                             .lineLimit(1)
+                        
+                        if state.isSleeping {
+                            Image(systemName: "moon.zzz.fill")
+                                .font(.system(size: 9))
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    
+                    if let url = state.url {
+                        if showURL {
+                            Text(url.host ?? url.absoluteString)
+                                .font(.system(size: 10))
+                                .foregroundStyle(.secondary)
+                                .lineLimit(1)
+                        }
                     }
                 }
+                .frame(maxWidth: .infinity, alignment: .leading)
             }
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-            // Audio indicator
-            if state.isAudioMuted {
-                Image(systemName: "speaker.slash.fill")
-                    .font(.system(size: 10))
-                    .foregroundStyle(.tertiary)
-            }
-
-            Spacer()
             
-            Button {
-                windowManager.closeTab(state.tabID)
-            } label:{
-                Image(systemName: "xmark")
+            if !compact {
+                if state.isAudioMuted {
+                    Image(systemName: "speaker.slash.fill")
+                        .font(.system(size: 10))
+                        .foregroundStyle(.tertiary)
+                }
+
+                Spacer()
+
+                Button {
+                    windowManager.closeTab(state.tabID)
+                } label:{
+                    Image(systemName: "xmark")
+                }
+                .buttonStyle(.plain)
+                .font(.caption)
             }
-            .buttonStyle(.plain)
-            .font(.caption)
-            
             
         }
-        .padding(.horizontal, 8)
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, compact ? 0 : 8)
         .padding(.vertical, 9)
         .background {
             if isActive {
@@ -753,6 +814,8 @@ private struct TabRow: View {
             }
         }
         .contentShape(BackgroundShape())
+        .help(state.title.isEmpty ? "New Tab" : state.title)
+        .accessibilityLabel(state.title.isEmpty ? "New Tab" : state.title)
         .offset(
             x: insertionFinished || tabMode != 0 ? 0 : 80,
             y: insertionFinished || tabMode == 0 ? 0 : 24
@@ -762,8 +825,6 @@ private struct TabRow: View {
         .onAppear {
             guard animateInsertion, !insertionFinished else { return }
             Task { @MainActor in
-                // Allow the initial offset/opacity to render before transitioning.
-                // Updating immediately in onAppear is coalesced into the first frame.
                 await Task.yield()
                 state.shouldAnimateTabInsertion = false
                 withAnimation(.interactiveSpring(response: 0.32, dampingFraction: 0.82)) {
@@ -799,7 +860,7 @@ private struct TabRow: View {
                 state.webView?.reload()
             }
 
-            if tabMode == 1 || tabMode == 2 {
+            if tabMode == 1 || tabMode == 2 || tabMode == 6 {
                 if pinStore.items.first(where: { $0.url == state.url?.absoluteString }) == nil {
                     Button("Pin Tab") {
                         pinStore.add(Bookmark(

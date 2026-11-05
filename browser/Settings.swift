@@ -143,6 +143,15 @@ let Settings: [Setting] = {
         ),
         
         Setting(
+            name:"Smart Dark Mode",
+            icon: "moon.stars",
+            category: catAppearance,
+            type:"toggle",
+            appStorageKey:"smartDarkMode",
+            defaultValueBool:false
+        ),
+        
+        Setting(
             name: "Handoff",
             icon: "hand.point.up.left.and.text.fill",
             category: catSync,
@@ -229,7 +238,7 @@ let Settings: [Setting] = {
             type: "dropdown",
             appStorageKey: "tabMode",
             defaultValueInt: 0,
-            dropdownOptions: .staticOptions([0: "Top", 1: "Slide Over", 2: "Vertical", 3:"Hidden", 4: "Bottom", 5: "Compact"])
+            dropdownOptions: .staticOptions([0: "Top", 1: "Slide Over", 2: "Vertical", 3:"Hidden", 4: "Bottom", 5: "Compact", 6:"Compact Vertical"])
         ),
         Setting(
             name: "Toolbar Position",
@@ -1230,6 +1239,8 @@ struct SettingsSectionContent: View {
     
     @State private var showNewScript = false
     
+    @Environment(\.colorScheme) var colorScheme
+    
     private func loadInitialURL() {
         if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
             lmpage.load(URLRequest(url: url))
@@ -1338,11 +1349,21 @@ struct SettingsSectionContent: View {
         
             ForEach(settingsForCategory) { setting in
                 if !setting.hidden && !(setting.advanced && !isAdvancedPressed) {
-                SettingsCardRow(
-                    setting: setting,
-                    icon: setting.icon,
-                    accentColor: def.color
-                )
+                    if setting.appStorageKey == "smartDarkMode" {
+                        if colorScheme == .dark {
+                            SettingsCardRow(
+                                setting: setting,
+                                icon: setting.icon,
+                                accentColor: def.color
+                            )
+                        }
+                    } else {
+                        SettingsCardRow(
+                            setting: setting,
+                            icon: setting.icon,
+                            accentColor: def.color
+                        )
+                    }
             }
             }
             

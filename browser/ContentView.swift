@@ -377,8 +377,6 @@ struct ContentView: View {
     var body: some View {
         VStack(spacing: 0) {
             
-            // MARK: - Address Bar
-
             if leftSidebarMode == 0 && !MemoryStorage.shared.focusMode {
                 Tabs(browserState: browserState)
                     .frame(height: isCompact ? 44 : 50)
@@ -439,9 +437,9 @@ struct ContentView: View {
             HStack(spacing: 0) {
                 // MARK: - Web Content Area
                 
-                if leftSidebarMode == 2 && !MemoryStorage.shared.focusMode {
+                if (leftSidebarMode == 2 || leftSidebarMode == 6) && !MemoryStorage.shared.focusMode {
                     Tabs(browserState: browserState)
-                        .frame(width: isCompact ? min(CGFloat(leftSidebarWidth), 160) : CGFloat(leftSidebarWidth))
+                        .frame(width: leftSidebarMode == 6 ? 75 : isCompact ? min(CGFloat(leftSidebarWidth), 160) : CGFloat(leftSidebarWidth))
                         .frame(maxHeight: .infinity)
                 }
                 
