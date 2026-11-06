@@ -374,6 +374,8 @@ struct ContentView: View {
 #endif
     }
     
+    @AppStorage("showDownloadButton") var showDownloadButton = true
+    
     var body: some View {
         VStack(spacing: 0) {
             
@@ -459,7 +461,7 @@ struct ContentView: View {
                             
                             
                           
-                            ZStack {
+                            ZStack(alignment: .topTrailing) {
                                 BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
                                     .id(browserState.webViewIdentity)
                                     .roundedBorderStyleNoFrame(enabled: showPageShine)
@@ -501,8 +503,11 @@ struct ContentView: View {
 #endif
                                 
                                 if let url = browserState.url, let mimeType = browserState.mimeType {
-                                    if mimeType.contains("pdf") && usePDFKit {
-                                        PDFKitRepresentedView(url: url)
+                                    if mimeType.contains("pdf") {
+                                        if usePDFKit {
+                                            PDFKitRepresentedView(url: url)
+                                                .roundedBorderStyleNoFrame()
+                                        }
                                     }
                                     
                                     if mimeType.contains("markdown") && renderMd {
@@ -511,6 +516,18 @@ struct ContentView: View {
                                     
                                     if mimeType.contains("json") && renderJson {
                                         JSONView(url: url)
+                                    }
+                                    
+                                    
+                                    if !mimeType.contains("html") && showDownloadButton {
+                                        Button {
+                                            (browserState.webView as? BrowserWKWebView)?
+                                                .startTrackedDownload(from: url)
+                                        } label: {
+                                            Label("Download", systemImage: "arrow.down.to.line")
+                                        }
+                                        .buttonStyle(.borderedProminent)
+                                        .padding(16)
                                     }
                                 }
                             }

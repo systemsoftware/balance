@@ -1,9 +1,12 @@
 import Foundation
+import SwiftUI
 internal import Combine
 
 final class DownloadStore: ObservableObject {
     static let didChange = Notification.Name("BalanceDownloadsDidChange")
     @Published var items: [Download] = []
+
+    @AppStorage("recordDownloadHistory") var recordDownloadHistory: Bool = true
 
     private var cloudObserver: NSObjectProtocol?
     private var localObserver: NSObjectProtocol?
@@ -50,6 +53,9 @@ final class DownloadStore: ObservableObject {
     }
 
     func add(_ download: Download) {
+        if recordDownloadHistory == false {
+            return
+        }
         items.append(download)
         save()
     }
@@ -61,13 +67,35 @@ final class DownloadStore: ObservableObject {
 
     func discard(id: UUID) {
         if let item = items.first(where: { $0.id == id }) {
-            let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL
-            for path in item.temporaryPaths ?? [] {
-                let url = URL(fileURLWithPath: path).standardizedFileURL
-                guard url.deletingLastPathComponent() == temporaryDirectory else { continue }
-                try? FileManager.default.removeItem(at: url)
-            }
+            removeTemporaryFiles(for: item)
         }
         remove(id: id)
+    }
+
+    func clearAll() {
+        for item in items {
+            removeTemporaryFiles(for: item)
+        }
+        items.removeAll()
+        save()
+    }
+
+    static func clearAllHistory() {
+        let keys = Config.defaults.dictionaryRepresentation().keys.filter {
+            $0 == "Downloads" || $0.hasPrefix("Downloads_")
+        }
+        for key in keys {
+            let profile = key == "Downloads" ? "" : String(key.dropFirst("Downloads_".count))
+            DownloadStore(profile: profile).clearAll()
+        }
+    }
+
+    private func removeTemporaryFiles(for item: Download) {
+        let temporaryDirectory = FileManager.default.temporaryDirectory.standardizedFileURL
+        for path in item.temporaryPaths ?? [] {
+            let url = URL(fileURLWithPath: path).standardizedFileURL
+            guard url.deletingLastPathComponent() == temporaryDirectory else { continue }
+            try? FileManager.default.removeItem(at: url)
+        }
     }
 }

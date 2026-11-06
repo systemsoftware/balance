@@ -830,10 +830,9 @@ struct BrowserHomepage: View {
 
 
     private func addSamples() {
-        store.add(Bookmark(title: "GitHub",  url: "https://github.com"))
-        store.add(Bookmark(title: "Apple",   url: "https://apple.com"))
-        store.add(Bookmark(title: "SwiftUI", url: "https://developer.apple.com/xcode/swiftui/"))
-        store.add(Bookmark(title: "HN",      url: "https://news.ycombinator.com"))
+        store.add(Bookmark(title: "Google", url: "https://www.google.com"))
+        store.add(Bookmark(title: "Wikipedia", url: "https://www.wikipedia.org"))
+        store.add(Bookmark(title: "GitHub", url: "https://www.github.com"))
     }
 
     private func saveBackgroundImage(from sourceURL: URL) {

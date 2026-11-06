@@ -70,6 +70,8 @@ let catPrivacy = CategoryDef(
     description: "Manage data retention, tracking preferences, and local browsing privacy options."
 )
 
+let catHistory = CategoryDef(id: "history", name: "History", icon: "clock", color: .gray, description: "Manage your browsing history and related settings.")
+
 let catAdvanced = CategoryDef(
     id: "advanced",
     name: "Advanced",
@@ -128,7 +130,7 @@ let catAppearance = CategoryDef(
 
 
 let categoryDefs: [CategoryDef] = [
-    catBrowsing, catAppearance, catSidebar, catAI, catAutofill, catSync, catPalette, catBookmarks, catProfiles, catPrivacy, catContetBlocker, catExt, catAdvanced, catLearnMore
+    catBrowsing, catAppearance, catSidebar, catAI, catAutofill, catSync, catPalette, catBookmarks, catProfiles, catPrivacy, catHistory, catContetBlocker, catExt, catAdvanced, catLearnMore
 ]
 
 let Settings: [Setting] = {
@@ -136,12 +138,20 @@ let Settings: [Setting] = {
         Setting(
             name: "Browsing History",
             icon: "clock",
-            category: catPrivacy,
+            category: catHistory,
             type: "toggle",
             appStorageKey: "recordHistory",
             defaultValueBool: true
         ),
       
+        Setting(
+            name: "Download History",
+            icon: "arrow.down.circle",
+            category: catHistory,
+            type: "toggle",
+            appStorageKey: "recordDownloadHistory",
+            defaultValueBool: true
+        ),
         
         Setting(
             name: "Handoff",
@@ -214,7 +224,7 @@ let Settings: [Setting] = {
             appStorageKey: "homepage",
             defaultValueString: "balance://home"
         ),
-
+        
         Setting(
             name: "Expose Bookmarks to Homepage",
             icon: "house.and.flag",
@@ -375,7 +385,7 @@ let Settings: [Setting] = {
         Setting(
             name: "Clear Browsing History On Close",
             icon: "clock.badge.xmark",
-            category: catPrivacy,
+            category: catHistory,
             type: "toggle",
             appStorageKey: "clearHistoryOnClose",
             defaultValueBool: false
@@ -383,7 +393,7 @@ let Settings: [Setting] = {
         Setting(
             name: "Clear Download History On Close",
             icon: "arrow.down.circle.badge.xmark",
-            category: catPrivacy,
+            category: catHistory,
             type: "toggle",
             appStorageKey: "clearDownloadHistoryOnClose",
             defaultValueBool: true
@@ -478,6 +488,11 @@ let Settings: [Setting] = {
             appStorageKey: "openLinksInBackground",
             defaultValueBool: false
         ),
+        
+        
+        Setting(name: "Show Download Button", icon: "arrow.down.circle", category: catBrowsing, type: "toggle", appStorageKey: "showDownloadButton", defaultValueBool: true),
+        
+        
         Setting(
             name:"Manage Permissions",
             icon:"lock.shield",

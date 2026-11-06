@@ -11,6 +11,8 @@ struct SaveToToolbarButton: View {
     var body: some View {
         
         Menu() {
+            if let loc = location {
+                
                 Button("Bookmark", systemImage: "star") {
                     bookmarkStore.add(Bookmark(
                         title: location?.host() ?? "Unnamed",
@@ -24,13 +26,22 @@ struct SaveToToolbarButton: View {
                         url: location
                     ))
                 }
-            
+                
                 Divider()
-            
-            Button("PDF") {
-                browserState.exportWebViewToPDF()
+                Button("Download")
+                {
+                    (browserState.webView as? BrowserWKWebView)?
+                        .startTrackedDownload(from: loc)
+                }
+                
+                
+                Button("PDF") {
+                    browserState.exportWebViewToPDF()
+                }
+            } else {
+                Text("No page found")
+                    .disabled(true)
             }
-            
         } label: {
             ToolbarItemLabel(expanded: expandedLabel, title: "Save To", systemImage: "star.fill")
         }

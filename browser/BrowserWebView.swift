@@ -781,6 +781,20 @@ final class BrowserWKWebView: WKWebView {
     
     var downloadStore: DownloadStore?
     var state: BrowserState?
+
+    func startTrackedDownload(from url: URL, suggestedFilename: String? = nil) {
+        Task { @MainActor [weak self] in
+            guard let self else { return }
+            let download = await startDownload(using: URLRequest(url: url))
+            guard let coordinator = navigationDelegate as? BrowserWebView.Coordinator else { return }
+            coordinator.downloads.insert(download)
+            DockProgressManager.shared.add(download: download)
+            if let suggestedFilename, !suggestedFilename.isEmpty {
+                coordinator.downloadTitles[download] = suggestedFilename
+            }
+            download.delegate = coordinator
+        }
+    }
     
     override func becomeFirstResponder() -> Bool {
         let result = super.becomeFirstResponder()
@@ -899,18 +913,7 @@ final class BrowserWKWebView: WKWebView {
         """) { value, _ in
             guard let dict = value as? [String: String], let urlString = dict["url"], let url = URL(string: urlString) else { return }
             let name = dict["name"] ?? ""
-            let request = URLRequest(url: url)
-            Task { @MainActor in
-                let download = await self.startDownload(using: request)
-                if let coordinator = self.navigationDelegate as? BrowserWebView.Coordinator {
-                    coordinator.downloads.insert(download)
-                    DockProgressManager.shared.add(download: download)
-                    if !name.isEmpty {
-                        coordinator.downloadTitles[download] = name
-                    }
-                    download.delegate = coordinator
-                }
-            }
+            self.startTrackedDownload(from: url, suggestedFilename: name)
         }
     }
     #endif

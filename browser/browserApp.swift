@@ -189,7 +189,7 @@ struct browserApp: App {
         SwiftUI.Settings {
             SettingsView(isStandalone: true)
                 .buttonBorderShape(.roundedRectangle(radius: 10))
-                .frame(minWidth: 450, minHeight: 615)
+                .frame(minWidth: 450, minHeight: 645)
         }
     }
     #else
@@ -239,18 +239,15 @@ private func performCloseCleanup() async {
     let clearCache = defaults.bool(forKey: "clearCacheOnClose")
     let clearCookies = defaults.bool(forKey: "clearCookiesOnClose")
     let clearHistory = defaults.bool(forKey: "clearHistoryOnClose")
-    let clearDownloadHistory = defaults.bool(forKey: "clearDownloadHistoryOnClose")
+    let clearDownloadHistory = defaults.object(forKey: "clearDownloadHistoryOnClose") as? Bool ?? true
 
+    if clearDownloadHistory {
+        DownloadStore.clearAllHistory()
+    }
     if clearHistory {
         await HistoryManager.clearAllHistory()
     } else {
         HistoryManager.flushPending()
-    }
-    if clearDownloadHistory {
-        let downloadStore = DownloadStore()
-        for download in downloadStore.items {
-            downloadStore.discard(id: download.id)
-        }
     }
     cleanTemporaryDirectory()
 
