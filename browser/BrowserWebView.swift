@@ -1843,18 +1843,9 @@ struct BrowserWebView: PlatformViewRepresentable {
                         
                         let currentState = SitePermissionStore.shared.mediaPermission(for: host, type: "notifications")
                         if currentState == .ask {
-#if canImport(AppKit)
-                            let alert = NSAlert()
-                            alert.messageText = "Allow \"\(host)\" to show notifications?"
-                            alert.addButton(withTitle: "Allow")
-                            alert.addButton(withTitle: "Deny")
-                            let result = alert.runModal()
-                            handleResult(result == .alertFirstButtonReturn ? .allow : .deny)
-#else
-                            SwiftUIPresentationCenter.shared.confirm("Allow \"\(host)\" to show notifications?") {
+                            SwiftUIPresentationCenter.shared.permission("Allow \"\(host)\" to show notifications?", tabID: self.state.tabID) {
                                 handleResult($0 ? .allow : .deny)
                             }
-#endif
                         } else {
                             handleResult(currentState)
                         }
@@ -2202,19 +2193,10 @@ struct BrowserWebView: PlatformViewRepresentable {
 
                         print("Handler app:", appName)
                         print("Path:", appURL.path)
-
-                        let alert = NSAlert()
-                        alert.messageText = "Open URL in \(appName)?"
-                        alert.addButton(withTitle: "Open")
-                        alert.addButton(withTitle: "Cancel")
-
-                        if alert.runModal() == .alertSecondButtonReturn {
-                            decisionHandler(.cancel, preferences)
-                            return
-                        }
-
-                        PlatformApplication.open(url)
                         decisionHandler(.cancel, preferences)
+                        SwiftUIPresentationCenter.shared.confirm("Open URL in \(appName)?", message: url.absoluteString, primaryTitle: "Open") { allowed in
+                            if allowed { PlatformApplication.open(url) }
+                        }
                         return
                     }
 #else
@@ -2533,66 +2515,11 @@ struct BrowserWebView: PlatformViewRepresentable {
                 return
             }
             
-#if canImport(AppKit)
-            let alert = NSAlert()
-            var messageText = "The website \"\(host)\" would like to access your "
-            if type == .camera {
-                messageText += "camera."
-            } else if type == .microphone {
-                messageText += "microphone."
-            } else {
-                messageText += "camera and microphone."
-            }
-            alert.messageText = messageText
-            alert.informativeText = "You can change this later in the site settings (padlock icon)."
-            alert.addButton(withTitle: "Allow")
-            alert.addButton(withTitle: "Deny")
-            
-            if let window = webView.window {
-                alert.beginSheetModal(for: window) { response in
-                    if response == .alertFirstButtonReturn {
-                        if type == .camera || type == .cameraAndMicrophone {
-                            SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: .allow)
-                        }
-                        if type == .microphone || type == .cameraAndMicrophone {
-                            SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: .allow)
-                        }
-                        decisionHandler(.grant)
-                    } else {
-                        if type == .camera || type == .cameraAndMicrophone {
-                            SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: .deny)
-                        }
-                        if type == .microphone || type == .cameraAndMicrophone {
-                            SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: .deny)
-                        }
-                        decisionHandler(.deny)
-                    }
-                }
-            } else {
-                let response = alert.runModal()
-                if response == .alertFirstButtonReturn {
-                    if type == .camera || type == .cameraAndMicrophone {
-                        SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: .allow)
-                    }
-                    if type == .microphone || type == .cameraAndMicrophone {
-                        SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: .allow)
-                    }
-                    decisionHandler(.grant)
-                } else {
-                    if type == .camera || type == .cameraAndMicrophone {
-                        SitePermissionStore.shared.setMediaPermission(for: host, type: "camera", state: .deny)
-                    }
-                    if type == .microphone || type == .cameraAndMicrophone {
-                        SitePermissionStore.shared.setMediaPermission(for: host, type: "microphone", state: .deny)
-                    }
-                    decisionHandler(.deny)
-                }
-            }
-#else
             let accessName = type == .camera ? "camera" : (type == .microphone ? "microphone" : "camera and microphone")
-            SwiftUIPresentationCenter.shared.confirm(
+            SwiftUIPresentationCenter.shared.permission(
                 "Allow \"\(host)\" to access your \(accessName)?",
-                message: "You can change this later in site settings."
+                message: "You can change this later in site settings.",
+                tabID: state.tabID
             ) { allowed in
                 let state: PermissionState = allowed ? .allow : .deny
                 if type == .camera || type == .cameraAndMicrophone {
@@ -2603,7 +2530,6 @@ struct BrowserWebView: PlatformViewRepresentable {
                 }
                 decisionHandler(allowed ? .grant : .deny)
             }
-#endif
         }
 
         func webView(_ webView: WKWebView,
@@ -2626,15 +2552,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                      initiatedByFrame frame: WKFrameInfo,
                      completionHandler: @escaping (Bool) -> Void) {
 
-#if canImport(AppKit)
-            let alert = NSAlert()
-            alert.messageText = message
-            alert.addButton(withTitle: "OK")
-            alert.addButton(withTitle: "Cancel")
-            completionHandler(alert.runModal() == .alertFirstButtonReturn)
-#else
             SwiftUIPresentationCenter.shared.confirm(message, primaryTitle: "OK", completion: completionHandler)
-#endif
         }
 
         func webView(_ webView: WKWebView,
@@ -2658,27 +2576,16 @@ struct BrowserWebView: PlatformViewRepresentable {
                     }
                     
                     if state == .ask {
-#if canImport(AppKit)
-                        let alert = NSAlert()
-                        alert.messageText = "Allow \"\(host)\" to use your location?"
-                        alert.addButton(withTitle: "Allow")
-                        alert.addButton(withTitle: "Deny")
-                        let result = alert.runModal()
-                        let newState: PermissionState = (result == .alertFirstButtonReturn) ? .allow : .deny
-                        SitePermissionStore.shared.setMediaPermission(for: host, type: "location", state: newState)
-                        
-                        if newState == .allow {
-                            handleAllow()
-                        }
-                        completionHandler(newState.rawValue)
-#else
-                        SwiftUIPresentationCenter.shared.confirm("Allow \"\(host)\" to use your location?") { allowed in
+                        SwiftUIPresentationCenter.shared.permission(
+                            "Allow \"\(host)\" to use your location?",
+                            message: "You can change this later in site settings.",
+                            tabID: self.state.tabID
+                        ) { allowed in
                             let newState: PermissionState = allowed ? .allow : .deny
                             SitePermissionStore.shared.setMediaPermission(for: host, type: "location", state: newState)
                             if allowed { handleAllow() }
                             completionHandler(newState.rawValue)
                         }
-#endif
                     } else {
                         if state == .allow {
                             handleAllow()
@@ -2691,22 +2598,7 @@ struct BrowserWebView: PlatformViewRepresentable {
                 return
             }
 
-#if canImport(AppKit)
-            let alert = NSAlert()
-            alert.messageText = prompt
-
-            let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-            input.stringValue = defaultText ?? ""
-            alert.accessoryView = input
-
-            alert.addButton(withTitle: "OK")
-            alert.addButton(withTitle: "Cancel")
-
-            let result = alert.runModal()
-            completionHandler(result == .alertFirstButtonReturn ? input.stringValue : nil)
-#else
             SwiftUIPresentationCenter.shared.prompt(prompt, placeholder: prompt, initialText: defaultText ?? "", completion: completionHandler)
-#endif
         }
         
         func webView(_ webView: WKWebView,
@@ -2833,27 +2725,17 @@ final class WebExtensionManager: NSObject, ObservableObject, WKWebExtensionContr
 
         let extensionName = extensionContext.webExtension.manifest["name"] as? String
             ?? "This extension"
-        let visibleItems = requestedItems.sorted().prefix(8)
-        var details = visibleItems.map { "• \($0)" }.joined(separator: "\n")
-        if requestedItems.count > visibleItems.count {
-            details += "\n• …and \(requestedItems.count - visibleItems.count) more"
-        }
+        let visibleItems = Array(requestedItems.sorted().prefix(8))
+        let remainingCount = requestedItems.count - visibleItems.count
+        let items = visibleItems + (remainingCount > 0 ? ["…and \(remainingCount) more"] : [])
 
-#if canImport(AppKit)
-        let alert = NSAlert()
-        alert.messageText = "Allow \"\(extensionName)\" additional access?"
-        alert.informativeText = details
-        alert.addButton(withTitle: "Allow")
-        alert.addButton(withTitle: "Deny")
-        completion(alert.runModal() == .alertFirstButtonReturn)
-#else
-        SwiftUIPresentationCenter.shared.confirm(
+        SwiftUIPresentationCenter.shared.permission(
             "Allow \"\(extensionName)\" additional access?",
-            message: details
+            message: "This extension is requesting access to:",
+            items: items
         ) { allowed in
             completion(allowed)
         }
-#endif
     }
     
     func webExtensionController(_ controller: WKWebExtensionController, openOptionsPageFor extensionContext: WKWebExtensionContext, completionHandler: @escaping (Error?) -> Void) {

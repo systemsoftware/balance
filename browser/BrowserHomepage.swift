@@ -770,43 +770,40 @@ struct BrowserHomepage: View {
                     
                 TextField("City", text: $weatherCity)
                 HStack {
-                    Button {
-                     showCityChange = false
+                    Spacer()
+                    Button("Cancel") { showCityChange = false }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") {
+                        showCityChange = false
                         weatherVM.fetch(city: weatherCity)
-                    } label: {
-                        Text("Save")
-                            .frame(maxWidth: .infinity)
                     }
                     .buttonStyle(.borderedProminent)
-                    
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(weatherCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
             }
             .padding()
         }
         .sheet(isPresented: $showingURLPrompt) {
-            NavigationStack {
-                Form {
-                    TextField("Image URL", text: $urlString)
-                        .autocorrectionDisabled()
-                        .padding(.horizontal)
-                        .padding(.bottom)
-                }
-                .navigationTitle("Background URL")
-                .toolbar {
-                    ToolbarItem(placement: .cancellationAction) {
-                        Button("Cancel") {
-                            showingURLPrompt = false
-                        }
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Background URL").font(.headline)
+                TextField("Image URL", text: $urlString)
+                    .textFieldStyle(.roundedBorder)
+                    .autocorrectionDisabled()
+                HStack {
+                    Spacer()
+                    Button("Cancel") { showingURLPrompt = false }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") {
+                        homeBackground = urlString
+                        showingURLPrompt = false
                     }
-
-                    ToolbarItem(placement: .confirmationAction) {
-                        Button("Save") {
-                            homeBackground = urlString
-                            showingURLPrompt = false
-                        }
-                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                 }
             }
+            .padding(20)
+            .frame(minWidth: 280, idealWidth: 420, maxWidth: 420)
         }
         .fileImporter(
             isPresented: $showingFilePicker,

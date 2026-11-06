@@ -9,10 +9,14 @@ struct ToolbarCommandsSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             CommandsView(searchText: $searchText, searchQuery: $searchQuery)
-            Button("Close") { dismiss() }
-                .padding()
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
+            HStack {
+                Button() { dismiss() }
+                label: {
+                    Text("Close")
+                        .frame(maxWidth: .infinity)
+                }
+            }
+            .padding()
         }
     }
 }
@@ -23,10 +27,11 @@ struct ToolbarTabSearchSheet: View {
     var body: some View {
         VStack(spacing: 0) {
             TabSearchView(isPopover: true)
-            Button("Close") { dismiss() }
-                .padding()
-                .buttonStyle(.borderedProminent)
-                .tint(.red)
+            HStack {
+                Spacer()
+                Button("Close") { dismiss() }
+            }
+            .padding()
         }
     }
 }
@@ -38,14 +43,18 @@ struct ToolbarGoToSheet: View {
 
     var body: some View {
         VStack {
-            TextField("Enter URL", text: $urlInput)
-                .textFieldStyle(.roundedBorder)
-                .padding()
+                TextField("Enter URL", text: $urlInput)
+                    .textFieldStyle(.roundedBorder)
+                    .padding()
             HStack {
+                Spacer()
                 Button("Cancel") { dismiss() }
-                Button("Go") {
+                Button() {
                     dismiss()
                     submitURL()
+                } label: {
+                    Favicon(urlInput.contains(".") ? urlInput : "", debounce: true)
+                    Text("Go")
                 }
                 .buttonStyle(.borderedProminent)
                 .keyboardShortcut(.defaultAction)
@@ -69,6 +78,7 @@ struct ToolbarSplitURLSheet: View {
             TextField("https://example.com", text: $draftURL)
                 .textFieldStyle(.roundedBorder)
             HStack {
+                Spacer()
                 Button("Cancel") { dismiss() }
                 Button("Go") {
                     if !draftURL.hasPrefix("http") {
@@ -99,6 +109,7 @@ struct ToolbarRenameSheet: View {
                 .textFieldStyle(.roundedBorder)
                 .padding()
             HStack {
+                Spacer()
                 Button("Cancel") { dismiss() }
                 Button("Rename") {
                     let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)

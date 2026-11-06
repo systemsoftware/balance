@@ -212,7 +212,7 @@ struct AutoFillSettingsView: View {
         VStack {
             List {
                 if items.isEmpty {
-                    Text("No saved AutoFill entries")
+                    Text("No saved Autofill entries")
                         .font(.caption)
                         .foregroundColor(.secondary)
                         .padding(.vertical, 8)
@@ -261,55 +261,35 @@ struct AutoFillSettingsView: View {
             reloadItems()
         }
         .sheet(isPresented: $showNewEntrySheet) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Add New Autofill Entry")
-                    .font(.headline)
-
-                VStack(alignment: .leading) {
-                    Text("Data")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Text("This is the actual data that will be filled into input fields on websites. For example, your email address or phone number.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    TextField("e.g. someone@example.com", text: $newEntryData)
-                        .textFieldStyle(.roundedBorder)
-                }
-
-                VStack(alignment: .leading) {
-                    Text("Label (optional)")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Text("This is a label for this entry. Balance will use this label to match this entry to the right input field on websites. If you leave this blank, Balance will try to match this entry based on its type.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                        
-                    TextField("e.g. First Name", text: $newEntryLabel)
-                        .textFieldStyle(.roundedBorder)
-                }
-
-                
-                VStack(alignment: .leading) {
-                    Text("Type")
-                        .font(.callout)
-                        .foregroundStyle(.secondary)
-                    Text("This is the type of input field this entry is intended for. It helps the browser suggest the right data for the right fields.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                    Picker("", selection: $newEntryType) {
-                        ForEach(EntryType.allCases) { type in
-                            Text(type.rawValue)
-                                .tag(type)
-                        }
+            VStack(spacing: 0) {
+                Form {
+                    Section("Data") {
+                        TextField("Value to fill", text: $newEntryData)
+                        Text("For example, an email address or phone number.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
                     }
-                    .pickerStyle(.segmented)
+                    Section("Matching") {
+                        TextField("Label (optional)", text: $newEntryLabel)
+                        Picker("Field type", selection: $newEntryType) {
+                            ForEach(EntryType.allCases) { type in
+                                Text(type.rawValue).tag(type)
+                            }
+                        }
+                        Text("The label and type help match this value to website fields.")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
                 }
+                .formStyle(.grouped)
 
                 HStack {
                     Spacer()
                     Button("Cancel") {
                         showNewEntrySheet = false
                     }
+                    .buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
                     Button("Save") {
                         AutoFillStore.add(data: newEntryData, type: newEntryType.rawValue, label: newEntryLabel.isEmpty ? nil : newEntryLabel)
                         newEntryData = ""
@@ -318,10 +298,15 @@ struct AutoFillSettingsView: View {
                         showNewEntrySheet = false
                         reloadItems()
                     }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(newEntryData.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
                 }
+                .controlSize(.large)
+                .buttonBorderShape(.roundedRectangle(radius: 10))
+                .padding()
             }
-            .padding()
+            .frame(minWidth: 320, idealWidth: 460, minHeight: 380)
         }
     }
 }

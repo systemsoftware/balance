@@ -58,21 +58,6 @@ struct ServerTrustView: View {
                     }
                 }
                 
-                if !certificates.isEmpty {
-                    Divider()
-                    
-                    Text("Certificate Chain")
-                        .font(.subheadline)
-                        .bold()
-                    
-                    VStack(alignment: .leading, spacing: 8) {
-                        ForEach(0..<certificates.count, id: \.self) { index in
-                            let cert = certificates[index]
-                            CertificateRow(certificate: cert, isRoot: index == certificates.count - 1)
-                        }
-                    }
-                }
-                
                 if colorScheme == .dark {
                     Divider()
                     HStack {
@@ -110,6 +95,22 @@ struct ServerTrustView: View {
                         permissionRow(title: "Autoplay", icon: "play.rectangle", host: host, type: "autoplay", isMedia: false, defaultState: .allow)
                         zoomRow(title: "Zoom", icon: "magnifyingglass", host: host)
                     }
+                    
+                    if !certificates.isEmpty {
+                        Divider()
+                        
+                        Text("Certificate Chain")
+                            .font(.subheadline)
+                            .bold()
+                        
+                        VStack(alignment: .leading, spacing: 8) {
+                            ForEach(0..<certificates.count, id: \.self) { index in
+                                let cert = certificates[index]
+                                CertificateRow(certificate: cert, isRoot: index == certificates.count - 1)
+                            }
+                        }
+                    }
+                    
                     
                     if !cookies.isEmpty {
                         Divider()

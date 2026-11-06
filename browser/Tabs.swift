@@ -555,20 +555,6 @@ struct Tabs: View {
     private func promptRenameSpace(at index: Int) {
         guard windowManager.spaceNames.indices.contains(index) else { return }
         let currentName = windowManager.spaceNames[index]
-#if canImport(AppKit)
-        let alert = NSAlert()
-        alert.informativeText = "Enter new space name:"
-        alert.addButton(withTitle: "Rename")
-        alert.addButton(withTitle: "Cancel")
-        let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 250, height: 24))
-        input.stringValue = currentName
-        alert.accessoryView = input
-        alert.window.initialFirstResponder = input
-        if alert.runModal() == .alertFirstButtonReturn {
-            let val = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-            windowManager.renameSpace(at: index, to: val)
-        }
-#else
         SwiftUIPresentationCenter.shared.prompt(
             "Rename Space",
             message: "Enter a new space name.",
@@ -580,7 +566,6 @@ struct Tabs: View {
             let val = value.trimmingCharacters(in: .whitespacesAndNewlines)
             windowManager.renameSpace(at: index, to: val)
         }
-#endif
     }
 }
 
@@ -690,7 +675,7 @@ private struct TabRow: View {
     var compact: Bool = false
     @EnvironmentObject var windowManager: WindowManager
     @State private var insertionFinished: Bool
-    @State private var faviconURL: URL?
+    @State private var resolvedFavicon: (pageURL: URL, iconURL: URL)?
 
     var glass = false
     
@@ -728,10 +713,19 @@ private struct TabRow: View {
                         .frame(width: 16, height: 16)
                 } else {
                     if let host = state.url?.host, !host.isEmpty {
-                        CachedAsyncImage(url: faviconURL ?? Favicon.full(host))
+                        CachedAsyncImage(url: (resolvedFavicon?.pageURL == state.url ? resolvedFavicon?.iconURL : nil) ?? Favicon.full(host))
                             .frame(width: 16, height: 16)
                             .task(id: state.url) {
-                                faviconURL = await state.tryGetFavicon()
+                                guard let pageURL = state.url else { return }
+                                do {
+                                    try await Task.sleep(for: .milliseconds(250))
+                                } catch {
+                                    return
+                                }
+                                guard !Task.isCancelled, state.url == pageURL else { return }
+                                let resolvedURL = await state.tryGetFavicon()
+                                guard !Task.isCancelled, state.url == pageURL else { return }
+                                resolvedFavicon = (pageURL, resolvedURL)
                             }
                     } else{
                         Image(systemName: "house")

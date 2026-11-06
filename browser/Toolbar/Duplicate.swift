@@ -8,9 +8,10 @@ struct DuplicateToolbarButton: View {
     var body: some View {
         
         Menu() {
-                Text("Duplicate Tab")
-                    .disabled(true)
-            if let u = location {
+         if let u = location {
+             
+             Text("Duplicate Tab")
+                 .disabled(true)
 
             Button("In This Window", systemImage: "plus.square.on.square") {
                 createNewTab(with: u)

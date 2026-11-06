@@ -123,7 +123,7 @@ let catAppearance = CategoryDef(
     name:"Appearance",
     icon:"paintbrush",
     color: .purple,
-    description: "Customize how Balance looks"
+    description: "Customize how Balance looks."
     )
 
 
@@ -277,7 +277,7 @@ let Settings: [Setting] = {
             category: catAppearance,
             type: "dropdown",
             appStorageKey: "backgroundShape",
-            defaultValueInt: 0,
+            defaultValueInt: 1,
             dropdownOptions: .staticOptions([0: "Capsule", 1:"Rounded Rect"]),
             advanced: true
         ),
@@ -1340,12 +1340,23 @@ struct SettingsSectionContent: View {
             
         
             ForEach(settingsForCategory) { setting in
+                
+                if setting.appStorageKey == "exposeBookmarksToHomepage" {
+                    if Config.defaults.string(forKey: "homepage")?.starts(with: "https://") == true {
+                        SettingsCardRow(
+                            setting: setting,
+                            icon: setting.icon,
+                            accentColor: def.color
+                        )
+                    }
+                } else {
                 if !setting.hidden && !(setting.advanced && !isAdvancedPressed) {
                         SettingsCardRow(
                             setting: setting,
                             icon: setting.icon,
                             accentColor: def.color
                         )
+                    }
             }
             }
             
@@ -1401,7 +1412,7 @@ struct SettingsSectionContent: View {
                 case 1:
                     
                     SettingsCardRow(setting: Setting(
-name: "New Password", category: catAutofill, type: "button", appStorageKey: "", buttonText: "Add", action: {
+name: "New Password", category: catAutofill, type: "button", appStorageKey: "", buttonText: "New", action: {
                         showNewPassword = true
                     }), icon: "plus", accentColor: def.color
                     )
@@ -1428,8 +1439,8 @@ name: "New Password", category: catAutofill, type: "button", appStorageKey: "", 
                     
                     SettingsCardRow(
                         setting: Setting(
-                            name: "Add Autofill Entry", category: catAutofill, type: "button", appStorageKey: "",
-                            buttonText: "Add",
+                            name: "New Autofill Entry", category: catAutofill, type: "button", appStorageKey: "",
+                            buttonText: "New",
                             action: {
                                 showNewEntrySheet = true
                             }
@@ -1936,16 +1947,24 @@ struct NewPasswordView: View {
     @State var host = ""
     
     var body: some View {
-        VStack(alignment: .leading) {
-            Text("New Password")
-                .font(.headline)
-                .padding(.bottom, 10)
-            TextField("Username", text: $u)
-                .textFieldStyle(.roundedBorder)
-            TextField("Password", text: $p)
-                .textFieldStyle(.roundedBorder)
-            TextField("Website URL", text: $host)
-                .textFieldStyle(.roundedBorder)
+        VStack(spacing:0) {
+        Form {
+            Section("Credentials") {
+                TextField("Username", text: $u)
+                    .textFieldStyle(.plain)
+                TextField("Password", text: $p)
+                    .textFieldStyle(.plain)
+            }
+            Section("Website") {
+                HStack {
+                    Favicon(host.contains(".") ? host : "", debounce: true)
+                    TextField("URL", text: $host)
+                        .textFieldStyle(.plain)
+                }
+            }
+        }
+        .formStyle(.grouped)
+
             HStack {
                 Spacer()
                 Button {
@@ -1968,9 +1987,9 @@ struct NewPasswordView: View {
                 .buttonStyle(.borderedProminent)
                 .disabled(u.isEmpty || p.isEmpty || host.isEmpty)
             }
-            .padding(.top, 10)
-        }
-        .padding()
+            .padding(.horizontal)
+            .padding(.bottom)
+    }
     }
     
 }

@@ -40,7 +40,7 @@ struct RSSView: View {
                     newFeedURL = ""
                     isAddingFeed = true
                 } label: {
-                    Label("Add Feed", systemImage: "link")
+                    Label("Add Feed", systemImage: "plus")
                 }
                 .buttonStyle(.plain)
                 .font(.caption)
@@ -84,13 +84,29 @@ struct RSSView: View {
             }
         }
         .padding()
-        .alert("Add RSS Feed", isPresented: $isAddingFeed) {
-            TextField("https://example.com/feed", text: $newFeedURL)
-            Button("Cancel", role: .cancel) {}
-            Button("Add") { addFeed(newFeedURL) }
-                .disabled(newFeedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-        } message: {
-            Text("Enter the URL of an RSS feed")
+        .sheet(isPresented: $isAddingFeed) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Add RSS Feed")
+                    .font(.headline)
+                Text("Enter the URL of an RSS feed")
+                    .foregroundStyle(.secondary)
+                HStack {
+                    Favicon(newFeedURL.contains(".") ? newFeedURL : "", debounce: true)
+                    TextField("https://example.com/feed", text: $newFeedURL)
+                }
+                HStack {
+                    Spacer()
+                    Button("Cancel", role: .cancel) { isAddingFeed = false }
+                    Button("Add") {
+                        addFeed(newFeedURL)
+                        isAddingFeed = false
+                    }
+                        .disabled(newFeedURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                        .keyboardShortcut(.defaultAction)
+                        .buttonStyle(.borderedProminent)
+                }
+            }
+            .padding()
         }
     }
     

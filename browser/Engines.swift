@@ -346,39 +346,36 @@ private struct EngineEditorView: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text(isEditing ? "Edit Search Engine" : "New Search Engine")
-                .font(.headline)
-
-            VStack(alignment: .leading, spacing: 12) {
-               
-                HStack {
-                    Text("@")
-                    TextField("prefix", text: $title)
-                        .textFieldStyle(.roundedBorder)
-                        
+        VStack(spacing: 0) {
+            Form {
+                Section("Shortcut") {
+                    HStack {
+                        Text("@")
+                        TextField("prefix", text: $title)
+                    }
+                    Text("Type @\(trimmedTitle) <query> in the address bar.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
                 }
-                
-                Text("Type @\(trimmedTitle) <query> in the address bar to search with this engine.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-
-                TextField("Search URL template", text: $url)
-                    .textFieldStyle(.roundedBorder)
-
-                Text("Use the OpenSearch placeholder {searchTerms}. Example: https://example.com/search?q={searchTerms}")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
+                Section("Search URL") {
+                    HStack {
+                        Favicon(url.contains(".") ? url : "", debounce: true)
+                        TextField("Template", text: $url)
+                    }
+                    Text("Use {searchTerms} where the query belongs, for example https://example.com/search?q={searchTerms}.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
             }
+            .formStyle(.grouped)
 
             HStack {
+                Spacer()
                 Button("Cancel") {
                     dismiss()
                 }
+                .buttonStyle(.bordered)
                 .keyboardShortcut(.cancelAction)
-
-                Spacer()
-
                 Button(isEditing ? "Save Changes" : "Add Engine") {
                     onSave(trimmedTitle, trimmedURL)
                     dismiss()
@@ -387,8 +384,10 @@ private struct EngineEditorView: View {
                 .keyboardShortcut(.defaultAction)
                 .disabled(!canSave)
             }
+            .controlSize(.large)
+            .buttonBorderShape(.roundedRectangle(radius: 10))
+            .padding()
         }
-        .padding()
-        .frame(width: 380)
+        .frame(minWidth: 320, idealWidth: 460, minHeight: 360)
     }
 }

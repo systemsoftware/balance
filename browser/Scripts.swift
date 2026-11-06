@@ -190,46 +190,44 @@ struct NewScriptView: View {
     @State private var saveError: String?
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 10) {
-            Text("New Userscript")
-                .font(.system(.headline, design: .rounded))
-
-            VStack(alignment: .leading, spacing: 8) {
-                TextField("Name", text: $name)
-                    .textFieldStyle(.roundedBorder)
-
-                TextField("Domain", text: $domain)
-                    .textFieldStyle(.roundedBorder)
-
-                HStack {
-                    Text("Execution Time")
-                    Spacer()
-                    Picker("", selection: $type) {
+        VStack(spacing: 0) {
+            Form {
+                Section("Details") {
+                    TextField("Name", text: $name)
+                    HStack {
+                        Favicon(domain.contains(".") ? domain : "", debounce: true)
+                        TextField("Website", text: $domain)
+                    }
+                    Picker("Execution Time", selection: $type) {
                         ForEach(ScriptExecType.allCases) { execType in
                             Text(execType.title).tag(execType)
                         }
                     }
                 }
-
-                Text("Script")
-                TextEditor(text: $source)
-                    .font(.system(.body, design: .monospaced))
-                    .frame(minHeight: 140)
-                    .overlay(RoundedRectangle(cornerRadius: 6).stroke(.quaternary))
+                Section("Script") {
+                    TextEditor(text: $source)
+                        .font(.system(.body, design: .monospaced))
+                        .frame(minHeight: 140)
+                }
             }
+            .formStyle(.grouped)
 
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
 
                 Button("Create Script") { saveScript() }
                     .buttonStyle(.borderedProminent)
-                    .controlSize(.regular)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
             }
+            .controlSize(.large)
+            .buttonBorderShape(.roundedRectangle(radius: 10))
+            .padding()
         }
-        .padding()
+        .frame(minWidth: 320, idealWidth: 500, minHeight: 420)
         .alert("Couldn't Save Userscript", isPresented: Binding(
             get: { saveError != nil },
             set: { if !$0 { saveError = nil } }

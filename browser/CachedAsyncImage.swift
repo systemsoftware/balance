@@ -31,6 +31,8 @@ struct Favicon: View {
     
     var width: CGFloat = 16
     var height: CGFloat = 16
+    var debounce = false
+    @State private var settledURL: String?
     
     static func full(_ urlString: String) -> URL? {
         let normalized = urlString.contains("://")
@@ -44,15 +46,30 @@ struct Favicon: View {
         return URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico")
     }
     
-    init(_ url: String, width: CGFloat = 16, height: CGFloat = 16) {
+    init(_ url: String, width: CGFloat = 16, height: CGFloat = 16, debounce: Bool = false) {
         self.url = url
         self.width = width
         self.height = height
+        self.debounce = debounce
     }
     
     var body: some View {
-        CachedAsyncImage(url:Favicon.full(url))
+        CachedAsyncImage(url: Favicon.full(debounce ? (settledURL ?? "") : url))
             .frame(width: width, height: height)
+            .task(id: debounce ? url : "") {
+                guard debounce else { return }
+                if url.isEmpty {
+                    settledURL = nil
+                    return
+                }
+                do {
+                    try await Task.sleep(for: .milliseconds(250))
+                } catch {
+                    return
+                }
+                guard !Task.isCancelled else { return }
+                settledURL = url
+            }
     }
     
 }

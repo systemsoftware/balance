@@ -236,12 +236,27 @@ struct ContentBlockerView: View {
             if case .success(let url) = result { installFile(at: url) }
             if case .failure(let error) = result { errorMessage = error.localizedDescription }
         }
-        .alert("Add Content Blocker from URL", isPresented: $isEnteringURL) {
-            TextField("https://example.com/rules.json", text: $draftURL)
-            Button("Cancel", role: .cancel) {}
-            Button("Add") { installFromURL(urlStr: draftURL, filename: "") }
-        } message: {
-            Text("Enter the URL of a .json rule list.")
+        .sheet(isPresented: $isEnteringURL) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Add Content Blocker from URL").font(.headline)
+                Text("Enter the URL of a .json rule list.").foregroundStyle(.secondary)
+                TextField("https://example.com/rules.json", text: $draftURL)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { isEnteringURL = false }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Add") {
+                        isEnteringURL = false
+                        installFromURL(urlStr: draftURL, filename: "")
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(draftURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(20)
+            .frame(minWidth: 280, idealWidth: 420, maxWidth: 420)
         }
     }
     

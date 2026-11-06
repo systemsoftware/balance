@@ -284,33 +284,36 @@ struct AddBookmarkSheet: View {
     }
 
     var body: some View {
-        VStack(spacing: 20) {
-            Text(isEditing ? "Edit Bookmark" : "New Bookmark")
-                .font(.headline)
-            
-            VStack(spacing: 12) {
-                TextField("URL (https://...)", text: $url)
-                    .textFieldStyle(.roundedBorder)
-                TextField("Title", text: $title)
-                    .textFieldStyle(.roundedBorder)
+        VStack(spacing: 0) {
+            Form {
+                Section("Details") {
+                    TextField("Title", text: $title)
+                    HStack {
+                        Favicon(url.contains(".") ? url : "", debounce: true)
+                        TextField("Website", text: $url)
+                    }
+                }
             }
-            
+            .formStyle(.grouped)
+
             HStack {
-                Button("Cancel") { dismiss() }
-                    .keyboardShortcut(.cancelAction)
-                
                 Spacer()
-                
+                Button("Cancel") { dismiss() }
+                    .buttonStyle(.bordered)
+                    .keyboardShortcut(.cancelAction)
                 Button("Save Bookmark") {
                     url = url.trimmingCharacters(in: .whitespacesAndNewlines)
                     title = title.trimmingCharacters(in: .whitespacesAndNewlines)
                     onSave()
                 }
                     .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
                     .disabled(!canSave)
             }
+            .controlSize(.large)
+            .buttonBorderShape(.roundedRectangle(radius: 10))
+            .padding()
         }
-        .padding()
-        .frame(width: 300)
+        .frame(minWidth: 320, idealWidth: 420, minHeight: 260)
     }
 }

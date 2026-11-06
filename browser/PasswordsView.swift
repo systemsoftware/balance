@@ -168,19 +168,48 @@ struct PasswordRow: View {
                 }
             }
         }
-        .alert("Edit Username", isPresented: $showEditUsername) {
-            TextField("New Username", text: $editUsernameText)
-            Button("Cancel", role: .cancel) { }
-            Button("Save") {
-                PasswordManager.shared.updateUsername(oldUsername: cred.username, newUsername: editUsernameText, domain: cred.domain)
+        .sheet(isPresented: $showEditUsername) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Edit Username").font(.headline)
+                TextField("New Username", text: $editUsernameText)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { showEditUsername = false }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") {
+                        PasswordManager.shared.updateUsername(oldUsername: cred.username, newUsername: editUsernameText, domain: cred.domain)
+                        showEditUsername = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(editUsernameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
             }
+            .padding(20)
+            .frame(minWidth: 280, idealWidth: 360, maxWidth: 360)
         }
-        .alert("Edit Password", isPresented: $showEditPassword) {
-            SecureField("New Password", text: $editPasswordText)
-            Button("Cancel", role: .cancel) { }
-            Button("Save") {
-                PasswordManager.shared.savePassword(username: cred.username, passwordString: editPasswordText, domain: cred.domain)
+        .sheet(isPresented: $showEditPassword) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Edit Password").font(.headline)
+                SecureField("New Password", text: $editPasswordText)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { showEditPassword = false }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") {
+                        PasswordManager.shared.savePassword(username: cred.username, passwordString: editPasswordText, domain: cred.domain)
+                        editPasswordText = ""
+                        showEditPassword = false
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(editPasswordText.isEmpty)
+                }
             }
+            .padding(20)
+            .frame(minWidth: 280, idealWidth: 360, maxWidth: 360)
         }
         .background(Color.platformWindowBackground.opacity(0.5))
         .cornerRadius(12)

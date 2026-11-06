@@ -101,13 +101,26 @@ struct ChatView: View {
             pageText = ""
             pageTitle = ""
         }
-        .alert("Rename Chat", isPresented: Binding(
+        .sheet(isPresented: Binding(
             get: { renamingID != nil },
             set: { if !$0 { renamingID = nil } }
         )) {
-            TextField("Name", text: $renameText)
-            Button("Save") { renameChat() }
-            Button("Cancel", role: .cancel) { renamingID = nil }
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Rename Chat").font(.headline)
+                TextField("Name", text: $renameText)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { renamingID = nil }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Save") { renameChat() }
+                        .buttonStyle(.borderedProminent)
+                        .keyboardShortcut(.defaultAction)
+                        .disabled(renameText.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(20)
+            .frame(minWidth: 280, idealWidth: 360, maxWidth: 360)
         }
         .alert("Chat Error", isPresented: Binding(
             get: { errorMessage != nil },
@@ -157,7 +170,7 @@ struct ChatView: View {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     if sessions[selectedIndex].items.isEmpty {
                         ContentUnavailableView("Ask anything", systemImage: "sparkles",
-                                               description: Text("Ask about this page or add an image."))
+                                               description: Text("Start a conversation by typing a question or request below. You can also add the current page (\(Image(systemName: "doc.text"))), an image (\(Image(systemName: "photo.on.rectangle"))), or file (\((Image(systemName: "paperclip")))) to provide context for your query."))
                             .frame(maxWidth: .infinity, minHeight: 220)
                     }
                     ForEach(sessions[selectedIndex].items) { item in

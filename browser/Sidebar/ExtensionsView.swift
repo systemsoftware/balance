@@ -134,12 +134,27 @@ struct ExtensionsView: View {
             if case .success(let url) = result { installFile(at: url) }
             if case .failure(let error) = result { errorMessage = error.localizedDescription }
         }
-        .alert("Install Extension from URL", isPresented: $isEnteringURL) {
-            TextField("https://example.com/extension.crx", text: $draftURL)
-            Button("Cancel", role: .cancel) {}
-            Button("Install") { installFromURL(draftURL) }
-        } message: {
-            Text("Enter the URL of a .crx extension file.")
+        .sheet(isPresented: $isEnteringURL) {
+            VStack(alignment: .leading, spacing: 16) {
+                Text("Install Extension from URL").font(.headline)
+                Text("Enter the URL of a .crx extension file.").foregroundStyle(.secondary)
+                TextField("https://example.com/extension.crx", text: $draftURL)
+                    .textFieldStyle(.roundedBorder)
+                HStack {
+                    Spacer()
+                    Button("Cancel") { isEnteringURL = false }
+                        .keyboardShortcut(.cancelAction)
+                    Button("Install") {
+                        isEnteringURL = false
+                        installFromURL(draftURL)
+                    }
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(draftURL.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                }
+            }
+            .padding(20)
+            .frame(minWidth: 280, idealWidth: 420, maxWidth: 420)
         }
         .sheet(isPresented: $showActionPopup, onDismiss: { selectedAction = nil }) {
             if let action = selectedAction {

@@ -580,6 +580,7 @@ struct BrowserWindowHost: View {
                     }
             }
         }
+            .swiftUIPresentationHost(windowID: windowID)
             .background(
                 WindowCloseObserver(windowID: windowID, windowManager: windowManager)
             )

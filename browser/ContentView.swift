@@ -773,7 +773,6 @@ struct ContentView: View {
         .onAppear {
             sidebarPage.customUserAgent = userAgent
         }
-        .swiftUIPresentationHost()
         .onChange(of: windowManager.activeWindowID) { _, _ in
             guard windowManager.isActiveTab(tabID) else { return }
             if enableHandoff, let scheme = location?.scheme?.lowercased(), scheme == "http" || scheme == "https" {
@@ -918,27 +917,6 @@ struct ContentView: View {
                     }
                 }
             case .renameTab:
-#if canImport(AppKit)
-                let alert = NSAlert()
-                alert.informativeText = "Enter new tab name:"
-                alert.addButton(withTitle: "Rename")
-                alert.addButton(withTitle: "Cancel")
-                let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                input.stringValue = browserState.customTitle ?? browserState.title
-                input.placeholderString = browserState.webView?.title ?? "Page"
-                alert.accessoryView = input
-                alert.window.initialFirstResponder = input
-                if alert.runModal() == .alertFirstButtonReturn {
-                    let newTitle = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                    if newTitle.isEmpty {
-                        browserState.customTitle = nil
-                        browserState.title = browserState.webView?.title ?? "Page"
-                    } else {
-                        browserState.customTitle = newTitle
-                        browserState.title = newTitle
-                    }
-                }
-#else
                 SwiftUIPresentationCenter.shared.prompt(
                     "Rename Tab",
                     message: "Enter a new tab name.",
@@ -951,7 +929,6 @@ struct ContentView: View {
                     browserState.customTitle = newTitle.isEmpty ? nil : newTitle
                     browserState.title = newTitle.isEmpty ? (browserState.webView?.title ?? "Page") : newTitle
                 }
-#endif
             case .summarize: Task { summarizing = true; await createSummaryWindow(state: browserState); summarizing = false }
             case .addEvents: Task { await scanEvents() }
             case .cite: Task { await cite() }
@@ -1395,29 +1372,6 @@ struct ContentView: View {
     
     
     private func cite() async {
-#if canImport(AppKit)
-        let style: String? = await withCheckedContinuation { continuation in
-            DispatchQueue.main.async {
-                let alert = NSAlert()
-                alert.messageText = "Citation Style"
-                alert.informativeText = "Enter citation style (e.g. APA, MLA, Chicago):"
-                alert.addButton(withTitle: "Generate")
-                alert.addButton(withTitle: "Cancel")
-                
-                let input = NSTextField(frame: NSRect(x: 0, y: 0, width: 300, height: 24))
-                input.placeholderString = "APA"
-                alert.accessoryView = input
-                alert.window.initialFirstResponder = input
-                
-                if alert.runModal() == .alertFirstButtonReturn {
-                    let val = input.stringValue.trimmingCharacters(in: .whitespacesAndNewlines)
-                    continuation.resume(returning: val.isEmpty ? "APA" : val)
-                } else {
-                    continuation.resume(returning: nil)
-                }
-            }
-        }
-#else
         let style: String? = await withCheckedContinuation { continuation in
             SwiftUIPresentationCenter.shared.prompt(
                 "Citation Style",
@@ -1429,9 +1383,9 @@ struct ContentView: View {
                 continuation.resume(returning: value)
             }
         }
-#endif
         
-        guard let citationStyle = style else { return }
+        guard let style else { return }
+        let citationStyle = style.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty ? "APA" : style
         
         guard let webView = browserState.webView else { return }
         let text = await withCheckedContinuation { continuation in

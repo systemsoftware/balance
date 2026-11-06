@@ -130,6 +130,7 @@ struct browserApp: App {
     var body: some Scene {
         WindowGroup(for: String.self) { $windowID in
             BrowserWindowHost(windowID: windowID)
+                .buttonBorderShape(.roundedRectangle(radius: 10))
                 .onAppear {
                     applyTheme(themePreference)
                 }
@@ -187,6 +188,7 @@ struct browserApp: App {
         
         SwiftUI.Settings {
             SettingsView(isStandalone: true)
+                .buttonBorderShape(.roundedRectangle(radius: 10))
                 .frame(minWidth: 450, minHeight: 615)
         }
     }
@@ -194,6 +196,7 @@ struct browserApp: App {
     var body: some Scene {
         WindowGroup(for: String.self) { $windowID in
             BrowserWindowHost(windowID: windowID)
+                .buttonBorderShape(.roundedRectangle(radius: 10))
                 .onOpenURL(perform: openURL)
         } defaultValue: {
             WindowManager.shared.initialWindowID

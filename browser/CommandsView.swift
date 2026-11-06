@@ -1481,6 +1481,7 @@ struct NewProfileView: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
+                    .buttonStyle(.bordered)
                     .keyboardShortcut(.cancelAction)
 
                 Button(isEditing ? "Save Changes" : "Create Profile") {
@@ -1491,6 +1492,7 @@ struct NewProfileView: View {
                 .disabled(!canSave)
             }
             .controlSize(.large)
+            .buttonBorderShape(.roundedRectangle(radius: 10))
             .padding()
         }
         .frame(minWidth: 420, idealWidth: 460)
