@@ -13,8 +13,20 @@ struct AddressBar: View {
     let profileName: String?
     let submitURL: () -> Void
     @AppStorage("toolbarLocation") private var toolbarLocation = 0
+    @AppStorage("profiles", store: Config.sharedDefaults) private var profilesJSON = "[]"
+
+    private var siteProfile: Profile? {
+        guard !isPrivate,
+              let location,
+              let profileID = SiteProfileStore().profileID(for: location),
+              let data = profilesJSON.data(using: .utf8),
+              let profiles = try? JSONDecoder().decode([Profile].self, from: data) else { return nil }
+        return profiles.first { $0.id == profileID }
+    }
 
     var body: some View {
+        let activeProfile = siteProfile
+        let displayedIcon = activeProfile.flatMap { $0.icon.isEmpty ? nil : $0.icon } ?? profileIcon ?? "person.fill"
         HStack(spacing: 0) {
             TrustIndicator(url: location, isPresented: $showTrustInfo)
                 .popover(
@@ -47,9 +59,10 @@ struct AddressBar: View {
                     .padding(.trailing, 10)
             }
 
-            if let profileIcon, let profileName, !profileName.isEmpty {
-                Image(systemName: profileIcon)
-                    .help("Profile: \(profileName)")
+            if let displayedName = activeProfile?.name ?? profileName,
+               !displayedName.isEmpty {
+                Image(systemName: displayedIcon)
+                    .help("Profile: \(displayedName)")
                     .padding(.trailing, 10)
             }
         }

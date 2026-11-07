@@ -1610,10 +1610,13 @@ struct ProfileSettingsView: View {
     private enum Pane: String, CaseIterable, Identifiable {
         case profile = "Profile"
         case data = "Data"
+        case sites = "Sites"
         var id: String { rawValue }
     }
 
     @State private var pane: Pane = .profile
+    
+    @State var showAddSite = false
 
     var body: some View {
         VStack(spacing: 12) {
@@ -1631,15 +1634,140 @@ struct ProfileSettingsView: View {
             case .data:
                 WebDataView(profile: profile.id.uuidString)
                     .padding(.horizontal)
-
                 HStack {
                     Spacer()
                     Button("Close") { dismiss() }
-                        .keyboardShortcut(.cancelAction)
+                }
+                .padding([.horizontal, .bottom])
+            case .sites:
+                ProfileSitesView(profileID: profile.id, showAddSite: $showAddSite)
+                
+                HStack {
+                    Spacer()
+                    Button("Close") { dismiss() }
+                    Button("Add") {
+                        showAddSite.toggle()
+                    }
+                    .buttonStyle(.borderedProminent)
                 }
                 .padding([.horizontal, .bottom])
             }
         }
         .frame(minWidth: 460, minHeight: 440)
+    }
+}
+
+
+struct ProfileSitesView: View {
+    
+    var profileID: UUID
+        
+    private var store = SiteProfileStore()
+
+    @State private var sites: [String] = []
+    
+    @Binding var showAddSite: Bool
+
+    @State private var newSiteInput = ""
+    
+    var body: some View {
+        VStack(spacing: 12) {
+            if sites.isEmpty {
+                Text("No sites set to use this profile")
+                    .foregroundStyle(.secondary)
+                    .frame(maxHeight:.infinity)
+                    .padding(.top, 40)
+            } else {
+                Text("In regular tabs, these sites use this profile’s cookies and website data, even when opened from another profile. Browsing history stays with the tab’s profile.")
+                    .padding(.horizontal)
+                    .foregroundStyle(.secondary)
+                List(sites, id: \.self) { site in
+                    ProfileSiteRow(item: site) {
+                        store.removeProfile(forHost: site)
+                        sites = store.hosts(for: profileID)
+                    }
+                }
+                .listStyle(.inset)
+            }
+        }
+        .sheet(isPresented: $showAddSite) {
+                VStack(alignment: .leading, spacing: 16) {
+                    Text("Add Site")
+                        .font(.headline)
+                    Text("Enter the URL of a site you want to always open in this profile.")
+                        .foregroundStyle(.secondary)
+                    HStack {
+                        Favicon(newSiteInput.contains(".") ? newSiteInput : "", debounce: true)
+                        TextField("https://example.com", text: $newSiteInput)
+                    }
+                    HStack {
+                        Spacer()
+                        Button("Cancel", role: .cancel) { newSiteInput = ""
+                        showAddSite = false }
+                        Button("Add") {
+                            let trimmed = newSiteInput.trimmingCharacters(in: .whitespacesAndNewlines)
+                            guard !trimmed.isEmpty else { return }
+                            store.setProfile(profileID, forHost: trimmed)
+                            sites = store.hosts(for: profileID)
+                            newSiteInput = ""
+                            showAddSite = false
+                        }
+                            .disabled(newSiteInput.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+                            .keyboardShortcut(.defaultAction)
+                            .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding()
+        }
+        .onAppear { sites = store.hosts(for: profileID) }
+        .onChange(of: profileID) { _, newProfileID in
+            sites = store.hosts(for: newProfileID)
+        }
+
+    }
+    
+}
+
+
+struct ProfileSiteRow: View {
+  
+    var item: String
+    var onRemove: () -> Void
+    
+    var body: some View {
+        VStack {
+            HStack(spacing: 12) {
+                ZStack {
+                    Circle()
+                        .fill(Color.accentColor.opacity(0.1))
+                        .frame(width: 32, height: 32)
+                    Favicon(item)
+                }
+                
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(item)
+                        .font(.system(.subheadline, design: .rounded))
+                        .fontWeight(.medium)
+                        .lineLimit(1)
+                }
+                Spacer()
+
+                Button {
+                    onRemove()
+                } label: {
+                    Text("Remove")
+                }
+                .buttonStyle(.borderedProminent)
+            }
+            .padding()
+            .background(RoundedRectangle(cornerRadius: 10).fill(Color.platformControlBackground.opacity(0.5)))
+        }
+        .buttonStyle(.plain)
+        .background(Color.platformWindowBackground.opacity(0.5))
+        .cornerRadius(12)
+        .overlay(
+            RoundedRectangle(cornerRadius: 12)
+                .stroke(Color.primary.opacity(0.05), lineWidth: 1)
+        )
     }
 }

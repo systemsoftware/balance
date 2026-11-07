@@ -898,7 +898,7 @@ private struct TabRow: View {
             
             Divider()
             
-            Button("Trail") {
+            Button("Path") {
                 showTrail.toggle()
             }
             
@@ -931,16 +931,74 @@ struct TrailView: View {
     @ObservedObject var tabState: BrowserState
     @Environment(\.dismiss) private var dismiss
     @State private var searchText = ""
-    
-    var trail: [String] {
-        guard let webView = tabState.webView else { return [] }
-        let backList = webView.backForwardList.backList
-        return backList.map { $0.url.absoluteString }
+
+    private struct TrailEntry: Identifiable {
+        let url: URL
+        let depth: Int
+
+        var id: URL { url }
     }
 
-    var filteredTrail: [String] {
+    private var trailURLs: [URL] {
+        guard let webView = tabState.webView else { return [] }
+        let history = webView.backForwardList.backList.map(\.url)
+            + [webView.backForwardList.currentItem?.url].compactMap { $0 }
+        let referredPages = tabState.referrers.flatMap { [$0.key, $0.value] }
+            .sorted { $0.absoluteString < $1.absoluteString }
+        var seen = Set<URL>()
+        return (history + referredPages).filter { seen.insert($0).inserted }
+    }
+
+    private var trail: [TrailEntry] {
+        let urls = trailURLs
+        let available = Set(urls)
+        let parents = tabState.referrers.filter {
+            available.contains($0.key) && available.contains($0.value) && $0.key != $0.value
+        }
+        var children: [URL: [URL]] = [:]
+        for url in urls {
+            if let parent = parents[url] {
+                children[parent, default: []].append(url)
+            }
+        }
+
+        var entries: [TrailEntry] = []
+        var visited = Set<URL>()
+        func appendBranch(_ url: URL, depth: Int) {
+            guard visited.insert(url).inserted else { return }
+            entries.append(TrailEntry(url: url, depth: depth))
+            for child in children[url, default: []] {
+                appendBranch(child, depth: depth + 1)
+            }
+        }
+
+        for url in urls where parents[url] == nil {
+            appendBranch(url, depth: 0)
+        }
+
+        for url in urls where !visited.contains(url) {
+            appendBranch(url, depth: 0)
+        }
+        return entries
+    }
+
+    private var filteredTrail: [TrailEntry] {
         guard !searchText.isEmpty else { return trail }
-        return trail.filter { $0.localizedCaseInsensitiveContains(searchText) }
+        let matches = Set(trail.filter {
+            $0.url.absoluteString.localizedCaseInsensitiveContains(searchText)
+        }.map(\.url))
+        var visible = matches
+        let available = Set(trailURLs)
+        for match in matches {
+            var ancestor = match
+            var seen = Set<URL>()
+            while let parent = tabState.referrers[ancestor],
+                  available.contains(parent), seen.insert(parent).inserted {
+                visible.insert(parent)
+                ancestor = parent
+            }
+        }
+        return trail.filter { visible.contains($0.url) }
     }
 
     var body: some View {
@@ -970,7 +1028,7 @@ struct TrailView: View {
     private var header: some View {
         HStack {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Trail")
+                Text("Path")
                     .font(.headline)
                 Text(tabState.title.isEmpty ? "New Tab" : tabState.title)
                     .font(.caption)
@@ -997,7 +1055,7 @@ struct TrailView: View {
             Image(systemName: "magnifyingglass")
                 .foregroundStyle(.secondary)
                 .font(.system(size: 13))
-            TextField("Search trail", text: $searchText)
+            TextField("Search Path", text: $searchText)
                 .textFieldStyle(.plain)
                 .font(.system(size: 13))
             if !searchText.isEmpty {
@@ -1023,10 +1081,9 @@ struct TrailView: View {
     private var trailList: some View {
         ScrollView {
             LazyVStack(alignment: .leading, spacing: 2) {
-                ForEach(Array(filteredTrail.enumerated()), id: \.element) { index, urlString in
-                    TrailRow(index: index + 1, urlString: urlString) {
-                        guard let url = URL(string: urlString) else { return }
-                        createNewTab(with: url)
+                ForEach(filteredTrail) { entry in
+                    TrailRow(url: entry.url, depth: entry.depth, isActive: entry.url == tabState.webView?.url) {
+                        createNewTab(with: entry.url)
                         dismiss()
                     }
                 }
@@ -1071,18 +1128,18 @@ struct TrailView: View {
 // MARK: - Row
 
 private struct TrailRow: View {
-    let index: Int
-    let urlString: String
+    let url: URL
+    let depth: Int
+    let isActive: Bool
     let action: () -> Void
 
     @State private var isHovering = false
 
     private var host: String {
-        URL(string: urlString)?.host?.replacingOccurrences(of: "www.", with: "") ?? urlString
+        url.host?.replacingOccurrences(of: "www.", with: "") ?? url.absoluteString
     }
 
     private var path: String {
-        guard let url = URL(string: urlString) else { return "" }
         let p = url.path
         return p.isEmpty || p == "/" ? "" : p
     }
@@ -1090,12 +1147,12 @@ private struct TrailRow: View {
     var body: some View {
         Button(action: action) {
             HStack(spacing: 10) {
-                Text("\(index)")
-                    .font(.system(size: 11, weight: .medium, design: .monospaced))
+                Image(systemName: depth == 0 ? "circle.fill" : "arrow.turn.down.right")
+                    .font(.system(size: depth == 0 ? 5 : 11))
                     .foregroundStyle(.tertiary)
-                    .frame(width: 18, alignment: .trailing)
+                    .frame(width: 18)
 
-                Favicon(urlString)
+                Favicon(url.absoluteString)
 
                 VStack(alignment: .leading, spacing: 1) {
                     Text(host)
@@ -1119,10 +1176,12 @@ private struct TrailRow: View {
                 }
             }
             .padding(.horizontal, 8)
+            .padding(.leading, CGFloat(depth) * 18)
             .padding(.vertical, 7)
             .background(
                 RoundedRectangle(cornerRadius: 6)
                     .fill(isHovering ? Color.secondary.opacity(0.1) : .clear)
+                    .fill(isActive ? Color.primary.opacity(0.1) : .clear)
             )
         }
         .buttonStyle(.plain)

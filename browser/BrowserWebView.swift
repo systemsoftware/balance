@@ -83,6 +83,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var canGoForward: Bool = false
     @Published var favicon: UniversalImage?
     var preloadedWebView: WKWebView?
+    var pendingWebViewRequest: URLRequest?
     @Published var isFindBarVisible: Bool = false
     @Published var findQuery: String = ""
     @Published var findMatchCount: Int = 0
@@ -105,6 +106,8 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     private var findRequestGeneration: UInt = 0
     private var findHighlightGeneration: UInt = 0
     private var activeFindQuery = ""
+    
+    @Published var referrers: [URL: URL] = [:]
 
     init(initialURL: URL? = nil) {
         self.url = initialURL
@@ -393,9 +396,6 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
                 webView.configuration.userContentController.removeAllScriptMessageHandlers()
                 webView.configuration.userContentController.removeAllUserScripts()
                 
-                // The WKWebExtensionController lives in a global singleton and holds
-                // its delegate strongly. Nil it here so the Coordinator can be
-                // deallocated and doesn't keep the WKWebView context alive.
                 coordinator.locationManager?.stopUpdatingLocation()
                 coordinator.locationManager?.delegate = nil
                 coordinator.locationManager = nil
@@ -403,20 +403,15 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
             
             if let controller = webView.configuration.webExtensionController {
                 controller.didCloseTab(self)
-                // We should NOT set controller.delegate = nil because the controller is shared
-                // across all tabs in this profile context. Setting it to nil breaks extensions for others!
-            }
+                 }
             
-            // Instantly clear the document memory before destroying the view.
             webView.evaluateJavaScript("document.write(''); document.close();") { _, _ in }
             
-            // Stop loading and break all delegate references.
             webView.stopLoading()
             webView.navigationDelegate = nil
             webView.uiDelegate = nil
             webView.removeFromSuperview()
             
-            // Break BrowserWKWebView's strong reference to BrowserState.
             if let customWebView = webView as? BrowserWKWebView {
                 customWebView.state = nil
                 customWebView.downloadStore = nil
@@ -527,12 +522,19 @@ extension BrowserState {
 
     func rebuildWebView(to url: URL) {
         cleanup()
+        pendingWebViewRequest = nil
         if hidesHomepageURL {
             hasFinishedHiddenHomepageNavigation = false
         }
         self.url = url
         navigationRevision &+= 1
         webViewIdentity = UUID()
+    }
+
+    func rebuildWebView(for request: URLRequest) {
+        guard let url = request.url else { return }
+        rebuildWebView(to: url)
+        pendingWebViewRequest = request
     }
     
     func find(_ query: String, forward: Bool = true) {
@@ -941,6 +943,14 @@ enum BrowserErrorKind {
 
 struct BrowserWebView: PlatformViewRepresentable {
     private static let errorPageRequestHeader = "X-Balance-Error-Page"
+    private static func dataProfileID(for url: URL?, windowProfile: String, isPrivate: Bool) -> UUID? {
+        guard !isPrivate else { return nil }
+        if let url, let overrideID = SiteProfileStore().profileID(for: url),
+           storedProfile(withID: overrideID) != nil {
+            return overrideID
+        }
+        return UUID(uuidString: windowProfile)
+    }
     private static let userScriptMarker = "// balance-userscript:"
     private static let smartDarkScriptMarker = "// balance-smart-dark-mode\n"
     private static let smartDarkScriptSource: String? = {
@@ -1108,7 +1118,9 @@ struct BrowserWebView: PlatformViewRepresentable {
            webView.navigationDelegate === context.coordinator {
             return webView
         }
-        let requestedHost = state.url?.host ?? request.url?.host ?? "default"
+        let loadRequest = state.pendingWebViewRequest ?? request
+        let dataProfileID = Self.dataProfileID(for: loadRequest.url, windowProfile: profile, isPrivate: priv)
+        let requestedHost = loadRequest.url?.host ?? "default"
         let requestedAutoplaySetting = SitePermissionStore.shared.setting(
             for: requestedHost,
             type: "autoplay",
@@ -1118,6 +1130,7 @@ struct BrowserWebView: PlatformViewRepresentable {
 
         if let preloaded = (state.webView as? BrowserWKWebView)
             ?? (state.preloadedWebView as? BrowserWKWebView),
+           dataProfileID == (priv ? nil : UUID(uuidString: profile)),
            preloaded.configuration.mediaTypesRequiringUserActionForPlayback == requestedMediaTypes {
             let host = requestedHost
             context.coordinator.autoplaySetting = requestedAutoplaySetting
@@ -1147,7 +1160,9 @@ struct BrowserWebView: PlatformViewRepresentable {
             Self.synchronizeUserScripts(on: userContentController)
             Self.updateSmartDarkMode(on: preloaded, for: preloaded.url ?? request.url)
             
-            DispatchQueue.main.async {
+            DispatchQueue.main.async { [weak state, weak preloaded, weak coordinator = context.coordinator] in
+                guard let state, let preloaded, let coordinator,
+                      preloaded.navigationDelegate === coordinator else { return }
                 state.attach(preloaded)
             }
             
@@ -1195,6 +1210,7 @@ struct BrowserWebView: PlatformViewRepresentable {
             }
             
             context.coordinator.handledNavigationRevision = navigationRevision
+            context.coordinator.dataProfileID = dataProfileID
             state.preloadedWebView = nil
             return preloaded
         }
@@ -1211,7 +1227,7 @@ struct BrowserWebView: PlatformViewRepresentable {
         manager.loadAllFromDisk()
         let extensionControllerKey = profile
         let extensionController = priv ? nil : manager.controller(for: extensionControllerKey)
-        let extensionContext = request.url.flatMap { extensionController?.extensionContext(for: $0) }
+        let extensionContext = loadRequest.url.flatMap { extensionController?.extensionContext(for: $0) }
         let config = extensionContext?.webViewConfiguration ?? WKWebViewConfiguration()
         
         if UserDefaults.standard.bool(forKey: "developerMode") {
@@ -1330,31 +1346,16 @@ struct BrowserWebView: PlatformViewRepresentable {
             manager.activeTab = state
         }
         
-        var profileContext = ""
-        
         if priv {
-            profileContext = "priv"
-        } else if !profile.isEmpty {
-            profileContext = "profile"
-        }
-
-        switch profileContext {
-
-        case "priv":
             config.websiteDataStore = .nonPersistent()
-
-        case "profile":
-            if let profileUUID = UUID(uuidString: profile) {
-                config.websiteDataStore = storedProfile(withID: profileUUID)?.isEphemeral == true
-                    ? .nonPersistent()
-                    : WKWebsiteDataStore(forIdentifier: profileUUID)
-            } else {
-                config.websiteDataStore = .default()
-            }
-            
-        default:
+        } else if let dataProfileID {
+            config.websiteDataStore = storedProfile(withID: dataProfileID)?.isEphemeral == true
+                ? .nonPersistent()
+                : WKWebsiteDataStore(forIdentifier: dataProfileID)
+        } else {
             config.websiteDataStore = .default()
         }
+        context.coordinator.dataProfileID = dataProfileID
         
         if !priv, extensionContext == nil {
             config.webExtensionController = extensionController
@@ -1378,7 +1379,10 @@ struct BrowserWebView: PlatformViewRepresentable {
 
         state.underlyingWebView = webView
 
-        DispatchQueue.main.async {
+        DispatchQueue.main.async { [weak state, weak webView, weak coordinator = context.coordinator] in
+            guard let state, let webView, let coordinator,
+                  state.underlyingWebView === webView,
+                  webView.navigationDelegate === coordinator else { return }
             state.attach(webView)
         }
         
@@ -1439,7 +1443,7 @@ struct BrowserWebView: PlatformViewRepresentable {
             Self.configureContentBlockers(on: webView, enabled: blockersEnabled, directory: dir, reloadWhenReady: false, coordinator: context.coordinator)
         
         context.coordinator.handledNavigationRevision = navigationRevision
-        if let url = request.url, url.isFileURL {
+        if let url = loadRequest.url, url.isFileURL {
             let manager = LocalFileAccessManager.shared
             if let accessURL = manager.grantedAccessURL(for: url) {
                 // Already have a cached bookmark or powerbox grant — load immediately.
@@ -1456,8 +1460,9 @@ struct BrowserWebView: PlatformViewRepresentable {
                 }
             }
         } else {
-            webView.load(Self.privacyRequest(request))
+            webView.load(Self.privacyRequest(loadRequest))
         }
+        state.pendingWebViewRequest = nil
         return webView
     }
 
@@ -1509,6 +1514,14 @@ struct BrowserWebView: PlatformViewRepresentable {
 
         if context.coordinator.handledNavigationRevision != navigationRevision {
             context.coordinator.handledNavigationRevision = navigationRevision
+            if let url = request.url,
+               Self.dataProfileID(for: url, windowProfile: profile, isPrivate: priv) != context.coordinator.dataProfileID {
+                DispatchQueue.main.async { [weak state = context.coordinator.state] in
+                    guard let state, state.navigationRevision == navigationRevision else { return }
+                    state.rebuildWebView(for: request)
+                }
+                return
+            }
             if let url = request.url, url.isFileURL {
                 let manager = LocalFileAccessManager.shared
                 if let accessURL = manager.grantedAccessURL(for: url) {
@@ -1536,7 +1549,7 @@ struct BrowserWebView: PlatformViewRepresentable {
         guard !state.hasCleanedUp else { return }
 
         nsView.removeFromSuperview()
-        if state.webView !== nsView {
+        if state.webView == nil && state.underlyingWebView === nsView {
             state.webView = nsView
         }
     }
@@ -1646,6 +1659,7 @@ struct BrowserWebView: PlatformViewRepresentable {
         var contentBlockersEnabled: Bool?
         var autoplaySetting: SettingState?
         var isRebuildingForAutoplay = false
+        var dataProfileID: UUID?
         let profile: String
         #if canImport(AppKit)
         var activeShareDelegates: [NSSharingServicePicker: WebShareDelegate] = [:]
@@ -2146,12 +2160,28 @@ struct BrowserWebView: PlatformViewRepresentable {
                      preferences: WKWebpagePreferences,
                      decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
 
-            // Error pages use the failed URL so the address bar and retry action retain
-            // the original destination. They are simulated responses, though, and must
-            // bypass request rewrites such as GPC and HTTPS-only; otherwise those rules
-            // replace the error document with another network request and create a loop.
+            if navigationAction.navigationType == .linkActivated,
+                navigationAction.targetFrame?.isMainFrame == true,
+                let destination = navigationAction.request.url,
+                let source = navigationAction.sourceFrame.request.url {
+
+                 state.referrers[destination] = source
+             }
+            
             if navigationAction.request.value(forHTTPHeaderField: BrowserWebView.errorPageRequestHeader) == "1" {
                 decisionHandler(.allow, preferences)
+                return
+            }
+
+            if navigationAction.targetFrame?.isMainFrame == true,
+               let url = navigationAction.request.url,
+               BrowserWebView.dataProfileID(for: url, windowProfile: profile, isPrivate: isPrivate) != dataProfileID {
+                decisionHandler(.cancel, preferences)
+                DispatchQueue.main.async { [weak state = self.state, weak webView] in
+                    guard let state, let webView,
+                          state.webView === webView || state.underlyingWebView === webView else { return }
+                    state.rebuildWebView(for: navigationAction.request)
+                }
                 return
             }
             

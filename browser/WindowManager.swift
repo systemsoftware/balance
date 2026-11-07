@@ -258,10 +258,6 @@ final class WindowManager: ObservableObject {
 
     @discardableResult
     func createTab(initialURL: URL? = nil, inBackground: Bool = false, providedState: BrowserState? = nil) -> String {
-        // The app deliberately stays running after its last window closes. In
-        // that state a new tab must also create and present a window; merely
-        // creating an unpresented model would leave the new tab in an invisible
-        // window model and make the command appear to have hung.
         guard let windowID = activeWindowID,
               let window = browserWindows.first(where: { $0.id == windowID }) else {
             let state = providedState ?? BrowserState()
@@ -285,13 +281,10 @@ final class WindowManager: ObservableObject {
             profile: sourceTab?.profile ?? "",
             profileIcon: sourceTab?.profileIcon ?? "person.fill",
             browserState: providedState,
-            spaceIndex: currentSpaceIndex
+            spaceIndex: currentSpaceIndex,
         )
         tab.browserState.shouldAnimateTabInsertion = true
 
-        // A focused control in the old tab remains first responder even after
-        // its SwiftUI hierarchy becomes transparent. Resign it before changing
-        // the active tab so keyboard input cannot be trapped in a hidden field.
         if !openInBackground {
             PlatformApplication.dismissKeyboard()
         }
