@@ -1247,6 +1247,9 @@ struct SettingsSectionContent: View {
     
     @Environment(\.colorScheme) var colorScheme
     
+    @State private var selectedBgColor: Color = .white
+    @AppStorage("bgColor") var storedBgHexColor: String = "systemBackground"
+    
     private func loadInitialURL() {
         if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
             lmpage.load(URLRequest(url: url))
@@ -1482,6 +1485,34 @@ name: "New Password", category: catAutofill, type: "button", appStorageKey: "", 
                     
                 }
                 
+            }
+            
+            if def.id == "appearance" {
+                SettingsCustomCardRow(title: "Background Color", icon: "paint.bucket.classic", accentColor: def.color) {
+                    HStack {
+                        ColorPicker("", selection: $selectedBgColor)
+                            .cornerRadius(12)
+                            .onAppear {
+                                selectedBgColor = Color(hex: storedBgHexColor) ?? .accentColor
+                            }
+                            .onChange(of: selectedBgColor) { _, newColor in
+                                if selectedBgColor == .accentColor {
+                                    return
+                                }
+                                storedBgHexColor = newColor.toHex() ?? "systemBackground"
+                            }
+                        Button() {
+                            storedBgHexColor = "systemBackground"
+                            
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .foregroundStyle(.primary)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 8)
             }
             
             if def.id == "privacy" {

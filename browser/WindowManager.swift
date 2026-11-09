@@ -560,19 +560,28 @@ struct BrowserWindowHost: View {
     @Environment(\.dismiss) private var dismiss
     @EnvironmentObject private var windowManager: WindowManager
     let windowID: String
+    
+    @AppStorage("bgColor") var bgColor: String = "systemBackground"
 
     var body: some View {
-        Group {
-            if let window = windowManager.window(for: windowID) {
-                BrowserWindowContent(window: window)
-            } else {
-                ProgressView()
-                    .frame(maxWidth: .infinity, maxHeight: .infinity)
-                    .onAppear {
-                        windowManager.bindOrCreateWindow(for: windowID)
-                    }
+        ZStack {
+            
+            if bgColor != "systemBackground" {
+                Color(hex: bgColor)
+                    .ignoresSafeArea()
             }
-        }
+            
+            Group {
+                if let window = windowManager.window(for: windowID) {
+                    BrowserWindowContent(window: window)
+                } else {
+                    ProgressView()
+                        .frame(maxWidth: .infinity, maxHeight: .infinity)
+                        .onAppear {
+                            windowManager.bindOrCreateWindow(for: windowID)
+                        }
+                }
+            }
             .swiftUIPresentationHost(windowID: windowID)
             .background(
                 WindowCloseObserver(windowID: windowID, windowManager: windowManager)
@@ -590,6 +599,7 @@ struct BrowserWindowHost: View {
                     dismiss()
                 }
             }
+        }
     }
 }
 
