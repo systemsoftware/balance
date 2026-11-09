@@ -288,8 +288,7 @@ let Settings: [Setting] = {
             type: "dropdown",
             appStorageKey: "backgroundShape",
             defaultValueInt: 1,
-            dropdownOptions: .staticOptions([0: "Capsule", 1:"Rounded Rect"]),
-            advanced: true
+            dropdownOptions: .staticOptions([0: "Capsule", 1:"Rounded Rect"])
         ),
         Setting(
             name: "Tabs Background",

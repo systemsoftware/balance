@@ -16,7 +16,7 @@ struct ServerTrustView: View {
     @State private var errorMessage: String? = nil
     
     @Query private var historyItems: [HistoryItem]
-    
+        
     @Environment(\.colorScheme) private var colorScheme
     
     private var host: String {
@@ -33,9 +33,9 @@ struct ServerTrustView: View {
         ScrollView {
             VStack(alignment: .leading, spacing: 16) {
                 HStack {
-                    Image(systemName: isTrusted ? "lock.fill" : "exclamationmark.triangle.fill")
-                        .foregroundColor(isTrusted ? .green : .red)
-                        .font(.title)
+                        Image(systemName: isTrusted ? "lock.fill" : "exclamationmark.triangle.fill")
+                            .foregroundColor(isTrusted ? .green : .red)
+                            .font(.title)
                     
                     VStack(alignment: .leading) {
                         Text(isTrusted ? "Connection is secure" : "Connection is not secure")

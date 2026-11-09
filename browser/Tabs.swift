@@ -665,6 +665,11 @@ private struct PinnedSiteButton: View {
 
 // MARK: - Tab Row
 
+private struct FaviconRefreshKey: Equatable {
+    let url: URL?
+    let isLoading: Bool
+}
+
 private struct TabRow: View {
     @ObservedObject var state: BrowserState
     let isActive: Bool
@@ -675,7 +680,6 @@ private struct TabRow: View {
     var compact: Bool = false
     @EnvironmentObject var windowManager: WindowManager
     @State private var insertionFinished: Bool
-    @State private var resolvedFavicon: (pageURL: URL, iconURL: URL)?
 
     var glass = false
     
@@ -713,19 +717,16 @@ private struct TabRow: View {
                         .frame(width: 16, height: 16)
                 } else {
                     if let host = state.url?.host, !host.isEmpty {
-                        CachedAsyncImage(url: (resolvedFavicon?.pageURL == state.url ? resolvedFavicon?.iconURL : nil) ?? Favicon.full(host))
-                            .frame(width: 16, height: 16)
-                            .task(id: state.url) {
-                                guard let pageURL = state.url else { return }
+                        Favicon(host, iconURL: state.resolvedFavicon?.pageURL == state.url ? state.resolvedFavicon?.iconURL : nil)
+                            .task(id: FaviconRefreshKey(url: state.url, isLoading: state.isLoading)) {
+                                guard !state.isLoading, let pageURL = state.url else { return }
                                 do {
                                     try await Task.sleep(for: .milliseconds(250))
                                 } catch {
                                     return
                                 }
-                                guard !Task.isCancelled, state.url == pageURL else { return }
-                                let resolvedURL = await state.tryGetFavicon()
-                                guard !Task.isCancelled, state.url == pageURL else { return }
-                                resolvedFavicon = (pageURL, resolvedURL)
+                                guard !Task.isCancelled, !state.isLoading, state.url == pageURL else { return }
+                                await state.refreshFavicon(for: pageURL)
                             }
                     } else{
                         Image(systemName: "house")

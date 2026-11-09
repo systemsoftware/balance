@@ -31,6 +31,7 @@ struct Favicon: View {
     
     var width: CGFloat = 16
     var height: CGFloat = 16
+    var iconURL: URL?
     var debounce = false
     @State private var settledURL: String?
     
@@ -46,16 +47,19 @@ struct Favicon: View {
         return URL(string: "https://icons.duckduckgo.com/ip3/\(host).ico")
     }
     
-    init(_ url: String, width: CGFloat = 16, height: CGFloat = 16, debounce: Bool = false) {
+    init(_ url: String, width: CGFloat = 16, height: CGFloat = 16, iconURL: URL? = nil, debounce: Bool = false) {
         self.url = url
         self.width = width
         self.height = height
+        self.iconURL = iconURL
         self.debounce = debounce
     }
     
     var body: some View {
-        CachedAsyncImage(url: Favicon.full(debounce ? (settledURL ?? "") : url))
+        CachedAsyncImage(url: iconURL ?? Favicon.full(debounce ? (settledURL ?? "") : url))
             .frame(width: width, height: height)
+            .compositingGroup()
+            .clipShape(Circle())
             .task(id: debounce ? url : "") {
                 guard debounce else { return }
                 if url.isEmpty {
@@ -84,11 +88,13 @@ struct CachedAsyncImage: View {
         Group {
             if let url = url {
                 if loadImages || url.absoluteString.contains("failed-favicon") {
-                    CachedAsyncImageCore(url: url) { phase in
+                    CachedAsyncImageCore(url: url) { phase, isMonochromeIcon in
                         if let image = phase.image {
                             image
+                                .renderingMode(isMonochromeIcon ? .template : .original)
                                 .resizable()
                                 .scaledToFit()
+                                .foregroundStyle(.primary)
                         } else if phase.error != nil {
                             fallbackView
                         } else {

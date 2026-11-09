@@ -239,7 +239,7 @@ struct ChatView: View {
             HStack(spacing: 12) {
                 Menu {
                     Button { togglePage() } label: {
-                        Label(pageText.isEmpty ? "Add current page" : "Remove current page", systemImage: pageText.isEmpty ? "doc.text" : "doc.text.fill")
+                        Label(pageText.isEmpty ? "Add Current Page" : "Remove Current Page", systemImage: pageText.isEmpty ? "doc.text" : "doc.text.fill")
                     }
                     .disabled(isLoadingPage || browserState.webView == nil)
 

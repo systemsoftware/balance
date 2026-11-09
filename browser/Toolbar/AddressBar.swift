@@ -28,7 +28,7 @@ struct AddressBar: View {
         let activeProfile = siteProfile
         let displayedIcon = activeProfile.flatMap { $0.icon.isEmpty ? nil : $0.icon } ?? profileIcon ?? "person.fill"
         HStack(spacing: 0) {
-            TrustIndicator(url: location, isPresented: $showTrustInfo)
+            TrustIndicator(url: location, browserState: browserState, isPresented: $showTrustInfo)
                 .popover(
                     isPresented: $showTrustInfo,
                     attachmentAnchor: .rect(.bounds),
@@ -85,8 +85,15 @@ struct AddressBar: View {
 
 // MARK: - Trust Indicator
 
+private struct AddressFaviconRefreshKey: Equatable {
+    let tabID: String
+    let url: URL?
+    let isLoading: Bool
+}
+
 private struct TrustIndicator: View {
     let url: URL?
+    @ObservedObject var browserState: BrowserState
     @Binding var isPresented: Bool
 
     private var isWebURL: Bool {
@@ -97,12 +104,35 @@ private struct TrustIndicator: View {
         url?.scheme == "https"
     }
 
+    @AppStorage("tabMode", store: Config.sharedDefaults) var tabMode = 0
+
     var body: some View {
         Button(action: { isPresented.toggle() }) {
-            Image(systemName: isSecure ? "lock.fill" : "exclamationmark.triangle.fill")
-                .symbolEffect(.bounce.byLayer, options: .nonRepeating, value:isPresented)
-                .foregroundStyle(isSecure ? Color.primary : Color.red)
-                .frame(width: 16, height: 16)
+            if let url, (tabMode == 5 || tabMode == 6) && isSecure {
+                Favicon(url.absoluteString, iconURL: browserState.resolvedFavicon?.pageURL == url ? browserState.resolvedFavicon?.iconURL : nil)
+                    .task(id: AddressFaviconRefreshKey(tabID: browserState.tabID, url: url, isLoading: browserState.isLoading)) {
+                        guard !browserState.isLoading, browserState.url == url else { return }
+                        do {
+                            try await Task.sleep(for: .milliseconds(250))
+                        } catch {
+                            return
+                        }
+                        while !Task.isCancelled {
+                            guard !browserState.isLoading, browserState.url == url else { return }
+                            await browserState.refreshFavicon(for: url)
+                            do {
+                                try await Task.sleep(for: .seconds(2))
+                            } catch {
+                                return
+                            }
+                        }
+                    }
+            } else {
+                Image(systemName: isSecure ? "lock.fill" : "exclamationmark.triangle.fill")
+                    .symbolEffect(.bounce.byLayer, options: .nonRepeating, value:isPresented)
+                    .foregroundStyle(isSecure ? Color.primary : Color.red)
+                    .frame(width: 16, height: 16)
+            }
         }
         .buttonStyle(.plain)
         .help(isSecure ? "Connection is secure" : "Connection is not secure")

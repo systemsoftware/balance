@@ -437,8 +437,6 @@ struct ContentView: View {
             
             // MARK: - Web Content + Sidebar
             HStack(spacing: 0) {
-                // MARK: - Web Content Area
-                
                 if (leftSidebarMode == 2 || leftSidebarMode == 6) && !MemoryStorage.shared.focusMode {
                     Tabs(browserState: browserState)
                         .frame(width: leftSidebarMode == 6 ? 75 : isCompact ? min(CGFloat(leftSidebarWidth), 160) : CGFloat(leftSidebarWidth))
@@ -464,7 +462,7 @@ struct ContentView: View {
                             ZStack(alignment: .topTrailing) {
                                 BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
                                     .id(browserState.webViewIdentity)
-                                    .roundedBorderStyleNoFrame(enabled: showPageShine)
+                                    .glassEffect(in: RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius))
                                     .clipShape(RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius))
                                     .onChange(of: browserState.url) { oldValue, newValue in
                                         handleURLChange(from: oldValue, to: newValue)

@@ -82,6 +82,7 @@ final class BrowserState: NSObject, ObservableObject, WKWebExtensionTab {
     @Published var canGoBack: Bool = false
     @Published var canGoForward: Bool = false
     @Published var favicon: UniversalImage?
+    @Published var resolvedFavicon: (pageURL: URL, iconURL: URL)?
     var preloadedWebView: WKWebView?
     var pendingWebViewRequest: URLRequest?
     @Published var isFindBarVisible: Bool = false
@@ -727,6 +728,14 @@ extension BrowserState {
         webView?.evaluateJavaScript(js, completionHandler: nil)
     }
     
+    func refreshFavicon(for pageURL: URL) async {
+        let iconURL = await tryGetFavicon()
+        guard !Task.isCancelled, url == pageURL else { return }
+        if resolvedFavicon?.pageURL != pageURL || resolvedFavicon?.iconURL != iconURL {
+            resolvedFavicon = (pageURL, iconURL)
+        }
+    }
+
     func tryGetFavicon() async -> URL {
         guard let pageURL = self.url else {
             return URL(string: "https://example.com")!
@@ -742,15 +751,12 @@ extension BrowserState {
                             'link[rel="apple-touch-icon"]',
                             'link[rel="apple-touch-icon-precomposed"]'
                         ];
-
                         for (const selector of selectors) {
-                            const link = document.querySelector(selector);
-
-                            if (link?.href) {
-                                return link.href;
+                            const icons = document.querySelectorAll(selector);
+                            for (let i = icons.length - 1; i >= 0; i--) {
+                                if (icons[i].href) return icons[i].href;
                             }
                         }
-
                         return null;
                     })();
                 """)
@@ -769,7 +775,6 @@ extension BrowserState {
 
         if let host = pageURL.host,
            let fallbackURL = Favicon.full(host) {
-            print("Fell back to DDG: \(fallbackURL)")
             return fallbackURL
         }
 
