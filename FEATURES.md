@@ -1,6 +1,6 @@
 # Feature Guide
 
-Balance Browser is a high-performance, native web browser built with SwiftUI and WebKit. It blends an elegant Liquid Glass user interface with on-device AI intelligence, deep productivity tooling, flexible workspace customization, and robust privacy protections.
+Balance Browser is a high-performance, native web browser built with SwiftUI and WebKit. It blends an elegant Liquid Glass user interface with AI that defaults to on-device processing, deep productivity tooling, flexible workspace customization, and robust privacy protections.
 
 ## Support
 Supports iOS, iPadOS, and macOS 26.0 and later, and can be downloaded on the [App Store.](https://apps.apple.com/us/app/balance-browser/id6789459733)
@@ -17,7 +17,7 @@ Supports iOS, iPadOS, and macOS 26.0 and later, and can be downloaded on the [Ap
   - [Tab Management & Spaces](#tab-management--spaces)
   - [Breadcrumbs Trail](#breadcrumbs-trail)
   - [Word & Text Analysis](#word--text-analysis)
-- [Local On-Device AI](#local-on-device-ai)
+- [AI with an On-Device Default](#ai-with-an-on-device-default)
   - [Private AI Chat](#private-ai-chat)
   - [Page Summarization](#page-summarization)
   - [Calendar Event Extraction](#calendar-event-extraction)
@@ -116,11 +116,11 @@ Quickly inspect article length, word counts, and character statistics directly f
 
 
 
-## Local On-Device AI
+## AI with an On-Device Default
 
 ### Private AI Chat
 
-Chat with an on-device local AI assistant directly in the sidebar. Get assistance with coding, summarizing, brainstorming, and translation—with zero telemetry and complete privacy.
+Chat with an AI assistant directly in the sidebar for coding, summarizing, brainstorming, and translation. Chat uses an on-device model by default. You can enable **Use Private Cloud Compute** in the chat attachment menu for a new chat session; when enabled, chat prompts and any page or image content you attach are processed through Apple's Private Cloud Compute.
 
 ![AI Chat](images/chat.png)
 

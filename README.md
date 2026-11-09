@@ -1,6 +1,6 @@
 # Balance Browser
 
-**Balance Browser** is a modern, privacy-focused, and highly productive web browser built with **SwiftUI** and **WebKit**. It combines a native macOS experience with powerful built-in productivity tools—including local on-device AI, notepad, tab spaces, split view, RSS reader, interactive map workspace, and seamless iCloud sync—all encased in a customizable sidebar with a beautiful Liquid Glass interface.
+**Balance Browser** is a modern, privacy-focused, and highly productive web browser built with **SwiftUI** and **WebKit**. It combines a native macOS experience with powerful built-in productivity tools—including AI that defaults to on-device processing, notepad, tab spaces, split view, RSS reader, interactive map workspace, and seamless iCloud sync—all encased in a customizable sidebar with a beautiful Liquid Glass interface.
 
 
 ## Support
@@ -8,7 +8,7 @@ Supports iOS, iPadOS, and macOS 26.0 and later, and can be downloaded on the [Ap
 
 ## Key Highlights
 
-- **Local On-Device AI**: Private chat, page summarization, citation generator, and calendar event extraction powered by Apple Foundation Models.
+- **AI with an On-Device Default**: Chat uses Apple Foundation Models on your device by default, with an optional Private Cloud Compute setting. Page summarization, citation generation, and calendar event extraction use on-device processing.
 - **Flexible Workspace**: Split view, tab search, spaces, focus mode, and 6 tab layout styles (Top, Vertical, Slide Over, Compact, Bottom, Hidden).
 - **Modular Sidebar & Customizable Toolbar**: Drag-and-drop customization for sidebars and toolbars with instant access to your favorite utilities and pinned sites.
 - **Seamless iCloud Sync**: Synchronize history, bookmarks, pins, chats, profiles, inventory, toolbar/sidebar setups, search engines, and settings across your Apple devices.
@@ -48,10 +48,10 @@ Eliminate distractions with a minimal, focused reading and working window.
 
 
 
-### Local AI & Intelligence
+### AI & Intelligence
 
-#### On-Device AI Chat
-Chat with a completely private, local AI assistant directly from the sidebar for writing, coding assistance, research, and analysis.
+#### AI Chat
+Chat with an AI assistant directly from the sidebar for writing, coding assistance, research, and analysis. Chat uses the on-device model by default; enable **Use Private Cloud Compute** in the chat attachment menu to use Apple's cloud model for a new chat session.
 
 ![AI Chat](images/chat.png)
 
@@ -152,7 +152,7 @@ Inspect SSL certificate trust chains, manage site permissions, and enforce conte
 - **Cloud Synchronization**: iCloud (`NSUbiquitousKeyValueStore` & CloudKit sync)
 - **Document Rendering**: PDFKit, Native Markdown view, Native JSON viewer, Readability.js
 - **Automation**: AppIntents / macOS Shortcuts & Deep Linking (`balance://`, `balance-focus://`)
-- **AI & Intelligence**: Apple Foundation Models / CoreML / MLX on-device processing
+- **AI & Intelligence**: Apple Foundation Models / CoreML / MLX on-device processing by default, with an optional Private Cloud Compute model for chat
 
 
 
@@ -183,7 +183,7 @@ Customize Balance through **Settings (`⌘ ,`)**:
 - **Browsing**: Default search engine, custom engine shortcuts, homepage, address bar autocomplete, spaces, default page zoom.
 - **Appearance**: Theme selection (System, Light, Dark, Match Page), Tab layouts (Top, Vertical, Slide Over, Compact, Bottom, Hidden), background shapes (Capsule, Rounded Rect), toolbar & tab bar styling.
 - **Sidebar & Toolbar**: Drag-and-drop customization, width sizing, unified or individual backgrounds, top/bottom toolbar positioning.
-- **AI**: Temperature, max tokens, character cutoff thresholds, and custom system prompt instructions.
+- **AI**: Temperature, max tokens, character cutoff thresholds, and custom system prompt instructions. The optional Private Cloud Compute model for chat is selected from the chat attachment menu.
 - **iCloud Sync**: Granular toggles for history, bookmarks, pins, chats, sidebar, toolbar, profiles, settings, inventory, autofill, and custom engines.
 - **Privacy & Security**: HTTPS-only mode, Global Privacy Control (GPC), WebKit content blockers, per-site permissions, and automated cleanup on exit (history, cache, cookies, downloads).
 - **Profiles**: Create multiple profiles with dedicated storage data, custom search engines, IMAP email integration, or ephemeral private modes.

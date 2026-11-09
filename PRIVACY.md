@@ -1,6 +1,6 @@
 # Privacy Policy for Balance Browser
 
-**Last Updated:** July 9, 2026
+**Last Updated:** November 9, 2026
 
 Balance Browser ("we", "our", or "us") is committed to protecting your privacy. This Privacy Policy explains how Balance Browser handles your data. Balance Browser is designed with a privacy-first approach, meaning the vast majority of your data stays on your device.
 
@@ -19,8 +19,8 @@ As a web browser, Balance Browser stores certain information locally on your dev
 
 Balance Browser includes integrated AI features, such as Local AI Chat and AI Page Summarization. 
 
-*   **On-Device Processing:** All AI models (e.g., Apple Foundation Models) run **locally on your device**.
-*   **No Cloud Transmission:** Your chat conversations, page content for summarization, and data used for event or entity extraction are **not** sent to any external servers or third-party AI providers. 
+*   **On-Device Default:** AI chat uses an on-device Apple Foundation Model by default. Page summarization and event or entity extraction also run on your device.
+*   **Optional Private Cloud Compute:** You can enable **Use Private Cloud Compute** in the chat attachment menu. For a new chat session started with this option enabled, chat prompts and any page or image content you attach are sent to Apple's Private Cloud Compute for processing. When the option is off, chat prompts and attached content are processed on your device.
 
 ## 3. Email Integration (IMAP)
 

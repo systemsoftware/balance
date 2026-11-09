@@ -12,9 +12,9 @@ Unlike Chromium-based browsers (like Chrome, Edge, or Arc) or Electron-based app
 *   **Battery Life:** WebKit is designed to be extremely power-efficient, maximizing battery life on MacBooks compared to its non-native counterparts.
 *   **Rendering Speed:** Web pages benefit from native hardware acceleration and seamless scrolling built directly into the operating system.
 
-## 2. User Interface: SwiftUI & AppKit
+## 2. User Interface: SwiftUI
 
-*   **Native Execution:** The entire interface is built using **SwiftUI** and **AppKit**. It is compiled down to highly optimized machine code rather than running through a JavaScript bridge or web wrapper.
+*   **Native Execution:** The entire interface is built using **SwiftUI**. It is compiled down to highly optimized machine code rather than running through a JavaScript bridge or web wrapper.
 *   **Hardware Acceleration:** UI rendering, including the custom Liquid Glass aesthetics and micro-animations, utilizes Apple's Metal framework under the hood, ensuring consistently high frame rates (60fps/120fps on ProMotion displays) without burdening the CPU.
 
 ## 3. Data Storage: SwiftData
@@ -22,13 +22,13 @@ Unlike Chromium-based browsers (like Chrome, Edge, or Arc) or Electron-based app
 *   **Local Persistence:** Browsing history, bookmarks, notes, and other user data are managed via **SwiftData**.
 *   **Asynchronous Operations:** Backed by Core Data, SwiftData allows for fast, asynchronous read and write operations. The database is stored locally, ensuring that interacting with the Productive Sidebar or searching your history feels instantaneous.
 
-## 4. Local AI Processing
+## 4. AI Processing
 
-Balance Browser leverages on-device **Apple Foundation Models** for features like the Local AI Chat and AI Page Summarization. Performance here scales directly with your hardware:
+Balance Browser uses on-device **Apple Foundation Models** by default for features like AI Chat and AI Page Summarization. Local performance scales directly with your hardware. Chat also offers an optional Private Cloud Compute model:
 
 *   **Apple Silicon (M1/M2/M3/M4):** These processors feature dedicated Neural Engines (NPUs) and a unified memory architecture. Local AI tasks run exceptionally fast, with low latency and minimal impact on overall system performance or battery life.
-*   **Intel Macs:** AI is not supported.
-*   **Privacy & Speed:** Because the AI runs locally, there are zero network roundtrips. Responses begin generating instantly without relying on cloud server availability or internet connection speeds.
+*   **Local Privacy & Speed:** With the default on-device model, AI processing does not require a network round trip or a cloud server. Response time still depends on the device and request.
+*   **Private Cloud Compute Option:** When enabled for a new chat session, prompts and attached page or image content are processed through Apple's Private Cloud Compute, so response time also depends on the network and service availability.
 
 ## Summary
 

@@ -8,8 +8,6 @@ Balance can expose the current profile's bookmarks to a third-party webpage conf
 2. Turn on **Expose Bookmarks to Homepage**. This setting is off by default. If you change the homepage later, Balance turns the permission off; review the new URL before enabling it again.
 3. Open the homepage in a new tab after enabling the setting. The API script is installed when the web view is created, so an already-open tab may need to be reopened.
 
-If you enabled bookmark exposure in an older version of Balance, turn it off and on once to approve the current homepage URL.
-
 There is no separate prompt for each API call. Balance checks the setting and the calling page's origin on every request. The page must be the main frame of a non-private tab and have the same scheme, hostname, and port as the configured homepage. A different subdomain, protocol, or port cannot read or open bookmarks, and embedded frames cannot use the API. If access is turned off while a page is open, later requests are denied even if `window.balance` is still present in that page.
 
 Grant this permission only to a homepage you trust: `get()` gives that origin the names and URLs of all bookmarks in the active profile, including local file paths in file bookmarks. Any script running on that origin, including third-party scripts included by the page, can call the API. The API does not provide methods to create, edit, or delete bookmarks.

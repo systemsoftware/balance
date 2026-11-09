@@ -47,6 +47,8 @@ struct ChatView: View {
     @State private var renamingID: UUID?
     @State private var renameText = ""
     @State private var errorMessage: String?
+    
+    @State private var usePCC = false
 
     init(browserState: BrowserState) {
         self.browserState = browserState
@@ -170,7 +172,7 @@ struct ChatView: View {
                 LazyVStack(alignment: .leading, spacing: 18) {
                     if sessions[selectedIndex].items.isEmpty {
                         ContentUnavailableView("Ask anything", systemImage: "sparkles",
-                                               description: Text("Start a conversation by typing a question or request below. You can also add the current page (\(Image(systemName: "doc.text"))), an image (\(Image(systemName: "photo.on.rectangle"))), or file (\((Image(systemName: "paperclip")))) to provide context for your query."))
+                                               description: Text("Start a conversation by typing a question or request below."))
                             .frame(maxWidth: .infinity, minHeight: 220)
                     }
                     ForEach(sessions[selectedIndex].items) { item in
@@ -235,18 +237,27 @@ struct ChatView: View {
                 .textFieldStyle(.plain)
                 .onSubmit(sendMessage)
             HStack(spacing: 12) {
-                Button { togglePage() } label: {
-                    if isLoadingPage { ProgressView().controlSize(.small) }
-                    else { Image(systemName: pageText.isEmpty ? "doc.text" : "doc.text.fill") }
+                Menu {
+                    Button { togglePage() } label: {
+                        Label(pageText.isEmpty ? "Add current page" : "Remove current page", systemImage: pageText.isEmpty ? "doc.text" : "doc.text.fill")
+                    }
+                    .disabled(isLoadingPage || browserState.webView == nil)
+
+                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                        Label("Add Photo", systemImage: "photo.on.rectangle")
+                    }
+
+                    Button { isImporting = true } label: {
+                        Label("Add Image File", systemImage: "paperclip")
+                    }
+                        .help("Add image file")
+                    
+                    Divider()
+                    
+                    Toggle("Use Private Cloud Compute", isOn: $usePCC)
+                } label: {
+                    Image(systemName: "plus.circle").font(.title2)
                 }
-                .disabled(isLoadingPage || browserState.webView == nil)
-                .help(pageText.isEmpty ? "Add current page" : "Remove current page")
-                PhotosPicker(selection: $selectedPhoto, matching: .images) {
-                    Image(systemName: "photo.on.rectangle")
-                }
-                .help("Add photo")
-                Button { isImporting = true } label: { Image(systemName: "paperclip") }
-                    .help("Add image file")
                 Spacer()
                 if model.availability != .available {
                     Text(modelStatus).font(.caption).foregroundStyle(.secondary)
@@ -341,7 +352,18 @@ struct ChatView: View {
                 var previousConversation = ""
                 if let existing = modelSessions[sessionID] { session = existing }
                 else {
-                    session = LanguageModelSession(instructions: inst)
+                    
+                    let model: any LanguageModel
+
+                    if usePCC {
+                        model = PrivateCloudComputeLanguageModel()
+                    } else {
+                        model = SystemLanguageModel.default
+                    }
+
+                    session = LanguageModelSession(model: model, instructions: inst)
+                    
+                    
                     modelSessions[sessionID] = session
                     if let index = sessions.firstIndex(where: { $0.id == sessionID }) {
                         let pastItems = sessions[index].items.dropLast()
