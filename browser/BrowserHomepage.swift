@@ -286,21 +286,22 @@ class NewsViewModel: ObservableObject {
         ("None", ""),
         ("BBC", "https://feeds.bbci.co.uk/news/rss.xml"),
         ("CNBC", "https://www.cnbc.com/id/100727362/device/rss/rss.html"),
-        ("CNN", "https://rss.cnn.com/rss/cnn_topstories.rss"),
         ("LA Times", "https://www.latimes.com/local/rss2.0.xml"),
         ("Mozilla", "https://hacks.mozilla.org/feed/"),
         ("NPR", "https://www.npr.org/rss/rss.php?id=1001"),
         ("Politico", "https://www.politico.com/rss/politicopicks.xml"),
         ("Reuters", "https://news.google.com/rss/search?q=site%3Areuters.com&hl=en-US&gl=US&ceid=US%3Aen"),
-        ("Economist", "https://www.economist.com/leaders/rss.xml"),
-        ("Guardian", "https://www.theguardian.com/world/rss"),
-        ("Hill", "https://thehill.com/news/feed/"),
-        ("New Yorker", "https://www.newyorker.com/feed/news"),
+        ("The Economist", "https://www.economist.com/leaders/rss.xml"),
+        ("The Guardian", "https://www.theguardian.com/world/rss"),
+        ("The Hill", "https://thehill.com/news/feed/"),
+        ("The New Yorker", "https://www.newyorker.com/feed/news"),
         ("NYT", "https://rss.nytimes.com/services/xml/rss/nyt/HomePage.xml"),
-        ("Onion", "https://www.theonion.com/rss"),
+        ("The Onion", "https://www.theonion.com/rss"),
         ("WSJ", "https://feeds.a.dj.com/rss/RSSWorldNews.xml"),
-        ("WaPo", "https://feeds.washingtonpost.com/rss/homepage"),
         ("Apple Developer", "https://developer.apple.com/news/rss/news.rss"),
+        ("TechCrunch", "https://techcrunch.com/feed/"),
+        ("Wired", "https://www.wired.com/feed/rss"),
+        
     ]
     func fetch() {
         isLoading = true
@@ -367,42 +368,70 @@ class NewsViewModel: ObservableObject {
     }
 }
 
+// MARK: - Shared styling
+
+private extension View {
+    /// Frosted container with a continuous corner and a hairline edge.
+    func homeCard(cornerRadius: CGFloat = 20) -> some View {
+        self.glassEffect(.regular, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
+    }
+}
+
+private struct SectionHeader: View {
+    let title: String
+
+    var body: some View {
+        Text(title)
+            .font(.title3.weight(.semibold))
+            .padding(.leading, 4)
+    }
+}
+
+private struct TileButtonStyle: ButtonStyle {
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(configuration.isPressed ? 0.94 : 1)
+            .animation(.spring(response: 0.25, dampingFraction: 0.7), value: configuration.isPressed)
+    }
+}
+
 // MARK: - BookmarkCard
 
 struct BookmarkCard: View {
     let bookmark: Bookmark
     @State private var isHovered = false
-    
+
     var text = true
-    
+
     var state: BrowserState
 
     var body: some View {
-        VStack(spacing: 12) {
-            ZStack {
-                RoundedRectangle(cornerRadius: 16)
-                    .fill(Color.primary.opacity(isHovered ? 0.15 : 0.05))
-                    .frame(width: 80, height: 80)
-
-                Favicon(bookmark.url, width: 40, height: 40)
-            }
-            
-            if text {
-                Text(bookmark.title)
-                    .font(.system(size: 13, weight: .medium))
-                    .lineLimit(1)
-            }
-        }
-        .frame(width: 120)
-        .padding(.vertical, 10)
-        .scaleEffect(isHovered ? 1.05 : 1.0)
-        .animation(.spring(response: 0.3, dampingFraction: 0.6), value: isHovered)
-        .onHover { isHovered = $0 }
-        .onTapGesture {
+        Button {
             if let url = URL(string: bookmark.url) {
                 state.navigate(to: url)
             }
+        } label: {
+            VStack(spacing: 8) {
+                ZStack {
+                    Favicon(bookmark.url, width: 34, height: 34)
+                }
+                .frame(width: 68, height: 68)
+                .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+
+                if text {
+                    Text(bookmark.title)
+                        .font(.caption)
+                        .lineLimit(1)
+                }
+            }
+            .frame(width: 88)
+            .scaleEffect(isHovered ? 1.04 : 1)
+            .contentShape(Rectangle())
         }
+        .buttonStyle(TileButtonStyle())
+        .onHover { isHovered = $0 }
+        .animation(.spring(response: 0.3, dampingFraction: 0.7), value: isHovered)
+        .accessibilityLabel(bookmark.title)
     }
 }
 
@@ -410,7 +439,7 @@ struct BookmarkCard: View {
 
 struct ClockView: View {
     @StateObject private var vm = ClockViewModel()
-    
+
     var timeOnly = false
     var fontSize: CGFloat = 72
 
@@ -420,27 +449,18 @@ struct ClockView: View {
                 .font(.system(size: fontSize, weight: .thin, design: .default).monospacedDigit())
                 .contentTransition(.numericText())
         } else {
-            VStack(spacing: 4) {
-                Text(vm.timeString)
-                    .font(.system(size: fontSize, weight: .thin, design: .default).monospacedDigit())
-                    .contentTransition(.numericText())
-                
-                GeometryReader { geo in
-                    ZStack(alignment: .leading) {
-                        Capsule()
-                            .fill(Color.primary.opacity(0.08))
-                        Capsule()
-                            .fill(Color.accentColor.opacity(0.6))
-                            .frame(width: geo.size.width * vm.secondsFraction)
-                    }
-                }
-                .frame(maxWidth: 160, maxHeight: 3)
-                .animation(.linear(duration: 0.9), value: vm.secondsFraction)
-                
+            // Lock-screen style: date above a large rounded time.
+            VStack(spacing: 0) {
                 Text(vm.dateString)
-                    .font(.system(size: 16, weight: .regular))
-                    .foregroundColor(.secondary)
-                    .padding(.top, 4)
+                    .font(.title2.weight(.semibold))
+                    .foregroundStyle(.secondary)
+
+                Text(vm.timeString)
+                    .font(.system(size: fontSize, weight: .semibold, design: .rounded).monospacedDigit())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.5)
+                    .contentTransition(.numericText())
+                    .animation(.easeInOut, value: vm.timeString)
             }
             .multilineTextAlignment(.center)
         }
@@ -451,51 +471,136 @@ struct ClockView: View {
 
 struct WeatherView: View {
     @StateObject var vm: WeatherViewModel
-    
-    @AppStorage("homepageWeatherCity", store:Config.sharedDefaults) var weatherCity: String = ""
+
+    @AppStorage("homepageWeatherCity", store: Config.sharedDefaults) var weatherCity: String = ""
+
+    @State var showMore = false
     
     var body: some View {
         Group {
             if vm.isLoading {
                 HStack(spacing: 8) {
-                    ProgressView().scaleEffect(0.7)
-                    Text("Loading weather…").foregroundColor(.secondary)
+                    ProgressView().controlSize(.small)
+                    Text("Loading weather…").foregroundStyle(.secondary)
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
-                .padding(.vertical, 8)
+                .frame(maxWidth: .infinity, minHeight: 96)
             } else if let w = vm.weather {
-                HStack {
-                    HStack(spacing: 14) {
-                        Image(systemName: w.icon)
-                            .font(.system(size: 32))
-                            .symbolRenderingMode(.multicolor)
-                        Text(w.temperature)
-                            .font(.system(size: 24, weight: .semibold).monospacedDigit())
+                content(for: w)
+            } else {
+                Text("Weather unavailable")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity, minHeight: 96)
+            }
+        }
+        .homeCard(cornerRadius: 24)
+        .onAppear { vm.fetch(city: weatherCity) }
+    }
+
+    private func content(for w: WeatherInfo) -> some View {
+        VStack(alignment: .leading, spacing: 16) {
+            HStack(alignment: .center) {
+                VStack(alignment: .leading, spacing: 2) {
+                    if !w.location.isEmpty {
+                        Text(w.location)
+                            .font(.headline)
                     }
+                    Text(w.temperature)
+                        .font(.system(size: 52, weight: .light, design: .rounded))
+                        .monospacedDigit()
+                    Text(w.condition)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                Image(systemName: w.icon)
+                    .font(.system(size: 54))
+                    .symbolRenderingMode(.multicolor)
+            }
+
+            DisclosureGroup("Forecast and Conditions", isExpanded: $showMore) {
+                if let hourly = w.hourly, !hourly.isEmpty {
+                    Divider()
                     
-                    Spacer()
-                    
-                    VStack(alignment: .trailing, spacing: 4) {
-                        Text(w.condition)
-                            .font(.system(size: 14))
-                            .foregroundColor(.secondary)
-                        if !w.location.isEmpty {
-                            Text(w.location)
-                                .font(.system(size: 12))
-                                .foregroundColor(.secondary.opacity(0.7))
+                    ScrollView(.horizontal, showsIndicators: false) {
+                        HStack(spacing: 24) {
+                            ForEach(hourly) { hour in
+                                VStack(spacing: 8) {
+                                    Text(Self.hourLabel(hour.time))
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    Image(systemName: hour.icon)
+                                        .symbolRenderingMode(.multicolor)
+                                        .font(.title3)
+                                        .frame(height: 24)
+                                    Text(hour.temperature.replacingOccurrences(of: "F", with: ""))
+                                        .font(.subheadline.weight(.medium))
+                                        .monospacedDigit()
+                                }
+                                .accessibilityElement(children: .combine)
+                            }
                         }
                     }
                 }
-                .padding(.vertical, 8)
-            } else {
-                Text("Weather unavailable")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 13))
-                    .frame(maxWidth: .infinity, alignment: .leading)
-                    .padding(.vertical, 8)
+                
+                Divider()
+                
+                LazyVGrid(
+                    columns: [GridItem(.adaptive(minimum: 130), spacing: 16, alignment: .leading)],
+                    alignment: .leading,
+                    spacing: 14
+                ) {
+                    if !w.wind.trimmingCharacters(in: .whitespaces).isEmpty {
+                        WeatherStat(title: "Wind", systemImage: "wind", value: w.wind)
+                    }
+                    if !w.precip.isEmpty {
+                        WeatherStat(title: "Precipitation", systemImage: "drop.fill", value: "\(w.precip) in")
+                    }
+                    if !w.visibility.isEmpty {
+                        WeatherStat(title: "Visibility", systemImage: "eye.fill", value: "\(w.visibility) mi")
+                    }
+                    if !w.pressure.isEmpty {
+                        WeatherStat(title: "Pressure", systemImage: "gauge", value: "\(w.pressure) inHg")
+                    }
+                    if w.sun_rise_set.contains(where: \.isNumber) {
+                        WeatherStat(title: "Sun", systemImage: "sunrise.fill", value: w.sun_rise_set)
+                    }
+                    if !w.moon_phase.isEmpty {
+                        WeatherStat(title: "Moon", systemImage: "moon.stars.fill", value: w.moon_phase)
+                    }
+                }
             }
         }
-        .onAppear { vm.fetch(city: weatherCity) }
+        .padding(20)
+    }
+
+    /// wttr.in reports hourly blocks as "0", "300", … "2100".
+    private static func hourLabel(_ raw: String) -> String {
+        guard let value = Int(raw) else { return raw }
+        let hour = value / 100
+        let displayHour = hour % 12 == 0 ? 12 : hour % 12
+        return "\(displayHour) \(hour < 12 ? "AM" : "PM")"
+    }
+}
+
+private struct WeatherStat: View {
+    let title: String
+    let systemImage: String
+    let value: String
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 3) {
+            Label(title, systemImage: systemImage)
+                .font(.caption)
+                .foregroundStyle(.secondary)
+            Text(value)
+                .font(.subheadline.weight(.medium))
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+        }
+        .accessibilityElement(children: .combine)
     }
 }
 
@@ -505,46 +610,57 @@ struct NewsView: View {
     @StateObject private var vm = NewsViewModel()
 
     var body: some View {
-        VStack(alignment: .leading, spacing: 16) {
+        VStack(alignment: .leading, spacing: 14) {
             // Source picker
             ScrollView(.horizontal, showsIndicators: false) {
-                HStack(spacing: 0) {
+                HStack(spacing: 8) {
                     ForEach(vm.sources.indices, id: \.self) { i in
-                        Button(vm.sources[i].name) {
+                        let isSelected = vm.selectedSource == i
+                        Button {
                             vm.selectedSource = i
                             vm.fetch()
+                        } label: {
+                            Text(vm.sources[i].name)
+                                .font(.subheadline.weight(isSelected ? .semibold : .regular))
+                                .foregroundStyle(isSelected ? Color.white : Color.primary)
+                                .padding(.horizontal, 12)
+                                .padding(.vertical, 6)
+                                .background {
+                                    if isSelected {
+                                        Capsule().fill(Color.accentColor)
+                                    }
+                                }
+                                .glassEffect(isSelected ? .identity : .regular, in: Capsule())
                         }
                         .buttonStyle(.plain)
-                        .font(.system(size: 13, weight: vm.selectedSource == i ? .semibold : .regular))
-                        .foregroundColor(vm.selectedSource == i ? .primary : .secondary)
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 6)
-                        .background(
-                            RoundedRectangle(cornerRadius: 8)
-                                .fill(vm.selectedSource == i ? Color.primary.opacity(0.08) : .clear)
-                        )
+                        .accessibilityAddTraits(isSelected ? .isSelected : [])
                     }
                 }
+                .padding(.horizontal, 1)
             }
 
             if vm.isLoading && vm.selectedSource != 0 {
-                HStack { Spacer(); ProgressView(); Spacer() }
+                ProgressView()
+                    .frame(maxWidth: .infinity)
                     .padding(.vertical, 30)
             } else if vm.items.isEmpty {
-                Text( vm.selectedSource != 0 ? "Could not load news. Check network connection." : "Select a source.")
-                    .foregroundColor(.secondary)
-                    .font(.system(size: 13))
-                    .padding()
+                Text(vm.selectedSource != 0 ? "Could not load news. Check your network connection." : "Choose a source above.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 24)
+                    .homeCard()
             } else {
                 VStack(spacing: 0) {
-                    ForEach(vm.items) { item in
+                    ForEach(Array(vm.items.enumerated()), id: \.element.id) { index, item in
                         NewsRow(item: item)
-                        if item.id != vm.items.last?.id {
-                            Divider().opacity(0.4)
+                        if index < vm.items.count - 1 {
+                            Divider().padding(.leading, 16)
                         }
                     }
                 }
-                .background(RoundedRectangle(cornerRadius: 14).fill(Color.primary.opacity(0.04)))
+                .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                .homeCard()
             }
         }
         .onAppear { vm.fetch() }
@@ -557,30 +673,37 @@ struct NewsRow: View {
 
     var body: some View {
         Button {
-            if let url = URL(string: item.link) { createNewTab(with:url) }
+            if let url = URL(string: item.link) { createNewTab(with: url) }
         } label: {
-            HStack(alignment: .top, spacing: 12) {
+            HStack(alignment: .center, spacing: 12) {
                 VStack(alignment: .leading, spacing: 4) {
                     Text(item.title)
-                        .font(.system(size: 14, weight: .medium))
+                        .font(.subheadline.weight(.medium))
                         .multilineTextAlignment(.leading)
-                        .foregroundColor(.primary)
+                        .foregroundStyle(.primary)
                         .lineLimit(2)
-                    if !item.pubDate.isEmpty {
-                        Text(item.pubDate)
-                            .font(.system(size: 11))
-                            .foregroundColor(.secondary)
+
+                    HStack(spacing: 6) {
+                        Text(item.source)
+                            .fontWeight(.semibold)
+                        if !item.pubDate.isEmpty {
+                            Text(item.pubDate)
+                        }
                     }
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
                 }
-                Spacer()
+
+                Spacer(minLength: 8)
+
                 Image(systemName: "arrow.up.right")
-                    .font(.system(size: 11))
-                    .foregroundColor(.secondary)
-                    .opacity(isHovered ? 1 : 0)
+                    .font(.caption2.weight(.semibold))
+                    .foregroundStyle(Color.secondary.opacity(isHovered ? 1 : 0.5))
             }
-            .padding(.horizontal, 14)
-            .padding(.vertical, 10)
-            .background(Color.primary.opacity(isHovered ? 0.05 : 0))
+            .padding(.horizontal, 16)
+            .padding(.vertical, 11)
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .background(Color.primary.opacity(isHovered ? 0.06 : 0))
             .contentShape(Rectangle())
         }
         .buttonStyle(.plain)
@@ -594,240 +717,323 @@ struct NewsRow: View {
 struct BrowserHomepage: View {
     var profile: String = ""
     @StateObject private var store = BookmarkStore()
-    @State private var searchText = ""
-    
-    
+    @State private var draggedCard: String?
+
+
     var state: BrowserState
 
-    let columns = [GridItem(.adaptive(minimum: 120, maximum: 140), spacing: 20)]
-    
-    
-    @AppStorage("homeBackground", store:Config.sharedDefaults) var homeBackground: String = ""
+    let columns = [GridItem(.adaptive(minimum: 96, maximum: 112), spacing: 12, alignment: .top)]
 
-    @State private var showingFilePicker = false
-    @State private var showingURLPrompt = false
-    @State private var urlString = ""
+    
+    @AppStorage("homepageShowDragHandles") var showDragHandles: Bool = true
+
+
     @State var showCityChange = false
 
     @StateObject private var weatherVM = WeatherViewModel()
-    
+
     @AppStorage("profiles", store: Config.sharedDefaults) private var profilesJSON = "[]"
 
-    @AppStorage("homepageShowCock", store:Config.sharedDefaults) var showClock: Bool = true
     @AppStorage("homepageShowWeather", store:Config.sharedDefaults) var showWeather: Bool = true
     @AppStorage("homepageShowBookmarks", store:Config.sharedDefaults) var showBookmarks: Bool = true
     @AppStorage("homepageShowEmail", store:Config.sharedDefaults) var showEmail: Bool = true
     @AppStorage("homepageShowStories", store:Config.sharedDefaults) var showStories: Bool = true
     @AppStorage("homepageShowCalendar", store:Config.sharedDefaults) var showCalendar: Bool = true
-    @AppStorage("homepageWeatherCity") var weatherCity = ""
-    
+    @AppStorage("homepageWeatherCity", store: Config.sharedDefaults) var weatherCity = ""
+    @AppStorage("homepageCardOrder", store: Config.sharedDefaults) private var cardOrder = "weather,bookmarks,email,stories,calendar"
+
+    @State var falseBinding = false
+    @Binding var location: URL?
+    @Binding var urlInput: String
+    var isPrivate: Bool = false
+    var submitURL: () -> Void
+
     private var isEmailConfigured: Bool {
         let profiles = (try? JSONDecoder().decode([Profile].self, from: Data(profilesJSON.utf8))) ?? []
         let currentProfile = profiles.first { $0.id.uuidString == profile }
         return currentProfile?.imapHost != nil && !(currentProfile?.imapHost?.isEmpty ?? true)
     }
-    
+
     @State private var date = Date()
-    
+
+    private static let defaultCardOrder = ["weather", "bookmarks", "email", "stories", "calendar"]
+
+    private var orderedCards: [String] {
+        let saved = cardOrder.split(separator: ",").map(String.init)
+        let valid = saved.reduce(into: [String]()) { result, card in
+            if Self.defaultCardOrder.contains(card), !result.contains(card) {
+                result.append(card)
+            }
+        }
+        return valid + Self.defaultCardOrder.filter { !valid.contains($0) }
+    }
+
+    private var visibleCards: [String] {
+        orderedCards.filter { card in
+            switch card {
+            case "weather": return showWeather
+            case "bookmarks": return showBookmarks
+            case "email": return isEmailConfigured && showEmail
+            case "stories": return showStories
+            case "calendar": return showCalendar
+            default: return false
+            }
+        }
+    }
+
     var body: some View {
-        ZStack {
-            BackgroundImage(homeBackground:homeBackground)
-                .ignoresSafeArea()
-            
-            ScrollView {
-          
-                VStack(spacing: 50) {
-                    
-                    if showClock {
-                        HStack(alignment: .top, spacing: 40) {
-                            ClockView()
-                        }
-                        .padding(.top, 60)
-                    }
-                    
-                    if showWeather {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Weather", systemImage: "cloud.sun.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.secondary)
-                            
-                            WeatherView(vm: weatherVM)
-                        }
-                        .padding(.top, 8)
-                        .padding(.horizontal, 40)
-                    }
-           
-                    
-                    if !store.items.isEmpty && showBookmarks {
-                        VStack(alignment: .leading, spacing: 16) {
-                            Label("Bookmarks", systemImage: "bookmark.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.secondary)
-                                .padding(.horizontal, 40)
-                            
-                            LazyVGrid(columns: columns, spacing: 30) {
-                                ForEach(store.items) { bookmark in
-                                    BookmarkCard(bookmark: bookmark, state: state)
-                                }
+        ScrollView {
+                VStack(spacing: 40) {
+                    hero
+                    ForEach(visibleCards, id: \.self) { card in
+                        homepageCard(card)
+                            .onDrop(of: [UTType.plainText], isTargeted: nil) { providers in
+                                guard draggedCard != nil, !providers.isEmpty else { return false }
+                                moveCard(to: card)
+                                return true
                             }
-                            .padding(.horizontal, 40)
-                        }
-                    } else if showBookmarks && store.items.isEmpty {
-                            emptyBookmarksState
                     }
-                    
-                    
-                    if isEmailConfigured && showEmail {
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Emails", systemImage: "envelope.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.secondary)
-                            
-                            EmailView(profile: profile, home:true)
-                                .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 500)
-                                .background(Color.platformControlBackground.opacity(0.8))
-                                .cornerRadius(12)
-                        }
-                        .padding(.horizontal, 40)
-                    }
-                    
-                    if showStories {
-                        
-                        VStack(alignment: .leading, spacing: 12) {
-                            Label("Recent Stories", systemImage: "newspaper.fill")
-                                .font(.system(size: 13, weight: .semibold))
-                                .foregroundColor(.secondary)
-                            
-                            NewsView()
-                            
-                        }
-                        .padding(.horizontal, 40)
-                    }
-                    
-                    if showCalendar {
-                        FullCalendarView(selectedDate: $date)
-                    }
-                    
                 }
+                .frame(maxWidth: 820)
+                .padding(.horizontal, 24)
+                .padding(.top, 56)
+                .padding(.bottom, 88)
+                .frame(maxWidth: .infinity)
             }
-        }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .contextMenu {
-            Menu("Background") {
-                Button {
-                    showingFilePicker = true
-                } label: {
-                    Label("Add from File", systemImage: "folder")
-                }
-
-                Button {
-                    urlString = homeBackground
-                    showingURLPrompt = true
-                } label: {
-                    Label("Add from URL", systemImage: "link")
-                }
-                
-                Divider()
-                
-                Button {
-                    homeBackground = ""
-                } label: {
-                    Label("Remove", systemImage: "trash")
-                }
-            }
-            
-            Divider()
-            
-            Button("Set City for Weather") {
-                showCityChange = true
-            }
-            
-            Divider()
-            
-            Menu {
-                Toggle("Clock", isOn: $showClock)
-                Toggle("Weather", isOn: $showWeather)
-                Toggle("Bookmarks", isOn: $showBookmarks)
-                
-                if isEmailConfigured {
-                    Toggle("Email", isOn: $showEmail)
-                }
-                
-                Toggle("News", isOn: $showStories)
-                Toggle("Calendar", isOn: $showCalendar)
-            } label: {
-                Text("Views")
-            }
-
-            
-         }
-        .sheet(isPresented: $showCityChange) {
-            VStack(alignment: .leading) {
-                Text("Set City for Weather")
-                    .font(.headline)
-                Text("Enter the city name (e.g., 'Los Angeles', 'San Francisco', 'Palm Springs, CA') to fetch the weather for that location.")
-                    .font(.subheadline)
-                    
-                TextField("City", text: $weatherCity)
-                HStack {
-                    Spacer()
-                    Button("Cancel") { showCityChange = false }
-                        .keyboardShortcut(.cancelAction)
-                    Button("Save") {
-                        showCityChange = false
-                        weatherVM.fetch(city: weatherCity)
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                    .disabled(weatherCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
-                }
-            }
-            .padding()
-        }
-        .sheet(isPresented: $showingURLPrompt) {
-            VStack(alignment: .leading, spacing: 16) {
-                Text("Background URL").font(.headline)
-                TextField("Image URL", text: $urlString)
-                    .textFieldStyle(.roundedBorder)
-                    .autocorrectionDisabled()
-                HStack {
-                    Spacer()
-                    Button("Cancel") { showingURLPrompt = false }
-                        .keyboardShortcut(.cancelAction)
-                    Button("Save") {
-                        homeBackground = urlString
-                        showingURLPrompt = false
-                    }
-                    .buttonStyle(.borderedProminent)
-                    .keyboardShortcut(.defaultAction)
-                }
-            }
-            .padding(20)
-            .frame(minWidth: 280, idealWidth: 420, maxWidth: 420)
-        }
-        .fileImporter(
-            isPresented: $showingFilePicker,
-            allowedContentTypes: [.image]
-        ) { result in
-            switch result {
-            case .success(let url):
-                saveBackgroundImage(from: url)
-
-            case .failure(let error):
-                print(error)
-            }
-        }
+        .overlay(alignment: .bottomTrailing) { customizeMenu }
+        .sheet(isPresented: $showCityChange) { citySheet }
     }
 
     // MARK: Subviews
 
-    private var emptyBookmarksState: some View {
-        VStack(spacing: 10) {
-            Text("No bookmarks yet").foregroundColor(.secondary)
-            Button("Add Sample Bookmarks") { addSamples() }.buttonStyle(.bordered)
+    var timeOfDay: String {
+        let hour = Calendar.current.component(.hour, from: Date())
+        switch hour {
+        case 5..<12: return "morning"
+        case 12..<17: return "afternoon"
+        case 17..<21: return "evening"
+        default: return "night"
+        }
+    }
+    
+    var todaysDate: String {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d"
+        return formatter.string(from: Date())
+    }
+    
+    private var hero: some View {
+        VStack {
+            HStack {
+                Text("Good \(timeOfDay).")
+                    .font(.largeTitle.weight(.semibold))
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+                Spacer()
+                Text(todaysDate)
+                    .font(.subheadline.weight(.medium))
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 12)
+                    .padding(.bottom, 8)
+            }
+            
+            HStack(spacing: 10) {
+                AddressBar(browserState: state, location: $location, urlInput: $urlInput, showTrustInfo: $falseBinding, focusOnAppear: false, isPrivate: isPrivate, profileIcon: "", profileName: "", submitURL: submitURL)
+                
+                Button(action: submitURL) {
+                    Image(systemName: "arrow.right.circle.fill")
+                        .font(.system(size: 26))
+                        .symbolRenderingMode(.hierarchical)
+                }
+                .buttonStyle(.plain)
+                .foregroundStyle(Color.accentColor)
+                .accessibilityLabel("Go")
+            }
+            .padding(12)
+            .glassEffect(.regular, in: RoundedRectangle(cornerRadius: 24, style: .continuous))
+            .frame(maxWidth: .infinity)
         }
     }
 
+    @ViewBuilder
+    private func homepageCard(_ card: String) -> some View {
+        switch card {
+        case "weather" where showWeather:
+            VStack(alignment: .leading, spacing: 12) {
+                draggableHeader("Weather", card: card)
+                WeatherView(vm: weatherVM)
+            }
+        case "bookmarks" where showBookmarks:
+            bookmarksSection
+        case "email" where isEmailConfigured && showEmail:
+            VStack(alignment: .leading, spacing: 12) {
+                draggableHeader("Emails", card: card)
+                EmailView(profile: profile, home: true)
+                    .frame(maxWidth: .infinity, minHeight: 100, maxHeight: 500)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .homeCard()
+            }
+        case "stories" where showStories:
+            VStack(alignment: .leading, spacing: 12) {
+                draggableHeader("Recent Stories", card: card)
+                NewsView()
+            }
+        case "calendar" where showCalendar:
+            VStack(alignment: .leading, spacing: 12) {
+                draggableHeader("Calendar", card: card)
+                FullCalendarView(selectedDate: $date)
+                    .clipShape(RoundedRectangle(cornerRadius: 16, style: .continuous))
+                    .homeCard()
+            }
+        default:
+            EmptyView()
+        }
+    }
+
+    private func draggableHeader(_ title: String, card: String) -> some View {
+        HStack {
+            SectionHeader(title: title)
+            Spacer()
+            if showDragHandles {
+                Image(systemName: "line.3.horizontal")
+                    .foregroundStyle(.secondary)
+                    .accessibilityHidden(true)
+            }
+        }
+        .contentShape(Rectangle())
+        .onDrag {
+            draggedCard = card
+            return NSItemProvider(object: card as NSString)
+        }
+        .accessibilityHint("Drag to reorder homepage cards")
+    }
+
+    private func moveCard(to target: String) {
+        guard let draggedCard else { return }
+        defer { self.draggedCard = nil }
+        guard draggedCard != target else { return }
+        var cards = orderedCards
+        guard let sourceIndex = cards.firstIndex(of: draggedCard),
+              let targetIndex = cards.firstIndex(of: target) else { return }
+        cards.remove(at: sourceIndex)
+        cards.insert(draggedCard, at: targetIndex)
+        withAnimation(.easeInOut(duration: 0.2)) {
+            cardOrder = cards.joined(separator: ",")
+        }
+    }
+
+    private var bookmarksSection: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            draggableHeader("Bookmarks", card: "bookmarks")
+
+            if store.items.isEmpty {
+                emptyBookmarksState
+            } else {
+                LazyVGrid(columns: columns, alignment: .leading, spacing: 18) {
+                    ForEach(store.items) { bookmark in
+                        BookmarkCard(bookmark: bookmark, state: state)
+                    }
+                }
+            }
+        }
+    }
+
+    private var emptyBookmarksState: some View {
+        VStack(spacing: 10) {
+            Image(systemName: "bookmark")
+                .font(.system(size: 30, weight: .light))
+                .foregroundStyle(.secondary)
+            Text("No bookmarks yet")
+                .font(.headline)
+            Text("Add sites you visit often to open them from here.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+            Button("Add Sample Bookmarks") { addSamples() }
+                .buttonStyle(.bordered)
+                .padding(.top, 4)
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 28)
+        .homeCard()
+    }
+
+    private var customizeMenu: some View {
+        Menu {
+            Button {
+                showCityChange = true
+            } label: {
+                Label("Change City", systemImage: "location")
+            }
+            
+            Divider()
+            
+            Toggle("Show Drag Handles", isOn: $showDragHandles)
+            
+            Divider()
+
+            Menu {
+                Toggle("Weather", isOn: $showWeather)
+                Toggle("Bookmarks", isOn: $showBookmarks)
+
+                if isEmailConfigured {
+                    Toggle("Email", isOn: $showEmail)
+                }
+
+                Toggle("News", isOn: $showStories)
+                Toggle("Calendar", isOn: $showCalendar)
+            } label: {
+                Label("Views", systemImage: "square.grid.2x2")
+            }
+        } label: {
+            Image(systemName: "slider.horizontal.3")
+                .font(.system(size: 15, weight: .medium))
+                .foregroundStyle(.primary)
+                .frame(width: 36, height: 36)
+                .glassEffect(.regular, in: Circle())
+        }
+        .menuStyle(.borderlessButton)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .padding(20)
+        .accessibilityLabel("Customize Homepage")
+    }
+
+    private var citySheet: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 4) {
+                Text("Set City for Weather")
+                    .font(.headline)
+                Text("Enter a city name, such as “Los Angeles” or “Palm Springs, CA”.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+            }
+
+            TextField("City", text: $weatherCity)
+                .textFieldStyle(.roundedBorder)
+                .onSubmit(saveCity)
+
+            HStack {
+                Spacer()
+                Button("Cancel") { showCityChange = false }
+                    .keyboardShortcut(.cancelAction)
+                Button("Save", action: saveCity)
+                    .buttonStyle(.borderedProminent)
+                    .keyboardShortcut(.defaultAction)
+                    .disabled(weatherCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty)
+            }
+        }
+        .padding(20)
+        .frame(minWidth: 300, idealWidth: 400, maxWidth: 400)
+        .presentationDetents([.medium])
+    }
+
+    private func saveCity() {
+        guard !weatherCity.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return }
+        showCityChange = false
+        weatherVM.fetch(city: weatherCity)
+    }
 
     private func addSamples() {
         store.add(Bookmark(title: "Google", url: "https://www.google.com"))
@@ -835,88 +1041,4 @@ struct BrowserHomepage: View {
         store.add(Bookmark(title: "GitHub", url: "https://www.github.com"))
     }
 
-    private func saveBackgroundImage(from sourceURL: URL) {
-        let didAccess = sourceURL.startAccessingSecurityScopedResource()
-        defer {
-            if didAccess {
-                sourceURL.stopAccessingSecurityScopedResource()
-            }
-        }
-
-        do {
-            let fileManager = FileManager.default
-            let applicationSupport = try fileManager.url(
-                for: .applicationSupportDirectory,
-                in: .userDomainMask,
-                appropriateFor: nil,
-                create: true
-            )
-            let directory = applicationSupport
-                .appendingPathComponent("Homepage", isDirectory: true)
-            try fileManager.createDirectory(
-                at: directory,
-                withIntermediateDirectories: true
-            )
-
-            var destination = directory
-                .appendingPathComponent(UUID().uuidString)
-            if !sourceURL.pathExtension.isEmpty {
-                destination.appendPathExtension(sourceURL.pathExtension)
-            }
-
-            try fileManager.copyItem(at: sourceURL, to: destination)
-
-            let previousURL = URL(string: homeBackground)
-            homeBackground = destination.absoluteString
-
-            if let previousURL,
-               previousURL.isFileURL,
-               previousURL.deletingLastPathComponent() == directory {
-                try? fileManager.removeItem(at: previousURL)
-            }
-        } catch {
-            print("Unable to save homepage background: \(error)")
-        }
-    }
-    
-    
-}
-
-struct BackgroundImage: View {
-    let homeBackground: String
-
-    var body: some View {
-        GeometryReader { geo in
-            content
-                .frame(width: geo.size.width, height: geo.size.height)
-                .clipped()
-        }
-        .ignoresSafeArea()
-    }
-
-    @ViewBuilder
-    private var content: some View {
-        if let url = URL(string: homeBackground),
-           url.scheme?.hasPrefix("http") == true {
-
-            AsyncImage(url: url) { image in
-                image
-                    .resizable()
-                    .scaledToFill()
-            } placeholder: {
-                Color.clear
-            }
-
-        } else if
-            let url = URL(string: homeBackground),
-            let image = UniversalImage.load(contentsOf: url) {
-
-            Image(universalImage: image)
-                .resizable()
-                .scaledToFill()
-
-        } else {
-            EmptyView()
-        }
-    }
 }

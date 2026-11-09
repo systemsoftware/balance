@@ -586,7 +586,6 @@ let Settings: [Setting] = {
             appStorageKey: "loadImages",
             defaultValueBool: true
         ),
-        Setting(name: "Weather City", icon: "cloud.sun", category: catBrowsing, type: "text", appStorageKey: "homepageWeatherCity"),
         Setting(
             name: "Developer Mode",
             icon: "chevron.left.forwardslash.chevron.right",

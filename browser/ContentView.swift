@@ -540,7 +540,7 @@ struct ContentView: View {
                             }
                         }
                     } else {
-                        BrowserHomepage(profile: bProfile, state:browserState)
+                        BrowserHomepage(profile: bProfile, state:browserState, location: locationBinding, urlInput: $urlInput, isPrivate: priv, submitURL: submitURL)
                             .clipShape(RoundedRectangle(cornerRadius: isCompact ? 14 : Layout.cornerRadius))
                             .task {
                                 browserState.title = "Balance"

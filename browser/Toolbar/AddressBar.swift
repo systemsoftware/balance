@@ -49,7 +49,8 @@ struct AddressBar: View {
                 text: $urlInput,
                 isLoading: browserState.isLoading,
                 focusOnAppear: focusOnAppear,
-                onSubmit: submitURL
+                onSubmit: submitURL,
+                onNavigate: { browserState.navigate(to: $0) }
             )
             Spacer()
 
@@ -123,6 +124,7 @@ private struct AddressField: View {
     let isLoading: Bool
     var focusOnAppear = false
     let onSubmit: () -> Void
+    let onNavigate: (URL) -> Void
 
     @AppStorage("showAddressBarAutofill") private var showAddressBarAutofill = true
     @State private var isEditing = false
@@ -175,6 +177,7 @@ private struct AddressField: View {
                     AutocompleteView(
                         searchTerm: $text,
                         onSelection: { showSuggestions = false },
+                        navigateToURL: onNavigate,
                         loadQuery: {
                             showSuggestions = false
                             onSubmit()

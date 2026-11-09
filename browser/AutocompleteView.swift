@@ -40,6 +40,7 @@ struct AutocompleteView: View {
     
     var updateOther: Binding<String?>?
     var onSelection: (() -> Void)?
+    var navigateToURL: ((URL) -> Void)?
     
     var loadQuery: () -> Void
     
@@ -168,19 +169,30 @@ struct AutocompleteView: View {
         } else {
             searchTerm = sugg
         }
+        if let navigateToURL, let url = URL(string: sugg) {
+            navigateToURL(url)
+        } else {
+            loadQuery()
+        }
         if let onSelection {
             onSelection()
         } else {
             dismiss()
         }
-        
-        loadQuery()
     }
 
     private func searchURL(for query: String) -> String {
         if let customEngine,
            let url = EngineManager.searchURL(for: customEngine, query: query) {
             return url.absoluteString
+        }
+
+        if var components = URLComponents(string: searchEngine),
+           components.host?.hasSuffix("google.com") == true,
+           components.path == "/webhp" {
+            components.queryItems = (components.queryItems ?? []).filter { $0.name != "q" }
+                + [URLQueryItem(name: "q", value: query)]
+            if let url = components.url { return url.absoluteString }
         }
 
         let encoded = query.addingPercentEncoding(withAllowedCharacters: .urlQueryAllowed) ?? query

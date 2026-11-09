@@ -392,12 +392,7 @@ struct CommandsView: View {
         .init(name: "New Window With Profile…",
               systemImage: "person.fill",
               action: .newWindowWithProfile, showsChevron: true,
-              subtitle: "Choose which profile to use"),
-
-        .init(name: "New Profile…",
-              systemImage: "person.crop.circle.badge.plus",
-              action: .newProfile, showsChevron: true,
-              subtitle: "Set up a separate browsing profile"),
+              subtitle: "Choose which profile to use")
     ]
 
     @State private var urlString = ""
@@ -606,6 +601,7 @@ struct CommandsView: View {
                 arrangeScreen
             }
         }
+        .buttonBorderShape(.roundedRectangle(radius: 10))
         .frame(minWidth: showData ? 420 : nil, minHeight: 350)
         .animation(.snappy(duration: 0.2), value: screen)
         .onChange(of: showNewProfile) { _, isShowing in
@@ -729,7 +725,7 @@ struct CommandsView: View {
                 .padding(.vertical, 5)
                 .background(
                     isSelected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06),
-                    in: Capsule()
+                    in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
         }
         .buttonStyle(.plain)
