@@ -158,8 +158,8 @@ Inspect SSL certificate trust chains, manage site permissions, and enforce conte
 
 ## Requirements
 
-- **macOS**: macOS 15.0 (Sequoia) / macOS 26.0+
-- **Xcode**: Xcode 16.0+ / Swift 6.0+
+- **macOS**: macOS 26.0+
+- **Xcode**: Xcode 26.0+
 
 
 

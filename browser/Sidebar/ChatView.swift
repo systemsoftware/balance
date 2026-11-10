@@ -47,6 +47,7 @@ struct ChatView: View {
     @State private var renamingID: UUID?
     @State private var renameText = ""
     @State private var errorMessage: String?
+    @State var showPhotosPicker = false
     
     @State private var usePCC = false
 
@@ -243,7 +244,9 @@ struct ChatView: View {
                     }
                     .disabled(isLoadingPage || browserState.webView == nil)
 
-                    PhotosPicker(selection: $selectedPhoto, matching: .images) {
+                    Button {
+                        showPhotosPicker.toggle()
+                    } label: {
                         Label("Add Photo", systemImage: "photo.on.rectangle")
                     }
 
@@ -258,6 +261,7 @@ struct ChatView: View {
                 } label: {
                     Image(systemName: "plus.circle").font(.title2)
                 }
+                .photosPicker(isPresented: $showPhotosPicker, selection: $selectedPhoto, matching: .images)
                 Spacer()
                 if model.availability != .available {
                     Text(modelStatus).font(.caption).foregroundStyle(.secondary)

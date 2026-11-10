@@ -7,31 +7,27 @@ struct DuplicateToolbarButton: View {
  
     var body: some View {
         
-        Menu() {
-         if let u = location {
-             
-             Text("Duplicate Tab")
-                 .disabled(true)
-
+        Menu {
             Button("In This Window", systemImage: "plus.square.on.square") {
-                createNewTab(with: u)
+                if let u = location {
+                    createNewTab(with: u)
+                } else {
+                    createNewTab()
+                }
             }
             Button("In New Window", systemImage: "macwindow.badge.plus") {
-                createNewWindow(with: u)
+                if let u = location {
+                    createNewWindow(with: u)
+                } else {
+                    createNewWindow()
+                }
             }
-            
-            
-               
-            } else {
-                Text("Cannot Duplicate Tab")
-                    .disabled(true)
-            }
+    
         } label: {
             ToolbarItemLabel(expanded: expandedLabel, title: "Duplicate", systemImage: "plus.square.on.square")
         }
         .menuStyle(.borderlessButton)
         .menuIndicator(.hidden)
         .frame(width: expandedLabel ? nil : 40, height: 40)
-        .disabled(!(location?.absoluteString.starts(with: "http") ?? false))
     }
 }

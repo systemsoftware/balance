@@ -615,9 +615,7 @@ struct BrowserToolbar: View {
                     TranslateToolbar(browserState: browserState)
                         .disabled(location == nil)
                 case .tabs:
-                    TabsToolbarButton(expandedLabel: expandedLabel, presentSheet: {
-                        activeSheet = .tabs
-                    })
+                    TabsToolbarButton(expandedLabel: expandedLabel)
                 }
             }
         }

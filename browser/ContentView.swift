@@ -364,6 +364,10 @@ struct ContentView: View {
     @State private var addIndex = 0
     @State private var shouldAutoFocusAddress = true
     
+    private var showTabOverview: Bool {
+        MemoryStorage.shared.showTabOverview
+    }
+    
     @AppStorage("toolbarLocation") var toolbarLocation = 0
 
     private var usesCompactTitlebar: Bool {
@@ -457,7 +461,6 @@ struct ContentView: View {
                         
                         HStack(spacing: isCompact ? 4 : 8) {
                             
-                            
                           
                             ZStack(alignment: .topTrailing) {
                                 BrowserWebView(request:URLRequest(url: location ?? URL(string:homepage) ?? URL(string:"about:blank")!), state: browserState, priv:priv, profile:bProfile, userAgent: userAgent)
@@ -504,16 +507,18 @@ struct ContentView: View {
                                     if mimeType.contains("pdf") {
                                         if usePDFKit {
                                             PDFKitRepresentedView(url: url)
-                                                .roundedBorderStyleNoFrame()
+                                                .clipShape(RoundedRectangle(cornerRadius: 15))
                                         }
                                     }
                                     
                                     if mimeType.contains("markdown") && renderMd {
                                         MarkdownView(url: url)
+                                            .clipShape(RoundedRectangle(cornerRadius: 15))
                                     }
                                     
                                     if mimeType.contains("json") && renderJson {
                                         JSONView(url: url)
+                                            .clipShape(RoundedRectangle(cornerRadius: 15))
                                     }
                                     
                                     
@@ -528,6 +533,7 @@ struct ContentView: View {
                                         .padding(16)
                                     }
                                 }
+                                
                             }
                             
                             if !splitURL.isEmpty {
@@ -544,6 +550,22 @@ struct ContentView: View {
                                 browserState.title = "Balance"
                             }
                         
+                    }
+                    
+                    
+                    if showTabOverview {
+                        TabSearchView()
+                          #if os(macOS)
+                            .background(
+                            Color(NSColor.windowBackgroundColor)
+                                .clipShape(RoundedRectangle(cornerRadius: 15))
+                            )
+                        #else
+                            .background(
+                                Color(UIColor.systemBackground)
+                                    .clipShape(RoundedRectangle(cornerRadius: 15))
+                            )
+                        #endif
                     }
                     
                     if leftSidebarMode == 1 && !MemoryStorage.shared.focusMode {
@@ -644,9 +666,13 @@ struct ContentView: View {
                                         }
                                         .onDrop(of: [.plainText], delegate: SidebarDropDelegate(item: item, store: sidebarStore, draggedItem: $draggedSidebarItem))
                                         .contextMenu {
-                                            
                                             Button("Open in New Tab") {
                                                 if let targetURL = sidebarTargetURL(for: item) {
+                                                    if targetURL.absoluteString.contains(".view") {
+                                                        let app = targetURL.absoluteString.replacingOccurrences(of: ".view", with: "").replacingOccurrences(of: "View", with: "").lowercased()
+                                                        createNewTab(with: URL(string: "balance://\(app)")!)
+                                                        return
+                                                    }
                                                     createNewTab(with: targetURL)
                                                 }
                                             }
@@ -740,7 +766,7 @@ struct ContentView: View {
         }
         .ignoresSafeArea(.container, edges: usesCompactTitlebar ? .top : [])
         .sheet(item: $activeToolbarSheet) { sheet in
-            toolbarSheet(sheet)
+                toolbarSheet(sheet)
         }
         .onAppear {
               shouldAutoFocusAddress = false

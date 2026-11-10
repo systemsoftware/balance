@@ -1077,8 +1077,16 @@ struct BrowserWebView: PlatformViewRepresentable {
     static let internalScriptMessageHandlerNames = [
         "installExtension", "scrollObserver", "autofillRequest"
     ]
+    static var usesLegacyGlobalPrivacyControl: Bool {
+        if #available(macOS 27.0, iOS 27.0, *) {
+            return false
+        }
+        return true
+    }
+
     static func privacyRequest(_ request: URLRequest) -> URLRequest {
-        guard Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") == true else {
+        guard usesLegacyGlobalPrivacyControl,
+              Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") == true else {
             return request
         }
         var request = request
@@ -1235,6 +1243,16 @@ struct BrowserWebView: PlatformViewRepresentable {
         let extensionContext = loadRequest.url.flatMap { extensionController?.extensionContext(for: $0) }
         let config = extensionContext?.webViewConfiguration ?? WKWebViewConfiguration()
         
+        config.allowsAirPlayForMediaPlayback = true
+
+        if #available(macOS 27.0, iOS 27.0, *) {
+            config.defaultWebpagePreferences.globalPrivacyControlEnabled = Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") ?? false
+        }
+
+#if os(iOS)
+        config.allowsPictureInPictureMediaPlayback = true
+#endif
+
         if UserDefaults.standard.bool(forKey: "developerMode") {
             config.preferences.setValue(true, forKey: "developerExtrasEnabled")
         }
@@ -1285,9 +1303,9 @@ struct BrowserWebView: PlatformViewRepresentable {
             config.userContentController.addUserScript(notifInitScript)
         }
         
-        // Global Privacy Control. Top-level requests also receive Sec-GPC below.
+        // WebKit provides both GPC signals on macOS and iOS 27 and later.
         let gpcEnabled = Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") ?? false
-        if gpcEnabled {
+        if Self.usesLegacyGlobalPrivacyControl && gpcEnabled {
             let gpcScript = WKUserScript(
                 source: "Object.defineProperty(Navigator.prototype, 'globalPrivacyControl', { get: function() { return true; }, configurable: true });",
                 injectionTime: .atDocumentStart,
@@ -2165,6 +2183,10 @@ struct BrowserWebView: PlatformViewRepresentable {
                      preferences: WKWebpagePreferences,
                      decisionHandler: @escaping (WKNavigationActionPolicy, WKWebpagePreferences) -> Void) {
 
+            if #available(macOS 27.0, iOS 27.0, *) {
+                preferences.globalPrivacyControlEnabled = Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") ?? false
+            }
+
             if navigationAction.navigationType == .linkActivated,
                 navigationAction.targetFrame?.isMainFrame == true,
                 let destination = navigationAction.request.url,
@@ -2251,7 +2273,8 @@ struct BrowserWebView: PlatformViewRepresentable {
                 // A nil target frame represents a new browsing context (for example,
                 // target="_blank" or window.open). Rewriting that request by loading it
                 // in `webView` would replace the opener instead of creating a new tab.
-                if navigationAction.targetFrame?.isMainFrame == true,
+                if BrowserWebView.usesLegacyGlobalPrivacyControl,
+                   navigationAction.targetFrame?.isMainFrame == true,
                    ["http", "https"].contains(url.scheme?.lowercased() ?? ""),
                    Config.sharedDefaults?.bool(forKey: "globalPrivacyControl") == true,
                    navigationAction.request.value(forHTTPHeaderField: "Sec-GPC") != "1" {
