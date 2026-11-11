@@ -45,7 +45,17 @@ struct WeatherInfo {
 class ClockViewModel: ObservableObject {
     @Published var timeString = ""
     @Published var dateString = ""
-    @Published var secondsFraction: Double = 0
+
+    private static let timeFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "h:mm"
+        return formatter
+    }()
+    private static let dateFormatter: DateFormatter = {
+        let formatter = DateFormatter()
+        formatter.dateFormat = "EEEE, MMMM d"
+        return formatter
+    }()
 
     private var cancellable: AnyCancellable?
 
@@ -58,17 +68,10 @@ class ClockViewModel: ObservableObject {
 
     private func update() {
         let now = Date()
-        let tf = DateFormatter()
-        tf.dateFormat = "h:mm"
-        timeString = tf.string(from: now)
-
-        let df = DateFormatter()
-        df.dateFormat = "EEEE, MMMM d"
-        dateString = df.string(from: now)
-
-        let cal = Calendar.current
-        let seconds = cal.component(.second, from: now)
-        secondsFraction = Double(seconds) / 60.0
+        let time = Self.timeFormatter.string(from: now)
+        let date = Self.dateFormatter.string(from: now)
+        if timeString != time { timeString = time }
+        if dateString != date { dateString = date }
     }
 }
 

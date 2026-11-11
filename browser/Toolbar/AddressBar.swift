@@ -117,15 +117,9 @@ private struct TrustIndicator: View {
                         } catch {
                             return
                         }
-                        while !Task.isCancelled {
-                            guard !browserState.isLoading, browserState.url == url else { return }
-                            await browserState.refreshFavicon(for: url)
-                            do {
-                                try await Task.sleep(for: .seconds(2))
-                            } catch {
-                                return
-                            }
-                        }
+                        guard !Task.isCancelled, !browserState.isLoading,
+                              browserState.url == url else { return }
+                        await browserState.refreshFavicon(for: url)
                     }
             } else {
                 Image(systemName: isSecure ? "lock.fill" : "exclamationmark.triangle.fill")

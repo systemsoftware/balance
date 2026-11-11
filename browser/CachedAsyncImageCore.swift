@@ -5,6 +5,7 @@
 
 import SwiftUI
 import CoreGraphics
+import ImageIO
 
 @available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
 public struct CachedAsyncImageCore<Content>: View where Content: View {
@@ -88,15 +89,9 @@ public struct CachedAsyncImageCore<Content>: View where Content: View {
         self.transaction = transaction
         self.content = content
         
+        // SwiftUI can create this value many times while tabs update. Decoding here
+        // blocks the main thread once for every visible favicon on each redraw.
         self._phase = State(wrappedValue: .empty)
-        do {
-            if let urlRequest = urlRequest, let (image, isMonochromeIcon) = try cachedImage(from: urlRequest, cache: urlCache) {
-                self._phase = State(wrappedValue: .success(image))
-                self._isMonochromeIcon = State(wrappedValue: isMonochromeIcon)
-            }
-        } catch {
-            self._phase = State(wrappedValue: .failure(error))
-        }
     }
     
     @Sendable
@@ -104,6 +99,7 @@ public struct CachedAsyncImageCore<Content>: View where Content: View {
         do {
             if let urlRequest = urlRequest {
                 let ((image, isMonochromeIcon), metrics) = try await remoteImage(from: urlRequest, session: urlSession)
+                guard !Task.isCancelled else { return }
                 if metrics?.transactionMetrics.last?.resourceFetchType == .localCache {
                     // WARNING: This does not behave well when the url is changed with another
                     self.isMonochromeIcon = isMonochromeIcon
@@ -120,19 +116,11 @@ public struct CachedAsyncImageCore<Content>: View where Content: View {
                 }
             }
         } catch {
+            guard !Task.isCancelled else { return }
             withAnimation(transaction.animation) {
                 phase = .failure(error)
             }
         }
-    }
-}
-
-// MARK: - LoadingError
-
-@available(iOS 15.0, macOS 12.0, tvOS 15.0, watchOS 8.0, *)
-private extension AsyncImage {
-    
-    struct LoadingError: Error {
     }
 }
 
@@ -168,32 +156,26 @@ private extension CachedAsyncImageCore {
             }
         }
 
-        return (try image(from: data), metrics)
-    }
-    
-    private func cachedImage(from request: URLRequest, cache: URLCache) throws -> (Image, Bool)? {
-        guard let cachedResponse = cache.cachedResponse(for: request) else { return nil }
-        return try image(from: cachedResponse.data)
-    }
-    
-    private func image(from data: Data) throws -> (Image, Bool) {
-#if os(macOS)
-        if let image = UniversalImage(data: data) {
-            let cgImage = image.cgImage(forProposedRect: nil, context: nil, hints: nil)
-            return (Image(universalImage: image), cgImage.map(isTransparentMonochrome) ?? false)
-        } else {
-            throw AsyncImage<Content>.LoadingError()
-        }
-#else
-        if let uiImage = UIImage(data: data, scale: scale) {
-            return (Image(uiImage: uiImage), uiImage.cgImage.map(isTransparentMonochrome) ?? false)
-        } else {
-            throw AsyncImage<Content>.LoadingError()
-        }
-#endif
+        return (try await image(from: data), metrics)
     }
 
-    private func isTransparentMonochrome(_ image: CGImage) -> Bool {
+    private func image(from data: Data) async throws -> (Image, Bool) {
+        let (cgImage, isMonochromeIcon) = try await Task.detached(priority: .utility) {
+            guard let source = CGImageSourceCreateWithData(data as CFData, nil),
+                  let image = CGImageSourceCreateThumbnailAtIndex(source, 0, [
+                    kCGImageSourceCreateThumbnailFromImageAlways: true,
+                    kCGImageSourceCreateThumbnailWithTransform: true,
+                    kCGImageSourceThumbnailMaxPixelSize: 64
+                  ] as CFDictionary) else {
+                throw URLError(.cannotDecodeContentData)
+            }
+            return await (image, isTransparentMonochrome(image))
+        }.value
+        return (Image(decorative: cgImage, scale: scale), isMonochromeIcon)
+    }
+}
+
+private func isTransparentMonochrome(_ image: CGImage) -> Bool {
         let side = 16
         var pixels = [UInt8](repeating: 0, count: side * side * 4)
         let drewImage = pixels.withUnsafeMutableBytes { buffer -> Bool in
@@ -228,7 +210,6 @@ private extension CachedAsyncImageCore {
             if spread * 255 > 35 * alpha { vivid += 1 }
         }
         return transparent > side * side / 5 && visible > 0 && vivid * 20 < visible
-    }
 }
 
 // MARK: - AsyncImageURLSession

@@ -2335,7 +2335,14 @@ struct BrowserWebView: PlatformViewRepresentable {
                 return
             }
 
-            if !navigationResponse.canShowMIMEType {
+            let isAttachment = (navigationResponse.response as? HTTPURLResponse)?
+                .value(forHTTPHeaderField: "Content-Disposition")?
+                .split(separator: ";", maxSplits: 1, omittingEmptySubsequences: false)
+                .first?
+                .trimmingCharacters(in: .whitespacesAndNewlines)
+                .lowercased() == "attachment"
+
+            if isAttachment || !navigationResponse.canShowMIMEType {
                 decisionHandler(.download)
                 return
             }
@@ -2535,6 +2542,10 @@ struct BrowserWebView: PlatformViewRepresentable {
             
             BrowserWebView.synchronizeUserScripts(on: configuration.userContentController)
             let newWebView = BrowserWKWebView(frame: .zero, configuration: configuration)
+            // WebKit can receive an attachment before SwiftUI creates the tab and
+            // installs its coordinator. Keep download callbacks alive in that gap.
+            newWebView.navigationDelegate = self
+            newWebView.uiDelegate = self
             let newState = BrowserState(initialURL: navigationAction.request.url)
             newState.preloadedWebView = newWebView
             
