@@ -53,8 +53,11 @@ struct ServerTrustView: View {
                 }
                 
                 if !isTrusted {
-                    Button("Attempt HTTPS Upgrade") {
+                    Button {
                         onAttemptHTTPS?()
+                    } label: {
+                        Text("Attempt HTTPS Upgrade")
+                            .frame(maxWidth: .infinity)
                     }
                 }
                 
@@ -166,6 +169,7 @@ struct ServerTrustView: View {
                     .padding()
             }
         }
+        .tint(.appAccent)
         .frame(width: 350)
         .frame(minHeight: 300, maxHeight: 600)
         .onAppear {
@@ -176,10 +180,8 @@ struct ServerTrustView: View {
     
     private func evaluateTrust() {
         guard let trust = trust else {
-            // WebKit can publish a committed HTTPS URL just before serverTrust.
-            // Match the address-bar indicator during that short transition.
             isTrusted = url?.scheme?.lowercased() == "https"
-            errorMessage = isTrusted ? nil : "This connection is not encrypted."
+            errorMessage = nil
             return
         }
         var error: CFError?
@@ -236,8 +238,6 @@ struct ServerTrustView: View {
                     get: { store.setting(for: host, type: type, defaultState: defaultState) },
                     set: {
                         store.setSetting(for: host, type: type, state: $0)
-                        // JavaScript policy is chosen for each navigation, so
-                        // reload the current document to apply a changed value.
                         if type == "javascript" {
                             webView?.reload()
                         }

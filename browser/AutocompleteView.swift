@@ -77,15 +77,16 @@ struct AutocompleteView: View {
 
                             Text(suggestion.expression)
                                 .font(.caption)
-                                .foregroundStyle(.secondary)
+                                .foregroundStyle(.gray)
                         }
 
                         Spacer()
 
                         Image(systemName: "doc.on.doc")
-                            .foregroundStyle(.secondary)
+                            .foregroundStyle(.gray)
                     }
                 }
+                .buttonStyle(.plain)
             }
 
             
@@ -97,13 +98,14 @@ struct AutocompleteView: View {
                         Image(systemName: "magnifyingglass")
                             .foregroundStyle(.secondary)
                         
-                        Text("Search for \(cleanSearchTerm) \( customEngine != nil ? "on \(URL(string:customEngine!.url)?.host ?? customEngine?.title ?? "")" : "")")
+                        Text("\(cleanSearchTerm) \( customEngine != nil ? "on \(URL(string:customEngine!.url)?.host ?? customEngine?.title ?? "")" : "")")
                             .frame(maxWidth: .infinity, alignment: .leading)
                         
                         Spacer()
                     }
                     .padding(.vertical, 6)
                 }
+                .buttonStyle(.plain)
             }
             if isLoading {
                 HStack(spacing: 8) {
