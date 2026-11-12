@@ -71,7 +71,7 @@ struct MapView: View {
                         HStack(spacing: 8) {
                             ZStack {
                                 Circle()
-                                    .fill(isPinned ? Color.orange : Color.accentColor)
+                                    .fill(isPinned ? Color.orange : Color.appAccent)
                                     .frame(width: 26, height: 26)
                                 Image(systemName: isPinned ? "star.fill" : "mappin")
                                     .font(.system(size: 12, weight: .bold))
@@ -212,7 +212,7 @@ struct MapView: View {
                             }
                             .buttonStyle(.plain)
                             .font(.system(size: 12, weight: .semibold))
-                            .foregroundColor(.accentColor)
+                            .foregroundColor(.appAccent)
                             
                             if browserState != nil {
                                 Button(action: scanCurrentTab) {
@@ -223,7 +223,7 @@ struct MapView: View {
                                 }
                                 .buttonStyle(.plain)
                                 .font(.system(size: 12, weight: .semibold))
-                                .foregroundColor(.accentColor)
+                                .foregroundColor(.appAccent)
                             }
                         }
                     }

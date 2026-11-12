@@ -826,6 +826,7 @@ struct SliderDoubleRow: View {
 struct ToggleRow: View {
     let setting: Setting
     @AppStorage var isEnabled: Bool
+    @AppStorage("accentColor") private var accentHex = "systemAccent"
 
     init(setting: Setting) {
         self.setting = setting
@@ -837,8 +838,9 @@ struct ToggleRow: View {
     }
 
     var body: some View {
-        Toggle("", isOn: $isEnabled)
+        Toggle(setting.name, isOn: $isEnabled)
             .toggleStyle(.switch)
+            .tint(Color(hex: accentHex) ?? .accentColor)
             .labelsHidden()
             .onChange(of: isEnabled) { _, enabled in
                 guard setting.appStorageKey == "exposeBookmarksToHomepage" else { return }
@@ -1248,6 +1250,8 @@ struct SettingsSectionContent: View {
     
     @State private var selectedBgColor: Color = .white
     @AppStorage("bgColor") var storedBgHexColor: String = "systemBackground"
+    @State private var selectedAccentColor: Color = .white
+    @AppStorage("accentColor") var storedAccentHex: String = "systemAccent"
     
     private func loadInitialURL() {
         if !learnMoreState.isEmpty, let url = URL(string: learnMoreState) {
@@ -1512,6 +1516,34 @@ name: "New Password", category: catAutofill, type: "button", appStorageKey: "", 
                     }
                 }
                 .padding(.top, 8)
+                .padding(.bottom, 8)
+
+                SettingsCustomCardRow(title: "Accent Color", icon: "paintbrush", accentColor: def.color) {
+                    HStack {
+                        ColorPicker("", selection: $selectedAccentColor)
+                            .cornerRadius(12)
+                            .onAppear {
+                                selectedAccentColor = Color(hex: storedAccentHex) ?? .accentColor
+                            }
+                            .onChange(of: selectedAccentColor) { _, newColor in
+                                if storedAccentHex == "systemAccent" && newColor == .accentColor {
+                                    return
+                                }
+                                storedAccentHex = newColor.toHex() ?? "systemAccent"
+                            }
+                        Button() {
+                            storedAccentHex = "systemAccent"
+                            selectedAccentColor = .accentColor
+                        } label: {
+                            Image(systemName: "arrow.counterclockwise")
+                                .foregroundStyle(.primary)
+                                .font(.system(size: 12, weight: .semibold))
+                        }
+                        .buttonStyle(.plain)
+                    }
+                }
+                .padding(.top, 8)
+
             }
             
             if def.id == "privacy" {
@@ -1551,7 +1583,7 @@ name: "New Password", category: catAutofill, type: "button", appStorageKey: "", 
                     HStack(spacing: 12) {
                         ZStack {
                             Circle()
-                                .fill(Color.accentColor.opacity(0.1))
+                                .fill(Color.appAccent.opacity(0.1))
                                 .frame(width: 32, height: 32)
                             Favicon(site.site)
                               }
@@ -1717,17 +1749,18 @@ struct SettingsView: View {
     }
 
     var body: some View {
-       if isStandalone {
-            standaloneLayout
-        } else {
-            sidebarLayout
+        Group {
+            if isStandalone {
+                standaloneLayout
+            } else {
+                sidebarLayout
+            }
         }
     }
 
     // MARK: Standalone (two-column)
     private var standaloneLayout: some View {
         HStack(spacing: 0) {
-            // Left nav panel
             VStack(alignment: .leading, spacing: 2) {
                 Text("Settings")
                     .font(.system(size: 18, weight: .bold, design: .rounded))

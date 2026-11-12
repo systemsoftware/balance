@@ -562,6 +562,7 @@ struct BrowserWindowHost: View {
     let windowID: String
     
     @AppStorage("bgColor") var bgColor: String = "systemBackground"
+    @AppStorage("accentColor") var accentColor: String = "systemAccent"
 
     var body: some View {
         ZStack {
@@ -586,6 +587,7 @@ struct BrowserWindowHost: View {
             .background(
                 WindowCloseObserver(windowID: windowID, windowManager: windowManager)
             )
+            .tint(accentColor == "systemAccent" ? .accentColor : (Color(hex: accentColor) ?? .accentColor))
             .onAppear {
                 windowManager.registerOpenWindow { id in
                     openWindow(value: id)

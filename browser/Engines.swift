@@ -246,7 +246,7 @@ private struct EngineManagerContentView: View {
         HStack(spacing: 12) {
             ZStack {
                 Circle()
-                    .fill(Color.accentColor.opacity(0.1))
+                    .fill(Color.appAccent.opacity(0.1))
                     .frame(width: 36, height: 36)
                 Favicon(engine.url)
             }

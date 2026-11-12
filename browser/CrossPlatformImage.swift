@@ -232,6 +232,14 @@ extension UniversalImage {
 }
 
 extension Color {
+    static var appAccent: Color {
+        guard let hex = UserDefaults.standard.string(forKey: "accentColor"),
+              let color = Color(hex: hex) else {
+            return .accentColor
+        }
+        return color
+    }
+
     static var platformWindowBackground: Color {
         #if canImport(UIKit)
         Color(uiColor: .systemBackground)

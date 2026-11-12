@@ -367,7 +367,7 @@ struct ScriptsView: View {
                     HStack(spacing: 10) {
                         ZStack {
                             RoundedRectangle(cornerRadius: 8)
-                                .fill(Color.accentColor.opacity(0.12))
+                                .fill(Color.appAccent.opacity(0.12))
                                 .frame(width: 36, height: 36)
                             Favicon(script.domain)
                         }

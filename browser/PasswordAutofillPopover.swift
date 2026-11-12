@@ -20,7 +20,7 @@ func autofillIconAndColor(for type: String, label: String?) -> (icon: String, co
     } else if lowerType == "number" || lowerLabel.contains("number") {
         return ("number", .indigo)
     } else {
-        return ("text.cursor", .accentColor)
+        return ("text.cursor", .appAccent)
     }
 }
 
@@ -52,7 +52,7 @@ struct AutofillPopoverView: View {
                 ForEach(credentials) { cred in
                     AutofillRowButton(
                         icon: "key.fill",
-                        iconColor: .accentColor,
+                        iconColor: .appAccent,
                         title: cred.username,
                         action: {
                             authenticate(reason: "authenticate to autofill your password") {
@@ -208,7 +208,7 @@ struct AutofillRowButton: View {
             .padding(.horizontal, 10)
             .padding(.vertical, 6)
             .contentShape(Rectangle())
-            .background(isHovered ? Color.accentColor.opacity(0.1) : Color.clear)
+            .background(isHovered ? Color.appAccent.opacity(0.1) : Color.clear)
             .cornerRadius(6)
         }
         .buttonStyle(.plain)

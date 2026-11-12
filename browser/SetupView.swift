@@ -668,7 +668,7 @@ struct SetupView: View {
             ZStack {
                 Circle()
                     .fill(index <= currentStep
-                          ? Color.accentColor.opacity(0.15)
+                          ? Color.appAccent.opacity(0.15)
                           : Color.platformControlBackground.opacity(0.5))
                     .frame(width: 36, height: 36)
                 
@@ -679,7 +679,7 @@ struct SetupView: View {
                 } else {
                     Image(systemName: icon)
                         .font(.system(size: 14, weight: .semibold))
-                        .foregroundStyle(index == currentStep ? Color.accentColor : .secondary)
+                        .foregroundStyle(index == currentStep ? Color.appAccent : .secondary)
                 }
             }
             
@@ -691,7 +691,7 @@ struct SetupView: View {
     
     private func stepConnector(after index: Int) -> some View {
         Rectangle()
-            .fill(index < currentStep ? Color.accentColor.opacity(0.4) : Color.platformSeparator.opacity(0.3))
+            .fill(index < currentStep ? Color.appAccent.opacity(0.4) : Color.platformSeparator.opacity(0.3))
             .frame(height: 2)
             .frame(maxWidth: 60)
             .offset(y: -10)

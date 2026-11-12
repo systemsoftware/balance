@@ -30,7 +30,7 @@ struct BookmarkRow: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(Color.accentColor.opacity(0.1))
+                        .fill(Color.appAccent.opacity(0.1))
                         .frame(width: 32, height: 32)
                     Favicon(bookmark.url)
 

@@ -442,7 +442,7 @@ struct Tabs: View {
             if let compactAddressBar {
                 compactAddressBar
                     .frame(minWidth: 220, maxWidth: .infinity)
-                    .background(Color.accentColor.opacity(0.08), in: Capsule())
+                    .background(Color.appAccent.opacity(0.08), in: Capsule())
             }
             
                     ForEach(visible.filter { $0 !== browserState }, id: \.self) { tab in

@@ -400,7 +400,7 @@ struct ExtensionRow: View {
             // Icon
             ZStack {
                 RoundedRectangle(cornerRadius: 8)
-                    .fill(Color.accentColor.opacity(0.12))
+                    .fill(Color.appAccent.opacity(0.12))
                     .frame(width: 36, height: 36)
                 
                 if let icon = context.webExtension.icon(for: CGSize(width:20,height: 20)) {

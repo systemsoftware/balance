@@ -386,7 +386,7 @@ struct HistoryView: View {
             HStack(spacing: 12) {
                 Image(systemName: clearOption == option ? "largecircle.fill.circle" : "circle")
                     .font(.system(size: 20))
-                    .foregroundStyle(clearOption == option ? Color.accentColor : Color.secondary)
+                    .foregroundStyle(clearOption == option ? Color.appAccent : Color.secondary)
 
                 VStack(alignment: .leading, spacing: 3) {
                     Text(title)
@@ -402,12 +402,12 @@ struct HistoryView: View {
             .padding(.vertical, 11)
             .frame(maxWidth: .infinity, alignment: .leading)
             .background(
-                clearOption == option ? Color.accentColor.opacity(0.08) : Color.primary.opacity(0.04),
+                clearOption == option ? Color.appAccent.opacity(0.08) : Color.primary.opacity(0.04),
                 in: RoundedRectangle(cornerRadius: 12)
             )
             .overlay {
                 RoundedRectangle(cornerRadius: 12)
-                    .strokeBorder(clearOption == option ? Color.accentColor.opacity(0.5) : Color.clear, lineWidth: 1)
+                    .strokeBorder(clearOption == option ? Color.appAccent.opacity(0.5) : Color.clear, lineWidth: 1)
             }
         }
         .buttonStyle(.plain)
@@ -467,7 +467,7 @@ struct HistoryRow: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(Color.accentColor.opacity(0.1))
+                        .fill(Color.appAccent.opacity(0.1))
                         .frame(width: 32, height: 32)
                     Favicon(item.url)
                 }

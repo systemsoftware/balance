@@ -90,11 +90,11 @@ struct WebPermissionsView: View {
                                     .frame(maxWidth: .infinity, alignment: .leading)
                                     .padding(.horizontal, 10)
                                     .padding(.vertical, 7)
-                                    .background(selectedCategory == category ? Color.accentColor.opacity(0.16) : .clear,
+                                    .background(selectedCategory == category ? Color.appAccent.opacity(0.16) : .clear,
                                                 in: RoundedRectangle(cornerRadius: 8))
                             }
                             .buttonStyle(.plain)
-                            .foregroundStyle(selectedCategory == category ? Color.accentColor : Color.primary)
+                            .foregroundStyle(selectedCategory == category ? Color.appAccent : Color.primary)
                         }
                     }
                     .padding(8)

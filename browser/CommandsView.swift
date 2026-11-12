@@ -166,7 +166,7 @@ private func highlighted(_ text: String, term: String) -> AttributedString {
 /// Rounded square that holds an SF Symbol. Used for every row in the palette and profile screens.
 struct PaletteIconTile: View {
     let symbol: String
-    var tint: Color = .accentColor
+    var tint: Color = .appAccent
     var size: CGFloat = 28
 
     var body: some View {
@@ -233,7 +233,7 @@ private struct PaletteSectionHeader: View {
                 Button(isExpanded ? "Show fewer" : "Show more", action: onToggle)
                     .buttonStyle(.plain)
                     .font(.caption)
-                    .foregroundStyle(Color.accentColor)
+                    .foregroundStyle(Color.appAccent)
             }
 
             Image(systemName: "line.3.horizontal")
@@ -291,7 +291,7 @@ private struct PaletteRow: View {
         .padding(.horizontal, 10)
         .padding(.vertical, 6)
         .background(
-            isSelected ? Color.accentColor.opacity(0.16) : Color.clear,
+            isSelected ? Color.appAccent.opacity(0.16) : Color.clear,
             in: RoundedRectangle(cornerRadius: 10, style: .continuous)
         )
         .contentShape(Rectangle())
@@ -312,7 +312,7 @@ private struct PaletteRow: View {
         } else {
             PaletteIconTile(
                 symbol: item.symbol,
-                tint: item.isPrivate ? .purple : .accentColor
+                tint: item.isPrivate ? .purple : .appAccent
             )
         }
     }
@@ -720,11 +720,11 @@ struct CommandsView: View {
         } label: {
             Text(title)
                 .font(.subheadline.weight(isSelected ? .semibold : .regular))
-                .foregroundStyle(isSelected ? Color.accentColor : Color.secondary)
+                .foregroundStyle(isSelected ? Color.appAccent : Color.secondary)
                 .padding(.horizontal, 12)
                 .padding(.vertical, 5)
                 .background(
-                    isSelected ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.06),
+                    isSelected ? Color.appAccent.opacity(0.18) : Color.primary.opacity(0.06),
                     in: RoundedRectangle(cornerRadius: 10, style: .continuous)
                 )
         }
@@ -1509,7 +1509,7 @@ struct NewProfileView: View {
                 .foregroundStyle(isSelected ? Color.white : Color.secondary)
                 .frame(width: 40, height: 40)
                 .background(
-                    isSelected ? Color.accentColor : Color.primary.opacity(0.07),
+                    isSelected ? Color.appAccent : Color.primary.opacity(0.07),
                     in: RoundedRectangle(cornerRadius: 11, style: .continuous)
                 )
         }
@@ -1735,7 +1735,7 @@ struct ProfileSiteRow: View {
             HStack(spacing: 12) {
                 ZStack {
                     Circle()
-                        .fill(Color.accentColor.opacity(0.1))
+                        .fill(Color.appAccent.opacity(0.1))
                         .frame(width: 32, height: 32)
                     Favicon(item)
                 }

@@ -133,9 +133,9 @@ struct DayCell: View {
     @ViewBuilder
     private var cellBackground: some View {
         if isSelected {
-            Color.accentColor
+            Color.appAccent
         } else if isToday {
-            Color.accentColor.opacity(0.15)
+            Color.appAccent.opacity(0.15)
         } else {
     //        Color(nsColor: .controlBackgroundColor)
         }
@@ -145,7 +145,7 @@ struct DayCell: View {
         if isSelected {
             return .white
         } else if isToday {
-            return .accentColor
+            return .appAccent
         } else {
             return .primary
         }

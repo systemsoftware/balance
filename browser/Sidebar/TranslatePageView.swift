@@ -136,7 +136,7 @@ struct TranslatePageView: View {
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .background(
                         RoundedRectangle(cornerRadius: 24, style: .continuous)
-                            .fill(Color.accentColor.opacity(0.1))
+                            .fill(Color.appAccent.opacity(0.1))
                     )
 
                     // Original: quieter, secondary

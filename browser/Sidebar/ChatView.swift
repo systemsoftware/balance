@@ -146,7 +146,7 @@ struct ChatView: View {
                             .padding(.horizontal, 11)
                             .padding(.vertical, 7)
                             .glassEffect(session.id == selectedSessionID ? .clear : .regular, in: .capsule)
-                            .background(session.id == selectedSessionID ? Color.accentColor.opacity(0.15) : Color.clear, in: .capsule)
+                            .background(session.id == selectedSessionID ? Color.appAccent.opacity(0.15) : Color.clear, in: .capsule)
                             .contextMenu {
                                 Button("Rename") {
                                     renameText = session.title
@@ -188,7 +188,7 @@ struct ChatView: View {
                                     if !item.query.isEmpty { Text(item.query).textSelection(.enabled) }
                                 }
                                 .padding(12)
-                                .background(Color.accentColor, in: RoundedRectangle(cornerRadius: 18))
+                                .background(Color.appAccent, in: RoundedRectangle(cornerRadius: 18))
                                 .foregroundStyle(.white)
                             }
                             HStack(alignment: .top) {
@@ -629,7 +629,7 @@ struct ChatViewLegacy: View {
                                     Spacer()
                                     Text(item.query.replacingOccurrences(of: String(CurrentPage.prefix(pageCutoff)), with: "").trimmingCharacters(in: .whitespaces))
                                         .padding(12)
-                                        .background(Color.accentColor)
+                                        .background(Color.appAccent)
                                         .foregroundColor(.white)
                                         .clipShape(RoundedRectangle(cornerRadius: 16))
                                         .textSelection(.enabled)
@@ -714,7 +714,7 @@ struct ChatViewLegacy: View {
                     } else {
                         Image(systemName: CurrentPage.count == 0 ? "doc.text" : "doc.text.fill")
                             .font(.system(size: 20))
-                            .foregroundColor(CurrentPage.count == 0 ? .secondary : .accentColor)
+                            .foregroundColor(CurrentPage.count == 0 ? .secondary : .appAccent)
                     }
                 }
                 .buttonStyle(.plain)
@@ -731,7 +731,7 @@ struct ChatViewLegacy: View {
                 Button(action: sendMessage) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(.system(size: 24))
-                        .foregroundColor(query.trimmingCharacters(in: .whitespaces).isEmpty ? .secondary : .accentColor)
+                        .foregroundColor(query.trimmingCharacters(in: .whitespaces).isEmpty ? .secondary : .appAccent)
                 }
                 .buttonStyle(.plain)
                 .disabled(query.trimmingCharacters(in: .whitespaces).isEmpty || respondingSessionIDs.contains(sessions[currentSessionIndex].id))

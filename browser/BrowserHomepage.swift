@@ -630,7 +630,7 @@ struct NewsView: View {
                                 .padding(.vertical, 6)
                                 .background {
                                     if isSelected {
-                                        Capsule().fill(Color.accentColor)
+                                        Capsule().fill(Color.appAccent)
                                     }
                                 }
                                 .glassEffect(isSelected ? .identity : .regular, in: Capsule())
@@ -851,7 +851,7 @@ struct BrowserHomepage: View {
                         .symbolRenderingMode(.hierarchical)
                 }
                 .buttonStyle(.plain)
-                .foregroundStyle(Color.accentColor)
+                .foregroundStyle(Color.appAccent)
                 .accessibilityLabel("Go")
             }
             .padding(12)

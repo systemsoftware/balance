@@ -316,7 +316,7 @@ struct WindowRow: View {
             .glassEffect(noGlass ? .identity : .regular.interactive(), in: cardShape)
             .overlay {
                 if isActive {
-                    cardShape.strokeBorder(Color.accentColor, lineWidth: 2)
+                    cardShape.strokeBorder(Color.appAccent, lineWidth: 2)
                 } else if noGlass {
                     cardShape.strokeBorder(Color.secondary, lineWidth: 1)
                 }
