@@ -1478,6 +1478,7 @@ struct NewProfileView: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.bordered)
+                    .tint(.primary)
                     .keyboardShortcut(.cancelAction)
 
                 Button(isEditing ? "Save Changes" : "Create Profile") {
@@ -1700,6 +1701,7 @@ struct ProfileSitesView: View {
                         Spacer()
                         Button("Cancel", role: .cancel) { newSiteInput = ""
                         showAddSite = false }
+                        .tint(.primary)
                         Button("Add") {
                             let trimmed = newSiteInput.trimmingCharacters(in: .whitespacesAndNewlines)
                             guard !trimmed.isEmpty else { return }

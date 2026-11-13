@@ -166,6 +166,7 @@ struct WebPermissionsView: View {
             Spacer()
             permissionPicker(for: host)
                 .labelsHidden()
+                .tint(.primary)
                 .frame(width: 115)
         }
         .tag(host)

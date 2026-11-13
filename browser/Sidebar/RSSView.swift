@@ -40,13 +40,9 @@ struct RSSView: View {
                     newFeedURL = ""
                     isAddingFeed = true
                 } label: {
-                    Label("Add Feed", systemImage: "plus")
+                    Image(systemName: "plus")
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundColor(.secondary)
-                .menuStyle(.borderlessButton)
-                .fixedSize()
             }
             .padding(.bottom, 8)
             
@@ -61,7 +57,7 @@ struct RSSView: View {
                             Text("No Feeds")
                                 .font(.headline)
                                 .foregroundStyle(.secondary)
-                            Text("Click 'Add Feed' to add a source")
+                            Text("Click \(Image(systemName:"plus")) to add one")
                                 .font(.caption)
                                 .foregroundStyle(.tertiary)
                                 .multilineTextAlignment(.center)
@@ -97,6 +93,7 @@ struct RSSView: View {
                 HStack {
                     Spacer()
                     Button("Cancel", role: .cancel) { isAddingFeed = false }
+                        .tint(.primary)
                     Button("Add") {
                         addFeed(newFeedURL)
                         isAddingFeed = false

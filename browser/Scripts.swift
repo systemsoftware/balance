@@ -203,6 +203,7 @@ struct NewScriptView: View {
                             Text(execType.title).tag(execType)
                         }
                     }
+                    .tint(.primary)
                 }
                 Section("Script") {
                     TextEditor(text: $source)
@@ -216,6 +217,7 @@ struct NewScriptView: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.bordered)
+                    .tint(.primary)
                     .keyboardShortcut(.cancelAction)
 
                 Button("Create Script") { saveScript() }

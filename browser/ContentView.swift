@@ -1171,6 +1171,7 @@ struct ContentView: View {
                 Button("Cancel", role: .cancel) {
                     showAddPopover = false
                 }
+                .tint(.primary)
                 Button("Add") {
                     
                     if !userInput.hasPrefix("http://") && !userInput.hasPrefix("https://") && !userInput.hasPrefix("file://") {

@@ -10,6 +10,7 @@ struct ServerTrustView: View {
     let dataStore: WKWebsiteDataStore?
     @StateObject private var store = SitePermissionStore.shared
     @ObservedObject var browserState: BrowserState
+    @AppStorage("accentColor") private var accentHex = "systemAccent"
     @State private var isTrusted: Bool = false
     @State private var certificates: [SecCertificate] = []
     @State private var cookies: [HTTPCookie] = []
@@ -66,7 +67,7 @@ struct ServerTrustView: View {
                     HStack {
                         Text("Smart Dark Mode")
                         Spacer()
-                        Toggle("", isOn: Binding(
+                        Toggle("Smart Dark Mode", isOn: Binding(
                             get: { SmartDarkModePreferences.isEnabled(for: host) },
                             set: {
                                 SmartDarkModePreferences.setEnabled($0, for: host)
@@ -76,6 +77,8 @@ struct ServerTrustView: View {
                             }
                         ))
                         .toggleStyle(.switch)
+                        .tint(Color(hex: accentHex) ?? .platformAccent)
+                        .labelsHidden()
                     }
                     .frame(maxWidth: .infinity)
                 }
@@ -169,7 +172,6 @@ struct ServerTrustView: View {
                     .padding()
             }
         }
-        .tint(.appAccent)
         .frame(width: 350)
         .frame(minHeight: 300, maxHeight: 600)
         .onAppear {
@@ -233,6 +235,7 @@ struct ServerTrustView: View {
                     }
                 }
                 .labelsHidden()
+                .tint(.primary)
             } else {
                 Picker("", selection: Binding(
                     get: { store.setting(for: host, type: type, defaultState: defaultState) },
@@ -248,6 +251,7 @@ struct ServerTrustView: View {
                     }
                 }
                 .labelsHidden()
+                .tint(.primary)
             }
         }
     }
@@ -267,6 +271,7 @@ struct ServerTrustView: View {
                 }
             }
             .labelsHidden()
+            .tint(.primary)
         }
     }
     
@@ -285,6 +290,7 @@ struct ServerTrustView: View {
                 }
             }
             .labelsHidden()
+            .tint(.primary)
         }
     }
 }

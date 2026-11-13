@@ -375,6 +375,7 @@ private struct EngineEditorView: View {
                     dismiss()
                 }
                 .buttonStyle(.bordered)
+                .tint(.primary)
                 .keyboardShortcut(.cancelAction)
                 Button(isEditing ? "Save Changes" : "Add Engine") {
                     onSave(trimmedTitle, trimmedURL)

@@ -3,6 +3,19 @@ import WebKit
 import CryptoKit
 internal import UniformTypeIdentifiers
 
+
+extension View {
+    @ViewBuilder
+    func applySettingsButtonStyle(isSettings: Bool) -> some View {
+        if isSettings {
+            self.buttonStyle(.borderedProminent)
+        } else {
+            self.buttonStyle(.plain)
+        }
+    }
+}
+
+
 struct ExtensionsView: View {
     @ObservedObject private var manager = WebExtensionManager.shared
     
@@ -143,6 +156,7 @@ struct ExtensionsView: View {
                 HStack {
                     Spacer()
                     Button("Cancel") { isEnteringURL = false }
+                        .tint(.primary)
                         .keyboardShortcut(.cancelAction)
                     Button("Install") {
                         isEnteringURL = false
@@ -364,7 +378,7 @@ struct ExtensionsView: View {
                     .font(.system(size: 12, weight: .semibold))
             }
         }
-        .buttonStyle(.borderedProminent)
+        .applySettingsButtonStyle(isSettings: isSettings)
         .menuIndicator(.hidden)
         .controlSize(isSettings ? .small : .regular)
         .fixedSize()

@@ -147,6 +147,7 @@ private struct SwiftUIPresentationHost: ViewModifier {
                             center.finish(request, value: nil)
                         }
                         .buttonStyle(.bordered)
+                        .tint(.primary)
                         .keyboardShortcut(.cancelAction)
                     }
                     Button(request.primaryTitle) {
@@ -235,7 +236,7 @@ extension Color {
     static var appAccent: Color {
         guard let hex = UserDefaults.standard.string(forKey: "accentColor"),
               let color = Color(hex: hex) else {
-            return .accentColor
+            return .platformAccent
         }
         return color
     }

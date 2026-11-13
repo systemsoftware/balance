@@ -101,6 +101,8 @@ struct DownloadsView: View {
     @State private var searchText: String = ""
     @State private var resumeError: String?
     
+    @State var showDeleteConfirm = false
+    
     var filteredHistory: [Download] {
         if searchText.isEmpty {
             return downloadStore.items
@@ -118,14 +120,34 @@ struct DownloadsView: View {
                 Text("Downloads")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
-                Button("Clear All") {
-                    for item in Array(downloadStore.items) {
-                        downloadStore.discard(id: item.id)
-                    }
+                Button {
+                    showDeleteConfirm.toggle()
+                } label: {
+                    Image(systemName: "trash")
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundColor(.secondary)
+            }
+            .sheet(isPresented: $showDeleteConfirm) {
+                VStack(spacing: 16) {
+                    Text("Are you sure you want to delete all downloads?")
+                        .font(.system(.headline, design: .rounded))
+                        .multilineTextAlignment(.center)
+                    HStack(spacing: 16) {
+                        Button("Cancel") {
+                            showDeleteConfirm = false
+                        }
+                        .tint(.primary)
+                        .buttonStyle(.bordered)
+                        Button("Delete All", role: .destructive) {
+                            for item in Array(downloadStore.items) {
+                                downloadStore.discard(id: item.id)
+                            }
+                            showDeleteConfirm = false
+                        }
+                        .buttonStyle(.borderedProminent)
+                    }
+                }
+                .padding()
             }
             .padding()
             VStack(spacing: 0) {

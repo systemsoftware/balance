@@ -49,6 +49,7 @@ struct ToolbarGoToSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
+                    .tint(.primary)
                 Button() {
                     dismiss()
                     submitURL()
@@ -80,6 +81,7 @@ struct ToolbarSplitURLSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
+                    .tint(.primary)
                 Button("Go") {
                     if !draftURL.hasPrefix("http") {
                         splitURL = "https://" + draftURL.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -111,6 +113,7 @@ struct ToolbarRenameSheet: View {
             HStack {
                 Spacer()
                 Button("Cancel") { dismiss() }
+                    .tint(.primary)
                 Button("Rename") {
                     let trimmedName = newName.trimmingCharacters(in: .whitespacesAndNewlines)
                     if trimmedName.isEmpty {

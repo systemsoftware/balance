@@ -225,8 +225,10 @@ struct HistoryView: View {
                 Text("History")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
-                Button("Clear") {
+                Button {
                     showClear.toggle()
+                } label: {
+                    Image(systemName: "trash")
                 }
                 .contextMenu {
                     Button("Clear All History") {
@@ -244,8 +246,6 @@ struct HistoryView: View {
                     }
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundColor(.secondary)
             }
             .sheet(isPresented: $showClear) {
                 VStack(spacing: 0) {
@@ -305,6 +305,7 @@ struct HistoryView: View {
                     HStack(spacing: 10) {
                         Spacer()
                         Button("Cancel") { showClear = false }
+                            .tint(.primary)
                             .keyboardShortcut(.cancelAction)
                         Button(role: .destructive) {
                             if clearOption == 4 {

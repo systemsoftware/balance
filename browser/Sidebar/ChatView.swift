@@ -115,6 +115,7 @@ struct ChatView: View {
                 HStack {
                     Spacer()
                     Button("Cancel") { renamingID = nil }
+                        .tint(.primary)
                         .keyboardShortcut(.cancelAction)
                     Button("Save") { renameChat() }
                         .buttonStyle(.borderedProminent)
@@ -572,6 +573,7 @@ struct ChatViewLegacy: View {
                                         Button("Cancel") {
                                             showRename = false
                                         }
+                                        .tint(.primary)
                                         .keyboardShortcut(.escape)
 
                                         Button("Rename") {

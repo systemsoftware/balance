@@ -757,6 +757,7 @@ struct DropdownRow: View {
             }
         }
         .pickerStyle(.menu)
+        .tint(.primary)
         .labelsHidden()
         .buttonStyle(.bordered)
     }
@@ -793,6 +794,7 @@ struct DropdownStringRow: View {
             }
         }
         .pickerStyle(.menu)
+        .tint(.primary)
         .labelsHidden()
         .buttonStyle(.bordered)
     }
@@ -1644,6 +1646,7 @@ name: "New Password", category: catAutofill, type: "button", appStorageKey: "", 
             }
             .buttonStyle(.bordered)
             .pickerStyle(.menu)
+            .tint(.primary)
             .labelsHidden()
             .controlSize(.small)
         }
@@ -2049,6 +2052,7 @@ struct NewPasswordView: View {
                 } label: {
                     Text("Cancel")
                 }
+                .tint(.primary)
                 
                 Button {
                     if !u.isEmpty && !p.isEmpty && !host.isEmpty {

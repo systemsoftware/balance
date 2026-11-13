@@ -276,6 +276,7 @@ struct AutoFillSettingsView: View {
                                 Text(type.rawValue).tag(type)
                             }
                         }
+                        .tint(.primary)
                         Text("The label and type help match this value to website fields.")
                             .font(.caption)
                             .foregroundStyle(.secondary)
@@ -289,6 +290,7 @@ struct AutoFillSettingsView: View {
                         showNewEntrySheet = false
                     }
                     .buttonStyle(.bordered)
+                    .tint(.primary)
                     .keyboardShortcut(.cancelAction)
                     Button("Save") {
                         AutoFillStore.add(data: newEntryData, type: newEntryType.rawValue, label: newEntryLabel.isEmpty ? nil : newEntryLabel)

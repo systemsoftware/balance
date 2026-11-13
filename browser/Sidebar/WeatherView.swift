@@ -67,14 +67,14 @@ struct WeatherSidebarView: View {
 
     private var header: some View {
         HStack {
-            Label("Weather", systemImage: "cloud.sun.fill")
+            Text("Weather")
                 .font(.system(.headline, design: .rounded, weight: .semibold))
 
             Spacer()
 
         }
         .padding(.horizontal, 16)
-        .padding(.vertical, 12)
+        .padding(.top, 12)
     }
 
     // MARK: - Current Weather

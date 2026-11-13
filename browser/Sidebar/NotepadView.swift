@@ -35,7 +35,7 @@ struct NoteView: View {
                 Text("Notepad")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
-                Button("Clear") {
+                Button {
                     switch noteScope {
                     case .global:
                         notepad = ""
@@ -48,10 +48,10 @@ struct NoteView: View {
                             Config.sharedDefaults?.set("", forKey: "siteNote_\(domain)")
                         }
                     }
+                } label: {
+                    Image(systemName: "trash")
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundColor(.secondary)
             }.padding([.top, .horizontal])
 
             scopePicker

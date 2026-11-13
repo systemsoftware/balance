@@ -587,7 +587,7 @@ struct BrowserWindowHost: View {
             .background(
                 WindowCloseObserver(windowID: windowID, windowManager: windowManager)
             )
-            .tint(accentColor == "systemAccent" ? .accentColor : (Color(hex: accentColor) ?? .accentColor))
+            .tint(Color(hex: accentColor) ?? .platformAccent)
             .onAppear {
                 windowManager.registerOpenWindow { id in
                     openWindow(value: id)

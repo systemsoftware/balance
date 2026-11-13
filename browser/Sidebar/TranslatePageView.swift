@@ -53,6 +53,7 @@ struct TranslatePageView: View {
                             isTranslating = false
                         }
                         .buttonStyle(.bordered)
+                        .tint(.primary)
                     }
                 }
                 .frame(maxWidth: .infinity, maxHeight: .infinity)
@@ -83,12 +84,14 @@ struct TranslatePageView: View {
                                 .tag(language.minimalIdentifier)
                         }
                     }
+                    .tint(.primary)
                     Picker("to", selection: $to) {
                         ForEach(languages, id: \.self) { language in
                             Text(languageName(language.minimalIdentifier))
                                 .tag(language.minimalIdentifier)
                         }
                     }
+                    .tint(.primary)
                 }
 
                 Button {

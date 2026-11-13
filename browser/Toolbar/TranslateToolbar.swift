@@ -75,6 +75,7 @@ struct TranslateToolbar: View {
                             .tag(language.minimalIdentifier)
                     }
                 }
+                .tint(.primary)
                 Picker("To", selection: $targetID) {
                     Text("Choose language").tag("")
                     ForEach(languages, id: \.self) { language in
@@ -83,12 +84,14 @@ struct TranslateToolbar: View {
                             .tag(language.minimalIdentifier)
                     }
                 }
+                .tint(.primary)
                 HStack {
                     Spacer()
                     Button("Cancel") {
                         showLanguagePicker = false
                         snapshot = nil
                     }
+                    .tint(.primary)
                     Button("Translate") {
                         guard canTranslate else { return }
                         isTranslating = true

@@ -64,12 +64,12 @@ struct WebDataView: View {
                 Text("Website Data")
                     .font(.system(.headline, design: .rounded))
                 Spacer()
-                Button("Bulk Delete...") {
+                Button {
                     confirmDeleteAll.toggle()
+                } label: {
+                    Image(systemName: "trash")
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundColor(.secondary)
             }
             .padding()
 
@@ -127,6 +127,7 @@ struct WebDataView: View {
                         .frame(maxWidth:.infinity)
                 }
                 .buttonStyle(.bordered)
+                .tint(.primary)
             }
             .padding()
         }
@@ -199,6 +200,7 @@ struct WebDataView: View {
                     Text("Cancel")
                         .frame(maxWidth:.infinity)
                 }
+                .tint(.primary)
             }
             .buttonStyle(.bordered)
             .padding(20)

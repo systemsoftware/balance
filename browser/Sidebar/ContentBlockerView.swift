@@ -245,6 +245,7 @@ struct ContentBlockerView: View {
                 HStack {
                     Spacer()
                     Button("Cancel") { isEnteringURL = false }
+                        .tint(.primary)
                         .keyboardShortcut(.cancelAction)
                     Button("Add") {
                         isEnteringURL = false

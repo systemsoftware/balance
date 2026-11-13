@@ -300,6 +300,7 @@ struct AddBookmarkSheet: View {
                 Spacer()
                 Button("Cancel") { dismiss() }
                     .buttonStyle(.bordered)
+                    .tint(.primary)
                     .keyboardShortcut(.cancelAction)
                 Button("Save Bookmark") {
                     url = url.trimmingCharacters(in: .whitespacesAndNewlines)

@@ -100,7 +100,7 @@ struct InventorySidebar: View {
 
                 } else {
                     ContentUnavailableView {
-                        Label("Or drop something here to get started", systemImage: "tray.and.arrow.down")
+                        Label("Or drop something here", systemImage: "tray.and.arrow.down")
                     }
                     .padding()
 

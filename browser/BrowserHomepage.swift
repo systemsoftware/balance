@@ -1020,6 +1020,7 @@ struct BrowserHomepage: View {
             HStack {
                 Spacer()
                 Button("Cancel") { showCityChange = false }
+                    .tint(.primary)
                     .keyboardShortcut(.cancelAction)
                 Button("Save", action: saveCity)
                     .buttonStyle(.borderedProminent)

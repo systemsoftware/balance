@@ -18,6 +18,8 @@ struct PasswordsView: View {
         }
     }
     
+    @State var showNewPasswordSheet = false
+    
     var body: some View {
         VStack(spacing: 0) {
             // Header
@@ -26,6 +28,16 @@ struct PasswordsView: View {
                     Text("Passwords")
                         .font(.system(.headline, design: .rounded))
                     Spacer()
+                    Button {
+                        showNewPasswordSheet.toggle()
+                    } label: {
+                        Image(systemName: "plus")
+                    }
+                    .buttonStyle(.plain)
+           //         .foregroundColor(.secondary)
+                    .sheet(isPresented: $showNewPasswordSheet) {
+                        NewPasswordView(showNewPassword: $showNewPasswordSheet)
+                    }
                 }
                 .padding()
             }
@@ -176,6 +188,7 @@ struct PasswordRow: View {
                 HStack {
                     Spacer()
                     Button("Cancel") { showEditUsername = false }
+                        .tint(.primary)
                         .keyboardShortcut(.cancelAction)
                     Button("Save") {
                         PasswordManager.shared.updateUsername(oldUsername: cred.username, newUsername: editUsernameText, domain: cred.domain)
@@ -197,6 +210,7 @@ struct PasswordRow: View {
                 HStack {
                     Spacer()
                     Button("Cancel") { showEditPassword = false }
+                        .tint(.primary)
                         .keyboardShortcut(.cancelAction)
                     Button("Save") {
                         PasswordManager.shared.savePassword(username: cred.username, passwordString: editPasswordText, domain: cred.domain)
