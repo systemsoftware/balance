@@ -37,8 +37,6 @@ struct OutlineView: View {
                     Image(systemName: "arrow.clockwise")
                 }
                 .buttonStyle(.plain)
-                .font(.caption)
-                .foregroundStyle(.secondary)
                 .disabled(browserState.webView == nil || isExtracting)
                 .help("Refresh outline")
             }

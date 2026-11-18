@@ -1460,8 +1460,8 @@ struct NewProfileView: View {
 
                 Section {
                     DisclosureGroup("Email settings (optional)", isExpanded: $showIMAP) {
-                        TextField("IMAP host (e.g. imap.gmail.com)", text: $imapHostInput)
-                        TextField("IMAP port (e.g. 993)", text: $imapPortInput)
+                        TextField("IMAP host", text: $imapHostInput)
+                        TextField("IMAP port", text: $imapPortInput)
                         if !portIsValid {
                             Text("Enter a port number between 0 and 65535.")
                                 .font(.caption)
@@ -1634,6 +1634,7 @@ struct ProfileSettingsView: View {
                 HStack {
                     Spacer()
                     Button("Close") { dismiss() }
+                        .tint(.primary)
                 }
                 .padding([.horizontal, .bottom])
             case .sites:
@@ -1642,6 +1643,7 @@ struct ProfileSettingsView: View {
                 HStack {
                     Spacer()
                     Button("Close") { dismiss() }
+                        .tint(.primary)
                     Button("Add") {
                         showAddSite.toggle()
                     }
@@ -1699,8 +1701,10 @@ struct ProfileSitesView: View {
                     }
                     HStack {
                         Spacer()
-                        Button("Cancel", role: .cancel) { newSiteInput = ""
-                        showAddSite = false }
+                        Button("Close", role: .cancel) {
+                        newSiteInput = ""
+                        showAddSite = false
+                        }
                         .tint(.primary)
                         Button("Add") {
                             let trimmed = newSiteInput.trimmingCharacters(in: .whitespacesAndNewlines)

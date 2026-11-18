@@ -444,6 +444,7 @@ struct WebDataRow: View {
                             Text("Delete")
                         }
                         .buttonStyle(.bordered)
+                        .tint(.primary)
 
                     }
                 }
@@ -462,6 +463,7 @@ struct WebDataRow: View {
             }
             .buttonStyle(.bordered)
             .padding()
+            .tint(.primary)
             .frame(minWidth: 280)
         }
         .buttonStyle(.plain)
